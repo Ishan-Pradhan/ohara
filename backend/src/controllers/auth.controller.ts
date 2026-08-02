@@ -184,7 +184,9 @@ export const logoutUser = asyncHandler(
           user.refreshToken = null;
           await user.save();
         }
-      } catch { }
+      } catch {
+        // Best-effort: an invalid or expired token still clears the cookies below.
+      }
     }
 
     return res
@@ -212,7 +214,7 @@ export const refreshAccessToken = asyncHandler(
         refreshToken,
         env.REFRESH_TOKEN_SECRET as string,
       ) as JwtPayload & { id: string };
-    } catch (error) {
+    } catch {
       throw new ApiError(401, 'Unauthorized: Invalid refresh token');
     }
 
