@@ -11,14 +11,14 @@ This repository is built to a strict, documented architecture. **Read the docs i
 | Layer | Choice | Why |
 |---|---|---|
 | Language | TypeScript (strict, no `any`) | Type safety across the whole stack |
-| Backend framework | Express | Mature, minimal, well understood |
-| ORM | Sequelize (`sequelize-typescript`) | Typed models via decorators |
+| Backend framework | Express 5 | Mature, minimal, well understood |
+| ORM | Sequelize 6 + `sequelize-typescript` | Typed models via decorators |
 | Database | PostgreSQL 16 + `pgvector` | Relational data *and* vector search in one DB |
-| Validation | Zod | Runtime validation that also produces TS types + OpenAPI |
-| Auth | JWT (access + refresh) + bcrypt | Stateless, role-based |
-| API docs | `@asteasolutions/zod-to-openapi` + Swagger UI | Single source of truth: Zod schema = validation = docs |
-| Rate limiting | `express-rate-limit` (+ Redis store optional) | Abuse protection |
-| Logging | Pino | Structured JSON logs |
+| Validation | Zod 4 | Runtime validation that also produces TS types + OpenAPI |
+| Auth | JWT (access + refresh, rotated) + bcrypt | Stateless, role-based |
+| API docs | `@asteasolutions/zod-to-openapi` v9 + Swagger UI | Single source of truth: Zod schema = validation = docs |
+| Rate limiting | `express-rate-limit` (in-memory) | Abuse protection |
+| Logging | Pino + `pino-http` | Structured JSON logs, redacted |
 | File upload | Multer | PDF ingestion |
 | PDF parsing | `pdf-parse` | Extract text from course PDFs |
 | LLM | Anthropic Claude via `@anthropic-ai/sdk` | Agentic tutor (tool use), grading, quiz + course generation |
@@ -29,6 +29,10 @@ This repository is built to a strict, documented architecture. **Read the docs i
 | Charts | Recharts (or Chart.js) | Render the tutor's generated graphs |
 | Containerization | Docker + docker-compose | Reproducible dev + deploy |
 | Testing | Vitest + Supertest | Unit + API integration |
+
+**Not used:** Redis. `ARCHITECTURE.md` lists it as an optional rate-limit store;
+the in-memory limiter is sufficient for a single API instance and it is
+deliberately omitted until there is more than one.
 
 ---
 
@@ -51,33 +55,68 @@ Read in this order:
 
 ```bash
 # 1. Clone and install
-git clone <repo> && cd edu-portal
+git clone <repo> && cd ohara/backend
+npm install
 cp .env.example .env          # then fill in secrets (see below)
 
-# 2. Bring up the whole stack (api + postgres+pgvector + redis)
-docker compose up --build
+# 2. Bring up the stack (backend + postgres/pgvector)
+cd .. && docker compose up --build
 
-# 3. Run migrations + seed inside the api container
-docker compose exec api npm run db:migrate
-docker compose exec api npm run db:seed
+# 3. Run migrations + seed inside the backend container
+docker compose exec backend npm run db:migrate
+docker compose exec backend npm run db:seed
 
-# API:      http://localhost:4000
-# Swagger:  http://localhost:4000/docs
-# Frontend: http://localhost:5173
+# API:      http://localhost:8080
+# Swagger:  http://localhost:8080/api/docs
+# OpenAPI:  http://localhost:8080/api/docs.json
 ```
+
+The seeder creates one verified admin from `SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD` (defaults `admin@ohara.local` / `changeme123`). Note that
+the **first account to register** is also promoted to admin automatically;
+everyone else self-registers as a `student`.
+
+### Running against a local PostgreSQL instead of Docker
+
+Point `DB_HOST`/`DB_PORT`/`DB_NAME` at your own server and run
+`npm run db:migrate` from `backend/`. That server must have **pgvector
+installed** or the `enable-pgvector` migration fails:
+
+```bash
+sudo apt install postgresql-16-pgvector   # Debian/Ubuntu
+```
+
+### Tests
+
+```bash
+cd backend && npm test
+```
+
+Integration tests run against a **separate** database named by `DB_NAME_TEST`,
+created and migrated automatically on first run. They truncate between tests, so
+that variable must never point at a database whose contents you care about.
 
 ### Required environment variables
 
+Validated by `backend/src/config/env.ts`. Anything not listed is not read.
+
 | Var | Purpose |
 |---|---|
-| `NODE_ENV` | `development` \| `production` |
-| `PORT` | API port (default 4000) |
-| `DATABASE_URL` | Postgres connection string |
-| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Token signing |
-| `ANTHROPIC_API_KEY` | LLM calls |
-| `EMBEDDINGS_API_KEY` | Embedding provider |
-| `EMBEDDINGS_PROVIDER` | `voyage` \| `openai` |
-| `REDIS_URL` | Rate-limit store (optional) |
+| `NODE_ENV` | `development` \| `production` \| `test` |
+| `PORT` | API port (default 8080) |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | Postgres connection |
+| `DB_NAME_TEST` | Database used by the test suite (truncated between tests) |
+| `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` | Token signing, min 32 chars |
+| `ACCESS_TOKEN_EXPIRES_IN` / `REFRESH_TOKEN_EXPIRES_IN` | e.g. `15m`, `7d` |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Transactional email |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` | Google OAuth |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` / `GITHUB_CALLBACK_URL` | GitHub OAuth |
+| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | Rate limiting (optional, defaulted) |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | Bootstrap admin (optional, defaulted) |
+| `FRONTEND_URL` | CORS origin and OAuth redirect target (optional) |
+
+`ANTHROPIC_API_KEY`, `EMBEDDINGS_API_KEY` and `EMBEDDINGS_PROVIDER` arrive in
+Phase 3 with the AI subsystem; they are not read yet.
 
 Config is validated at boot by a Zod schema (`src/config/env.ts`). The app **refuses to start** with a missing or malformed variable — fail fast, never silently.
 
@@ -85,26 +124,36 @@ Config is validated at boot by a Zod schema (`src/config/env.ts`). The app **ref
 
 ## Scripts
 
+Run from `backend/`:
+
 ```bash
-npm run dev          # ts-node-dev, hot reload
-npm run build        # tsc -> dist/
-npm run start        # node dist/
-npm run db:migrate   # run Sequelize migrations
-npm run db:seed      # seed demo data
-npm run lint         # eslint, fails on any warning
-npm run typecheck    # tsc --noEmit
-npm run test         # vitest
+npm run dev             # tsx watch, hot reload
+npm run build           # tsc -> dist/
+npm run start           # node dist/server.js
+npm run typecheck       # tsc --noEmit
+npm run lint            # eslint, fails on any warning
+npm run format          # prettier
+npm run test            # vitest (unit + integration)
+npm run test:watch      # vitest in watch mode
+npm run db:migrate      # run Sequelize migrations
+npm run db:migrate:undo # roll back the last migration
+npm run db:seed         # seed the bootstrap admin
 ```
 
 ## Repository layout (top level)
 
 ```
-edu-portal/
-├── apps/
-│   ├── api/          # Express + RMVCS backend
-│   └── web/          # React + Vite frontend
-├── docs/             # the documentation set
+ohara/
+├── backend/          # Express + RMVCS API
+│   ├── src/
+│   └── tests/        # vitest: unit/ + integration/
+├── frontend/         # React + Vite client (Phase 1, not yet built)
+├── docs/             # the documentation set (gitignored, local only)
 ├── docker-compose.yml
-├── CLAUDE.md
+├── CLAUDE.md         # agent operating manual (gitignored, local only)
 └── README.md
 ```
+
+`docs/` and `CLAUDE.md` are deliberately excluded from version control. They are
+the authoritative contract for this codebase but are maintained locally and not
+published to the remote.
