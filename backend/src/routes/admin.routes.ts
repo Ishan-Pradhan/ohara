@@ -7,11 +7,21 @@ import {
 import { requireRole, verifyJWT } from '../middlewares/auth.middleware.js';
 import { USER_ROLES } from '../constants/index.js';
 import { validate } from '../middlewares/validate.middleware.js';
-import { toggleBlockUserSchema } from '../validations/admin.validation.js';
+import {
+  getAllUsersSchema,
+  toggleBlockUserSchema,
+} from '../validations/admin.validation.js';
 
 const router = Router();
 
-router.route('/users').get(verifyJWT, requireRole(USER_ROLES.ADMIN), getAllUsers);
+router
+  .route('/users')
+  .get(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(getAllUsersSchema),
+    getAllUsers,
+  );
 
 router.route('/stats').get(verifyJWT, requireRole(USER_ROLES.ADMIN), getUserStats);
 

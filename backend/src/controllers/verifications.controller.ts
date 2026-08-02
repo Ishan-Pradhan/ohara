@@ -14,11 +14,7 @@ import { TWENTY_FOUR_HOURS_IN_MS } from '../constants/index.js';
 // VERIFY EMAIL
 export const verifyEmail = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const token = req.query.token as string | undefined;
-
-    if (!token) {
-      throw new ApiError(400, 'Verification token is required');
-    }
+    const { token } = req.validated?.query as { token: string };
 
     const verification =
       await verificationRepository.findEmailVerificationByToken(token);
@@ -39,7 +35,7 @@ export const verifyEmail = asyncHandler(
       throw new ApiError(404, 'User not found');
     }
 
-    const redirectUrl = `${env.FRONTEND_URL?.replace(/\/$/, '')}/verify-success`;
+    const redirectUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/verify-success`;
 
     // idempotent update
     if (!user.isVerified) {
@@ -68,11 +64,7 @@ export const verifyEmail = asyncHandler(
 // RESEND VERIFICATION EMAIL
 export const resendVerificationEmail = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const email = (req.body as { email?: unknown })?.email;
-
-    if (!email || typeof email !== 'string') {
-      throw new ApiError(400, 'Email is required');
-    }
+    const { email } = req.validated?.body as { email: string };
 
     const user = await userRepository.findByEmail(email);
 

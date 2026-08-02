@@ -38,7 +38,7 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 // REGISTER
 export const registerUser = asyncHandler(
   async (req: Request, res: Response) => {
-    const { name, email, password } = req.body as RegisterUserTypes;
+    const { name, email, password } = req.validated?.body as RegisterUserTypes;
 
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
@@ -114,11 +114,7 @@ export const registerUser = asyncHandler(
 // LOGIN
 export const loginUser = asyncHandler(
   async (req: Request, res: Response): Promise<Response> => {
-    const { email, password } = req.body as LoginUserTypes;
-
-    if (!email || !password) {
-      throw new ApiError(400, 'Email and password are required');
-    }
+    const { email, password } = req.validated?.body as LoginUserTypes;
 
     const user = await userRepository.findByEmailWithPassword(email);
 
@@ -265,18 +261,14 @@ export const changePassword = asyncHandler(
   async (req: AuthRequest, res: Response): Promise<Response> => {
     const userId = req.user?.id;
 
-    const { currentPassword, newPassword } = req.body as {
-      currentPassword?: string;
-      newPassword?: string;
-    };
-
     if (!userId) {
       throw new ApiError(401, 'Unauthorized');
     }
 
-    if (!currentPassword || !newPassword) {
-      throw new ApiError(400, 'Current password and new password are required');
-    }
+    const { currentPassword, newPassword } = req.validated?.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
 
     const user = await userRepository.findByIdWithSecrets(userId);
 
@@ -300,11 +292,8 @@ export const changePassword = asyncHandler(
 // FORGOT PASSWORD (PUBLIC)
 export const forgotPassword = asyncHandler(
   async (req: Request, res: Response): Promise<Response> => {
-    const { email } = req.body as { email?: unknown };
+    const { email } = req.validated?.body as { email: string };
 
-    if (!email || typeof email !== 'string') {
-      throw new ApiError(400, 'Email is required');
-    }
     const user = await userRepository.findByEmail(email);
 
     if (!user || user.authProvider === 'google') {
@@ -338,22 +327,10 @@ export const forgotPassword = asyncHandler(
 // RESET PASSWORD (PUBLIC)
 export const resetPassword = asyncHandler(
   async (req: Request, res: Response): Promise<Response> => {
-    const { token, newPassword } = req.body as {
-      token?: string;
-      newPassword?: string;
+    const { token, newPassword } = req.validated?.body as {
+      token: string;
+      newPassword: string;
     };
-
-    if (!token || typeof token !== 'string') {
-      throw new ApiError(400, 'Reset token is required');
-    }
-
-    if (
-      !newPassword ||
-      typeof newPassword !== 'string' ||
-      newPassword.length < 6
-    ) {
-      throw new ApiError(400, 'New password must be at least 6 characters');
-    }
 
     const record = await verificationRepository.findPasswordResetByToken(token);
 

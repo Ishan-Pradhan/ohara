@@ -9,6 +9,14 @@ export const toggleBlockUserSchema = {
     }),
 };
 
+export const getAllUsersSchema = {
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    search: z.string().optional(),
+  }),
+};
+
 // ── OpenAPI path registrations ─────────────────────────────────────────────
 
 import { registry } from './registry.js';
@@ -22,11 +30,7 @@ registry.registerPath({
   path: '/admin/users',
   tags: ['Admin'],
   request: {
-    query: z.object({
-      page: z.coerce.number().optional(),
-      limit: z.coerce.number().optional(),
-      search: z.string().optional(),
-    }),
+    query: getAllUsersSchema.query,
   },
   responses: {
     200: {

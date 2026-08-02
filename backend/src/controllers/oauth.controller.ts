@@ -151,33 +151,16 @@ export const githubAuthCallback = asyncHandler(async (req: Request, res: Respons
   }
 
   if (user.isBlocked) {
-    const errorRedirectUrl = `${env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${encodeURIComponent('Your account has been blocked')}`;
+    const errorRedirectUrl = `${env.FRONTEND_URL}/login?error=${encodeURIComponent('Your account has been blocked')}`;
     return res.redirect(errorRedirectUrl);
   }
 
   const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user.id);
 
-  const redirectUrl = env.FRONTEND_URL;
-
-  if (redirectUrl) {
-    return res
-      .cookie('accessToken', accessToken, getAccessTokenCookieOptions())
-      .cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions())
-      .redirect(redirectUrl);
-  } else {
-    return res.json({
-      message: 'Successfully logged in',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        role: user.role,
-      },
-      accessToken,
-      refreshToken,
-    });
-  }
+  return res
+    .cookie('accessToken', accessToken, getAccessTokenCookieOptions())
+    .cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions())
+    .redirect(env.FRONTEND_URL);
 })
 
 export const googleAuthCallback = asyncHandler(
@@ -260,7 +243,7 @@ export const googleAuthCallback = asyncHandler(
     }
 
     if (user.isBlocked) {
-      const errorRedirectUrl = `${env.FRONTEND_URL ?? 'http://localhost:3000'}/login?error=${encodeURIComponent('Your account has been blocked')}`;
+      const errorRedirectUrl = `${env.FRONTEND_URL}/login?error=${encodeURIComponent('Your account has been blocked')}`;
       return res.redirect(errorRedirectUrl);
     }
 
@@ -268,20 +251,10 @@ export const googleAuthCallback = asyncHandler(
       user.id,
     );
 
-    const redirectUrl = env.FRONTEND_URL;
-
-    if (redirectUrl) {
-      return res
-        .cookie('accessToken', accessToken, getAccessTokenCookieOptions())
-        .cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions())
-        .redirect(redirectUrl);
-    }
-
     return res
-      .status(200)
       .cookie('accessToken', accessToken, getAccessTokenCookieOptions())
       .cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions())
-      .json({ success: true, message: 'Google login successful' });
+      .redirect(env.FRONTEND_URL);
   },
 );
 

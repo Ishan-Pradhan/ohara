@@ -25,8 +25,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
 
 // send password reset email
 export const sendPasswordResetEmail = async (to: string, token: string) => {
-  const frontendUrl = env.FRONTEND_URL || 'http://localhost:5173';
-  const resetLink = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
+  const resetLink = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
 
   const from = env.EMAIL_FROM;
 

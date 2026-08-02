@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getCurrentUser } from '../controllers/users.controller.js';
 import { validate } from '../middlewares/validate.middleware.js';
+import { authLimiter } from '../middlewares/rateLimiter.middleware.js';
 import {
   loginSchema,
   refreshAccessTokenSchema,
@@ -35,6 +36,8 @@ import {
 } from '../controllers/verifications.controller.js';
 
 const router = Router();
+
+router.use(authLimiter);
 
 // ─────────────────────────────────────────────────────────────
 // AUTH

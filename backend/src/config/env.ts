@@ -43,12 +43,17 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
   RATE_LIMIT_MAX: z.coerce.number().default(1000),
 
+  // Stricter limiter for /auth/* (NFR-3): brute-force protection on credential
+  // and token endpoints. Skipped entirely under NODE_ENV=test.
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().default(20),
+
   // Seed data (sequelize-cli seeders read these from process.env directly)
   SEED_ADMIN_EMAIL: z.email().default('admin@ohara.local'),
   SEED_ADMIN_PASSWORD: z.string().min(6).default('changeme123'),
 
-  // Optional
-  FRONTEND_URL: z.url().optional(),
+  // Required: CORS allowlist origin, and where OAuth/email links redirect back to.
+  FRONTEND_URL: z.url(),
 });
 
 const parsed = envSchema.safeParse(process.env);

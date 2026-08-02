@@ -9,13 +9,15 @@ import {
   buildPaginationMeta,
   getPaginationParams,
 } from '../utils/pagination.utils.js';
+import type { PaginationQuery } from '../types/pagination.types.js';
 
 //    GET ALL USERS (ADMIN ONLY)
 export const getAllUsers = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { page, limit, offset } = getPaginationParams(req.query);
+    const query = (req.validated?.query ?? {}) as PaginationQuery;
+    const { page, limit, offset } = getPaginationParams(query);
 
-    const search = String(req.query.search || '').trim();
+    const search = String(query.search || '').trim();
 
     const { rows: users, count: totalItems } =
       await userRepository.findAndCountAll({
@@ -63,7 +65,7 @@ export const getUserStats = asyncHandler(
 // BLOCK / UNBLOCK USER
 export const blockAndUnblockUser = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const userId = req.params.id as string;
+    const { id: userId } = req.validated?.params as { id: string };
 
     const user = await userRepository.findById(userId);
 
