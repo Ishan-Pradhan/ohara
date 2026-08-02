@@ -2,6 +2,7 @@ import type { SignOptions } from 'jsonwebtoken';
 import { userRepository } from '../repositories/users.repository.js';
 import { ApiError } from './ApiError.js';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 
 // Helper function to generate access and refresh tokens
@@ -29,9 +30,17 @@ export const generateAccessAndRefereshTokens = async (userId: string) => {
       { ...(accessTokenExpiresIn !== undefined && { expiresIn: accessTokenExpiresIn } as SignOptions), }
     );
 
-    const refreshToken = jwt.sign({ id: user.id }, refreshTokenSecret, {
-      ...(refreshTokenExpiresIn !== undefined && { expiresIn: refreshTokenExpiresIn } as SignOptions),
-    });
+    // jti makes every issued refresh token unique. Without it, two signings in
+    // the same second produce byte-identical tokens (same payload, same iat at
+    // second granularity), so rotation would not actually rotate and a replayed
+    // token would still match the stored one.
+    const refreshToken = jwt.sign(
+      { id: user.id, jti: randomUUID() },
+      refreshTokenSecret,
+      {
+        ...(refreshTokenExpiresIn !== undefined && { expiresIn: refreshTokenExpiresIn } as SignOptions),
+      },
+    );
 
     user.refreshToken = refreshToken;
     await user.save();

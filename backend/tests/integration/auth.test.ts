@@ -1,0 +1,264 @@
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import request from 'supertest';
+
+vi.mock('../../src/services/email.service.js', async () => {
+  const { emailServiceStub } = await import('../helpers/auth.js');
+  return emailServiceStub();
+});
+
+const { app } = await import('../../src/app.js');
+const { truncateAll, closeDb } = await import('../helpers/db.js');
+const { cookiesFrom } = await import('../helpers/auth.js');
+const { User } = await import('../../src/models/users.model.js');
+
+const REGISTER = '/api/v1/auth/register';
+const LOGIN = '/api/v1/auth/login';
+const CURRENT = '/api/v1/auth/current-user';
+const REFRESH = '/api/v1/auth/refresh-access-token';
+const LOGOUT = '/api/v1/auth/logout';
+
+const credentials = {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  password: 'hunter2secret',
+};
+
+/** Registers the user and marks them verified so they can actually log in. */
+const registerVerified = async (): Promise<void> => {
+  await request(app).post(REGISTER).send(credentials);
+  await User.update(
+    { isVerified: true },
+    { where: { email: credentials.email } },
+  );
+};
+
+const signIn = async (): Promise<string[]> => {
+  const res = await request(app)
+    .post(LOGIN)
+    .send({ email: credentials.email, password: credentials.password });
+  return cookiesFrom(res);
+};
+
+beforeEach(async () => {
+  await truncateAll();
+});
+
+afterAll(async () => {
+  await closeDb();
+});
+
+describe('POST /auth/register', () => {
+  it('creates a user and never returns the password', async () => {
+    const res = await request(app).post(REGISTER).send(credentials);
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).not.toHaveProperty('password');
+    expect(res.body.data).not.toHaveProperty('refreshToken');
+    expect(res.body.data.email).toBe(credentials.email);
+  });
+
+  it('sets both auth cookies as httpOnly', async () => {
+    const cookies = cookiesFrom(await request(app).post(REGISTER).send(credentials));
+
+    const access = cookies.find((c) => c.startsWith('accessToken='));
+    const refresh = cookies.find((c) => c.startsWith('refreshToken='));
+
+    expect(access).toBeDefined();
+    expect(refresh).toBeDefined();
+    expect(access).toContain('HttpOnly');
+    expect(refresh).toContain('HttpOnly');
+  });
+
+  it('makes the very first account an admin', async () => {
+    await request(app).post(REGISTER).send(credentials);
+
+    const user = await User.findOne({ where: { email: credentials.email } });
+    expect(user?.role).toBe('admin');
+  });
+
+  it('makes every subsequent account a student', async () => {
+    await request(app).post(REGISTER).send(credentials);
+    await request(app)
+      .post(REGISTER)
+      .send({ ...credentials, email: 'second@example.com' });
+
+    const second = await User.findOne({
+      where: { email: 'second@example.com' },
+    });
+    expect(second?.role).toBe('student');
+  });
+
+  it('defaults new accounts to active status', async () => {
+    await request(app).post(REGISTER).send(credentials);
+
+    const user = await User.findOne({ where: { email: credentials.email } });
+    expect(user?.status).toBe('active');
+  });
+
+  it('rejects a duplicate email', async () => {
+    await request(app).post(REGISTER).send(credentials);
+    const res = await request(app).post(REGISTER).send(credentials);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('rejects a password shorter than six characters', async () => {
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ ...credentials, password: 'abc' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/login', () => {
+  it('refuses an unverified account', async () => {
+    await request(app).post(REGISTER).send(credentials);
+
+    const res = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: credentials.password });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('succeeds once the account is verified', async () => {
+    await registerVerified();
+
+    const res = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: credentials.password });
+
+    expect(res.status).toBe(200);
+    expect(cookiesFrom(res).some((c) => c.startsWith('accessToken='))).toBe(true);
+  });
+
+  it('refuses a wrong password', async () => {
+    await registerVerified();
+
+    const res = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: 'wrong-password' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('never returns the password hash', async () => {
+    await registerVerified();
+
+    const res = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: credentials.password });
+
+    expect(res.body.data).not.toHaveProperty('password');
+    expect(res.body.data).not.toHaveProperty('refreshToken');
+  });
+});
+
+describe('login status enforcement', () => {
+  const statuses = ['graduated', 'archived', 'inactive'] as const;
+
+  for (const status of statuses) {
+    it(`refuses a ${status} account`, async () => {
+      await registerVerified();
+      await User.update({ status }, { where: { email: credentials.email } });
+
+      const res = await request(app)
+        .post(LOGIN)
+        .send({ email: credentials.email, password: credentials.password });
+
+      expect(res.status).toBe(403);
+    });
+  }
+
+  it('still allows an active account', async () => {
+    await registerVerified();
+    await User.update(
+      { status: 'active' },
+      { where: { email: credentials.email } },
+    );
+
+    const res = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: credentials.password });
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /auth/current-user', () => {
+  it('rejects an unauthenticated request', async () => {
+    const res = await request(app).get(CURRENT);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns the caller when authenticated', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app).get(CURRENT).set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.email).toBe(credentials.email);
+    expect(res.body.data).not.toHaveProperty('password');
+    expect(res.body.data).not.toHaveProperty('refreshToken');
+  });
+});
+
+describe('POST /auth/refresh-access-token', () => {
+  it('rejects a request with no refresh cookie', async () => {
+    const res = await request(app).post(REFRESH);
+    expect(res.status).toBe(401);
+  });
+
+  it('issues a new token pair', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app).post(REFRESH).set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    const rotated = cookiesFrom(res);
+    expect(rotated.some((c) => c.startsWith('accessToken='))).toBe(true);
+    expect(rotated.some((c) => c.startsWith('refreshToken='))).toBe(true);
+  });
+
+  // Regression guard: this endpoint previously returned the raw unscoped model,
+  // leaking the bcrypt hash and the refresh token to the client.
+  it('never leaks the password hash or refresh token', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app).post(REFRESH).set('Cookie', cookies);
+
+    expect(res.body.data).not.toHaveProperty('password');
+    expect(res.body.data).not.toHaveProperty('refreshToken');
+  });
+
+  it('invalidates the previous refresh token after rotation', async () => {
+    await registerVerified();
+    const original = await signIn();
+
+    await request(app).post(REFRESH).set('Cookie', original);
+    const replay = await request(app).post(REFRESH).set('Cookie', original);
+
+    expect(replay.status).toBe(401);
+  });
+});
+
+describe('POST /auth/logout', () => {
+  it('clears the stored refresh token', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app).post(LOGOUT).set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    const user = await User.unscoped().findOne({
+      where: { email: credentials.email },
+    });
+    expect(user?.refreshToken).toBeNull();
+  });
+});
