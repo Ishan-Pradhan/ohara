@@ -1,5 +1,6 @@
 import type { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import type { AuthRequest, JwtPayload } from '../types/auth.types.js';
 import type { UserRole } from '../types/users.types.js';
@@ -21,7 +22,7 @@ export const verifyJWT = async (
   try {
     const decodedToken = jwt.verify(
       token,
-      process.env.ACCESS_TOKEN_SECRET as string,
+      env.ACCESS_TOKEN_SECRET,
     ) as JwtPayload;
     const user = await userRepository.findById(decodedToken.id);
     if (!user) throw new ApiError(401, 'User not found');

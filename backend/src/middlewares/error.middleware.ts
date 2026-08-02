@@ -1,3 +1,5 @@
+import { env } from '../config/env.js';
+import { logger } from '../utils/logger.js';
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { ValidationError } from 'sequelize';
@@ -41,16 +43,16 @@ const errorHandler = (
   // Generic JS error
   else if (err instanceof Error) {
     message =
-      process.env.NODE_ENV === 'development'
+      env.NODE_ENV === 'development'
         ? err.message
         : 'Internal server error';
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (env.NODE_ENV !== 'production') {
     if (statusCode === 401) {
-      console.warn(`[Auth Warning] ${message}`);
+      logger.warn(`[Auth Warning] ${message}`);
     } else {
-      console.error(`[Error] ${message}`, err);
+      logger.error({ err }, `[Error] ${message}`);
     }
   }
 
@@ -59,7 +61,7 @@ const errorHandler = (
     message,
     data: null,
     errors,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    ...(env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };
 

@@ -21,6 +21,7 @@ import type {
   RegisterUserTypes,
 } from '../types/auth.types.js';
 import { serializeUser } from '../serializers/user.serializer.js';
+import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ok } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -80,7 +81,7 @@ export const registerUser = asyncHandler(
       verificationEmailSent = true;
       verifyLink = result.verifyLink;
     } catch (emailError) {
-      console.error('Failed to send verification email:', emailError);
+      logger.error({ err: emailError }, 'Failed to send verification email');
     }
 
     const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(
@@ -99,7 +100,7 @@ export const registerUser = asyncHandler(
           email: newUser.email,
           avatarUrl: newUser.avatarUrl,
           verificationEmailSent,
-          ...(process.env.NODE_ENV === 'development' && verifyLink
+          ...(env.NODE_ENV === 'development' && verifyLink
             ? { verifyLink }
             : {}),
         },
@@ -193,7 +194,7 @@ export const logoutUser = asyncHandler(
       try {
         const decoded = jwt.verify(
           accessToken,
-          process.env.ACCESS_TOKEN_SECRET as string,
+          env.ACCESS_TOKEN_SECRET,
         ) as { id: string };
 
         const user = await userRepository.findByIdWithSecrets(decoded.id);
@@ -230,7 +231,7 @@ export const refreshAccessToken = asyncHandler(
     try {
       decoded = jwt.verify(
         refreshToken,
-        env.REFRESH_TOKEN_SECRET as string,
+        env.REFRESH_TOKEN_SECRET,
       ) as JwtPayload & { id: string };
     } catch {
       throw new ApiError(401, 'Unauthorized: Invalid refresh token');
@@ -323,7 +324,7 @@ export const forgotPassword = asyncHandler(
     try {
       await sendPasswordResetEmail(user.email, resetToken);
     } catch (emailErr) {
-      console.error('Failed to send password reset email', emailErr);
+      logger.error({ err: emailErr }, 'Failed to send password reset email');
     }
 
     return ok(

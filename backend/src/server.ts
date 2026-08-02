@@ -1,13 +1,14 @@
 import { app } from './app.js';
+import { logger } from './utils/logger.js';
 import { env } from './config/env.js';
 import { sequelize } from './config/db.js';
 
 const connectDB = async (): Promise<void> => {
   try {
     await sequelize.authenticate();
-    console.log('Database connected successfully');
+    logger.info('Database connected successfully');
   } catch (error) {
-    console.error('DB connection failed:', error);
+    logger.error({ err: error }, 'DB connection failed');
     process.exit(1);
   }
 };
@@ -15,7 +16,7 @@ const connectDB = async (): Promise<void> => {
 const start = async (): Promise<void> => {
   await connectDB();
   app.listen(env.PORT, () => {
-    console.log(`app is listening at ${env.PORT}`);
+    logger.info(`app is listening at ${env.PORT}`);
   });
 };
 

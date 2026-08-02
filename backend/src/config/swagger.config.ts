@@ -112,7 +112,6 @@ const options: swaggerJsdoc.Options = {
       }
     }
 
-    console.log('[Swagger] Scanning route files from:', routesDir);
     return paths;
   })(),
 };

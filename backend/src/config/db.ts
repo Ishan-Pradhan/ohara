@@ -5,8 +5,14 @@ import { env } from './env.js';
 import { User } from '../models/users.model.js';
 import { Verification } from '../models/verification.model.js';
 
+// Under test the app must talk to the throwaway test database. Without this
+// the integration suites connect to - and truncate - the development database,
+// because they share this Sequelize instance.
+const database =
+  env.NODE_ENV === 'test' && env.DB_NAME_TEST ? env.DB_NAME_TEST : env.DB_NAME;
+
 export const sequelize = new Sequelize({
-  database: env.DB_NAME,
+  database,
   username: env.DB_USER,
   password: env.DB_PASSWORD,
   host: env.DB_HOST,

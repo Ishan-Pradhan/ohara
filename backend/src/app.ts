@@ -3,6 +3,9 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
+import pinoHttp from 'pino-http';
+
+import { logger } from './utils/logger.js';
 
 import { env } from './config/env.js';
 import { limiter } from './middlewares/rateLimiter.middleware.js';
@@ -19,6 +22,8 @@ import healthRoutes from './routes/health.routes.js';
 export const app = express();
 
 app.set('trust proxy', 1);
+
+app.use(pinoHttp({ logger }));
 
 app.use(helmet());
 app.use(express.json());

@@ -38,7 +38,7 @@ export const googleAuthRedirect = async (_req: Request, res: Response) => {
 
   res.cookie('google_oauth_state', state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 5 * 60 * 1000,
   });
@@ -64,7 +64,7 @@ export const githubAuthRedirect = async (
 
   res.cookie("github_oauth_state", state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: env.NODE_ENV === 'production',
     sameSite: "lax",
     maxAge: 5 * 60 * 1000,
   });
@@ -95,7 +95,7 @@ export const githubAuthCallback = asyncHandler(async (req: Request, res: Respons
 
   res.clearCookie('github_oauth_state', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
   });
 
@@ -196,7 +196,7 @@ export const googleAuthCallback = asyncHandler(
 
     res.clearCookie('google_oauth_state', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
 
@@ -209,7 +209,7 @@ export const googleAuthCallback = asyncHandler(
 
     const ticket = await oauthClient.verifyIdToken({
       idToken: tokens.id_token as string,
-      audience: process.env.GOOGLE_CLIENT_ID as string,
+      audience: env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload() as GoogleProfile | undefined;
@@ -260,7 +260,7 @@ export const googleAuthCallback = asyncHandler(
     }
 
     if (user.isBlocked) {
-      const errorRedirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${encodeURIComponent('Your account has been blocked')}`;
+      const errorRedirectUrl = `${env.FRONTEND_URL ?? 'http://localhost:3000'}/login?error=${encodeURIComponent('Your account has been blocked')}`;
       return res.redirect(errorRedirectUrl);
     }
 

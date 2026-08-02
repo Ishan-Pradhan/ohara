@@ -39,6 +39,10 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().min(1),
   GITHUB_CALLBACK_URL: z.url(),
 
+  // Rate limiting
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  RATE_LIMIT_MAX: z.coerce.number().default(1000),
+
   // Seed data (sequelize-cli seeders read these from process.env directly)
   SEED_ADMIN_EMAIL: z.email().default('admin@ohara.local'),
   SEED_ADMIN_PASSWORD: z.string().min(6).default('changeme123'),

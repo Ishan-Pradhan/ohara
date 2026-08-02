@@ -1,5 +1,6 @@
 import { userRepository } from '../repositories/users.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
+import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/ApiError.js';
 import { generateToken } from '../utils/security.utils.js';
 import { generateAccessAndRefereshTokens } from '../utils/token.utils.js';
@@ -103,14 +104,14 @@ export const resendVerificationEmail = asyncHandler(
       );
       verifyLink = result.verifyLink;
     } catch (emailError) {
-      console.error('Failed to resend verification email:', emailError);
+      logger.error({ err: emailError }, 'Failed to resend verification email');
     }
 
     res.status(200).json({
       success: true,
       message:
         'If an account exists for this email, a verification link has been sent.',
-      ...(process.env.NODE_ENV === 'development' && verifyLink
+      ...(env.NODE_ENV === 'development' && verifyLink
         ? { verifyLink }
         : {}),
     });

@@ -12,10 +12,10 @@ export const baseCookieOptions = (): CookieOptions => ({
 
 export const getRefreshTokenCookieOptions = (): CookieOptions => ({
   ...baseCookieOptions(),
-  maxAge: parseTimeToMs(env.REFRESH_TOKEN_EXPIRES_IN as string),
+  maxAge: parseTimeToMs(env.REFRESH_TOKEN_EXPIRES_IN),
 });
 
 export const getAccessTokenCookieOptions = (): CookieOptions => ({
   ...baseCookieOptions(),
-  maxAge: parseTimeToMs(env.ACCESS_TOKEN_EXPIRES_IN as string),
+  maxAge: parseTimeToMs(env.ACCESS_TOKEN_EXPIRES_IN),
 });
