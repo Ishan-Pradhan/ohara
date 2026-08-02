@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5173,
+    port: 3000,
     proxy: {
       // Single origin by design. The backend sets its auth cookies with
       // sameSite=strict, so they are only sent on same-site requests — the

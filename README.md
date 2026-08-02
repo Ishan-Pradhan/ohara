@@ -59,12 +59,14 @@ git clone <repo> && cd ohara/backend
 npm install
 cp .env.example .env          # then fill in secrets (see below)
 
-# 2. Bring up the stack (backend + postgres/pgvector)
-cd .. && docker compose up --build
+# 2. Bring up the stack (backend + frontend + postgres/pgvector)
+#    --env-file is REQUIRED: compose resolves ${DB_USER} etc. from it, and
+#    there is deliberately no root .env.
+cd .. && docker compose --env-file ./backend/.env up --build
 
 # 3. Run migrations + seed inside the backend container
-docker compose exec backend npm run db:migrate
-docker compose exec backend npm run db:seed
+docker compose --env-file ./backend/.env exec backend npm run db:migrate
+docker compose --env-file ./backend/.env exec backend npm run db:seed
 
 # API:      http://localhost:8080
 # Swagger:  http://localhost:8080/api/docs
@@ -89,7 +91,7 @@ sudo apt install postgresql-16-pgvector   # Debian/Ubuntu
 ### Frontend
 
 ```bash
-cd frontend && npm run dev     # http://localhost:5173
+cd frontend && npm run dev     # http://localhost:3000
 ```
 
 Vite proxies `/api` to the backend on 8080, so the browser only ever sees one

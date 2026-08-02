@@ -1,3 +1,11 @@
+# Run with:  docker compose --env-file ./backend/.env up --build
+#
+# The --env-file flag is required, not optional. `env_file:` below only injects
+# variables INTO a container; the ${DB_USER}-style substitutions in this file
+# are resolved by Compose itself, which reads the shell environment or a .env in
+# this directory. There is deliberately no root .env (secrets live in
+# backend/.env only), so without --env-file the db container starts with an
+# empty POSTGRES_USER and fails.
 services:
   backend:
     build:
@@ -9,7 +17,9 @@ services:
       - "${PORT:-8080}:${PORT:-8080}"
     environment:
       - PORT=${PORT:-8080}
-      - NODE_ENV=${NODE_ENV:-development}
+      # This service builds the production target, so pino-pretty (a devDependency)
+      # is absent from the image. Defaulting to production keeps them consistent.
+      - NODE_ENV=${NODE_ENV:-production}
       - DB_HOST=db
       - DB_PORT=5432
     env_file:
@@ -26,7 +36,7 @@ services:
     container_name: ohara_frontend
     restart: always
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
     networks:
