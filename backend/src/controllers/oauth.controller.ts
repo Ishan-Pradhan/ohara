@@ -1,3 +1,4 @@
+import { USER_ROLES } from '../constants/index.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -119,7 +120,7 @@ export const githubAuthCallback = asyncHandler(async (req: Request, res: Respons
 
   if (!user) {
     const userCount = await userRepository.count();
-    const role = userCount === 0 ? 'admin' : 'user';
+    const role = userCount === 0 ? USER_ROLES.ADMIN : USER_ROLES.STUDENT;
 
     const randomPassword = generateToken();
     const hashedPassword = await hashPassword(randomPassword);
@@ -225,7 +226,7 @@ export const googleAuthCallback = asyncHandler(
 
     if (!user) {
       const userCount = await userRepository.count();
-      const role = userCount === 0 ? 'admin' : 'user';
+      const role = userCount === 0 ? USER_ROLES.ADMIN : USER_ROLES.STUDENT;
 
       const randomPassword = generateToken();
       const hashedPassword = await hashPassword(randomPassword);

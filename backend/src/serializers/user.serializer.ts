@@ -5,6 +5,7 @@ export const serializeUser = (u: UserInstance) => ({
   name: u.name,
   email: u.email,
   role: u.role,
+  status: u.status,
   isVerified: u.isVerified,
   isBlocked: u.isBlocked,
   authProvider: u.authProvider,

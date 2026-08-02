@@ -2,7 +2,7 @@ import { DataTypes } from 'sequelize';
 
 import { sequelize } from '../config/db.js';
 import type { UserInstance } from '../types/users.types.js';
-import { USER_ROLES } from '../constants/index.js';
+import { USER_ROLES, USER_STATUS } from '../constants/index.js';
 
 export const User = sequelize.define<UserInstance>(
   'User',
@@ -31,8 +31,28 @@ export const User = sequelize.define<UserInstance>(
       defaultValue: null,
     },
     role: {
-      type: DataTypes.ENUM(USER_ROLES.USER, USER_ROLES.ADMIN),
-      defaultValue: USER_ROLES.USER,
+      type: DataTypes.ENUM(
+        USER_ROLES.ADMIN,
+        USER_ROLES.TEACHER,
+        USER_ROLES.STUDENT,
+        USER_ROLES.ALUMNI,
+      ),
+      defaultValue: USER_ROLES.STUDENT,
+    },
+    status: {
+      type: DataTypes.ENUM(
+        USER_STATUS.ACTIVE,
+        USER_STATUS.INACTIVE,
+        USER_STATUS.GRADUATED,
+        USER_STATUS.ARCHIVED,
+      ),
+      allowNull: false,
+      defaultValue: USER_STATUS.ACTIVE,
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
     },
     isVerified: {
       type: DataTypes.BOOLEAN,
