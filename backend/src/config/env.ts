@@ -4,7 +4,7 @@ import { z } from 'zod';
 dotenv.config();
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(8080),
 
   // Database
@@ -13,6 +13,7 @@ const envSchema = z.object({
   DB_NAME: z.string().min(1),
   DB_USER: z.string().min(1),
   DB_PASSWORD: z.string().min(1),
+  DB_NAME_TEST: z.string().min(1).optional(),
 
   // JWT
   ACCESS_TOKEN_SECRET: z
@@ -37,6 +38,10 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: z.string().min(1),
   GITHUB_CLIENT_SECRET: z.string().min(1),
   GITHUB_CALLBACK_URL: z.url(),
+
+  // Seed data (sequelize-cli seeders read these from process.env directly)
+  SEED_ADMIN_EMAIL: z.email().default('admin@ohara.local'),
+  SEED_ADMIN_PASSWORD: z.string().min(6).default('changeme123'),
 
   // Optional
   FRONTEND_URL: z.url().optional(),
