@@ -3,7 +3,12 @@ import {
   getRefreshTokenCookieOptions,
 } from '../config/cookie.config.js';
 import { env } from '../config/env.js';
-import { ONE_HOUR_IN_MS, TWENTY_FOUR_HOURS_IN_MS } from '../constants/index.js';
+import {
+  ONE_HOUR_IN_MS,
+  TWENTY_FOUR_HOURS_IN_MS,
+  USER_ROLES,
+  USER_STATUS,
+} from '../constants/index.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
 import {
@@ -41,7 +46,10 @@ export const registerUser = asyncHandler(
     const hashedPassword = await hashPassword(password);
 
     const userCount = await userRepository.count();
-    const role = userCount === 0 ? 'admin' : 'user';
+    // The first account to register bootstraps the institution as its admin.
+    // Everyone else self-registers as a student; teachers and admins are
+    // provisioned by an admin (REQUIREMENTS.md FR-5..FR-7).
+    const role = userCount === 0 ? USER_ROLES.ADMIN : USER_ROLES.STUDENT;
 
     const newUser = await userRepository.create({
       name,
@@ -118,6 +126,15 @@ export const loginUser = asyncHandler(
 
     if (user.isBlocked) {
       throw new ApiError(403, 'Your account has been blocked');
+    }
+
+    // Graduated / archived / deactivated accounts keep their academic record
+    // but lose access (golden rule 10).
+    if (user.status !== USER_STATUS.ACTIVE) {
+      throw new ApiError(
+        403,
+        'This account is no longer active. Please contact your administrator.',
+      );
     }
 
     if (!user.isVerified) {

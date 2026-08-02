@@ -2,6 +2,7 @@ import type { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { ApiError } from '../utils/ApiError.js';
 import type { AuthRequest, JwtPayload } from '../types/auth.types.js';
+import type { UserRole } from '../types/users.types.js';
 import { userRepository } from '../repositories/users.repository.js';
 
 export const verifyJWT = async (
@@ -35,23 +36,21 @@ export const verifyJWT = async (
   }
 };
 
-export const isAdmin = async (
-  req: AuthRequest,
-  _res: Response,
-  next: NextFunction,
-) => {
-  const user = req.user;
+export const requireRole =
+  (...roles: UserRole[]) =>
+  (req: AuthRequest, _res: Response, next: NextFunction): void => {
+    const user = req.user;
 
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
+    if (!user) {
+      throw new ApiError(401, 'Unauthorized request');
+    }
 
-  if (user.role !== 'admin') {
-    throw new ApiError(403, 'Unauthorized request');
-  }
+    if (!roles.includes(user.role)) {
+      throw new ApiError(403, 'Unauthorized request');
+    }
 
-  next();
-};
+    next();
+  };
 
 export const checkBlockedUser = async (
   req: AuthRequest,
