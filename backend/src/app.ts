@@ -8,7 +8,9 @@ import { env } from './config/env.js';
 import { limiter } from './middlewares/rateLimiter.middleware.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 import { swaggerSpec } from './config/swagger.config.js';
-import './models/index.js';
+// Side-effect import: constructing the Sequelize instance is what registers
+// the models. Without it, any model used through this app is uninitialized.
+import './config/db.js';
 
 import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';

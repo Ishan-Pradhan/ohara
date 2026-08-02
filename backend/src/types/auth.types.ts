@@ -15,7 +15,7 @@ export interface JwtPayload {
 }
 
 import type { Request } from 'express';
-import type { UserInstance } from './users.types.js';
+import type { User } from '../models/users.model.js';
 export interface AuthRequest extends Request {
-  user?: UserInstance;
+  user?: User;
 }

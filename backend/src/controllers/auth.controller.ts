@@ -20,6 +20,7 @@ import type {
   LoginUserTypes,
   RegisterUserTypes,
 } from '../types/auth.types.js';
+import { serializeUser } from '../serializers/user.serializer.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ok } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -250,7 +251,9 @@ export const refreshAccessToken = asyncHandler(
       .cookie('refreshToken', newRefreshToken, getRefreshTokenCookieOptions())
       .json({
         success: true,
-        data: user,
+        // Must go through the serializer: this user came from the unscoped
+        // query, so it still carries the password hash and refresh token.
+        data: serializeUser(user),
         message: 'Token refreshed successfully',
       });
   },

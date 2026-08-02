@@ -1,6 +1,6 @@
-import type { UserInstance } from '../types/users.types.js';
+import type { User } from '../models/users.model.js';
 
-export const serializeUser = (u: UserInstance) => ({
+export const serializeUser = (u: User) => ({
   id: u.id,
   name: u.name,
   email: u.email,

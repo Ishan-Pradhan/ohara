@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { serializeUser } from '../../src/serializers/user.serializer.js';
+// Registers the models on the Sequelize instance; User.build() requires it.
+import '../../src/config/db.js';
 import { User } from '../../src/models/users.model.js';
 
 describe('serializeUser', () => {

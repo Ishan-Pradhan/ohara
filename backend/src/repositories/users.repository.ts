@@ -2,7 +2,6 @@ import { Op, type WhereOptions } from 'sequelize';
 import { User } from '../models/users.model.js';
 import type {
   UserCreationAttributes,
-  UserInstance,
   Users,
 } from '../types/users.types.js';
 
@@ -71,7 +70,7 @@ export const userRepository = {
     return await User.unscoped().findOne({ where: { email } });
   },
 
-  create: async (userData: UserCreationAttributes): Promise<UserInstance> => {
+  create: async (userData: UserCreationAttributes): Promise<User> => {
     return await User.create(userData);
   },
 

@@ -1,8 +1,5 @@
 import { Verification } from '../models/verification.model.js';
-import type {
-  VerificationCreationAttributes,
-  VerificationInstance,
-} from '../types/verifications.types.js';
+import type { VerificationCreationAttributes } from '../types/verifications.types.js';
 
 const createToken = async (data: VerificationCreationAttributes) => {
   return await Verification.create(data);
@@ -13,7 +10,7 @@ export const verificationRepository = {
     userId: string,
     token: string,
     expiresAt: Date,
-  ): Promise<VerificationInstance> => {
+  ): Promise<Verification> => {
     return createToken({
       userId,
       token,
@@ -26,7 +23,7 @@ export const verificationRepository = {
     userId: string,
     token: string,
     expiresAt: Date,
-  ): Promise<VerificationInstance> => {
+  ): Promise<Verification> => {
     return createToken({
       userId,
       token,
@@ -37,7 +34,7 @@ export const verificationRepository = {
 
   findEmailVerificationByToken: async (
     token: string,
-  ): Promise<VerificationInstance | null> => {
+  ): Promise<Verification | null> => {
     return await Verification.findOne({
       where: {
         token,
@@ -48,7 +45,7 @@ export const verificationRepository = {
 
   findPasswordResetByToken: async (
     token: string,
-  ): Promise<VerificationInstance | null> => {
+  ): Promise<Verification | null> => {
     return await Verification.findOne({
       where: {
         token,

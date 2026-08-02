@@ -1,37 +1,34 @@
+import 'reflect-metadata';
+import {
+  Table,
+  Column,
+  Model,
+  DataType,
+  Default,
+  AllowNull,
+  PrimaryKey,
+} from 'sequelize-typescript';
 
-import { DataTypes } from 'sequelize';
+@Table({ tableName: 'Verifications', timestamps: true })
+export class Verification extends Model {
+  @PrimaryKey
+  @Default(DataType.UUIDV4)
+  @Column(DataType.UUID)
+  declare id: string;
 
-import { sequelize } from '../config/db.js';
-import type { VerificationInstance } from '../types/verifications.types.js';
+  @AllowNull(false)
+  @Column(DataType.UUID)
+  declare userId: string;
 
+  @AllowNull(false)
+  @Column(DataType.STRING)
+  declare token: string;
 
-export const Verification = sequelize.define<VerificationInstance>(
-    'Verification',
-    {
-        id: {
-            type: DataTypes.UUID,
-            defaultValue: DataTypes.UUIDV4,
-            primaryKey: true,
-        },
-        userId: {
-            type: DataTypes.UUID,
-            allowNull: false,
-        },
-        token: {
-            type: DataTypes.STRING,
-            allowNull: false,
-        },
-        type: {
-            type: DataTypes.ENUM('emailVerification', 'passwordReset'),
-            allowNull: false,
-        },
-        expiresAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-        },
-    },
-    {
-        tableName: 'Verifications',
-        timestamps: true,
-    }
-);
+  @AllowNull(false)
+  @Column(DataType.ENUM('emailVerification', 'passwordReset'))
+  declare type: 'emailVerification' | 'passwordReset';
+
+  @AllowNull(false)
+  @Column(DataType.DATE)
+  declare expiresAt: Date;
+}

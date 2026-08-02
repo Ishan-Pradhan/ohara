@@ -1,4 +1,4 @@
-import { Model, type Optional } from 'sequelize';
+import type { Optional } from 'sequelize';
 import type { USER_ROLES, USER_STATUS } from '../constants/index.js';
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -36,5 +36,3 @@ export type UserCreationAttributes = Optional<
   | 'updatedAt'
 >;
 
-export interface UserInstance
-  extends Model<Users, UserCreationAttributes>, Users { }

@@ -1,6 +1,6 @@
 
 
-import { Model, type Optional } from 'sequelize';
+import type { Optional } from 'sequelize';
 
 export interface VerificationAttributes {
     id: string;
@@ -17,8 +17,3 @@ export type VerificationCreationAttributes = Optional<
     'id' | 'createdAt' | 'updatedAt'
 >;
 
-export type VerificationInstance = Model<
-    VerificationAttributes,
-    VerificationCreationAttributes
-> &
-    VerificationAttributes;
