@@ -86,10 +86,27 @@ installed** or the `enable-pgvector` migration fails:
 sudo apt install postgresql-16-pgvector   # Debian/Ubuntu
 ```
 
+### Frontend
+
+```bash
+cd frontend && npm run dev     # http://localhost:5173
+```
+
+Vite proxies `/api` to the backend on 8080, so the browser only ever sees one
+origin. That is not a convenience — the backend sets its auth cookies with
+`sameSite=strict`, so a cross-origin frontend would have them dropped on every
+request. nginx does the same proxying in production (`frontend/nginx.conf`).
+
+**All design values live in `frontend/src/styles/theme.css`.** Tailwind v4 is
+configured in CSS; there is no `tailwind.config.js`. Components reference
+semantic tokens (`bg-surface`, `text-fg`, `rounded-card`) and never raw hex or
+stock utilities, so changing the palette is a one-file edit.
+
 ### Tests
 
 ```bash
-cd backend && npm test
+cd backend && npm test         # 55 tests
+cd frontend && npm test        # 6 tests
 ```
 
 Integration tests run against a **separate** database named by `DB_NAME_TEST`,

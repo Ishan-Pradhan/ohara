@@ -1,0 +1,51 @@
+/*
+ * The single source of design values for the whole app.
+ *
+ * Tailwind v4 is configured in CSS, not JS — there is no tailwind.config.js.
+ * Every colour, radius and font lives here, so changing the look is a one-file
+ * edit. Components must reference the generated token utilities
+ * (bg-surface, text-fg, text-muted, rounded-card) and never a raw hex value or
+ * a stock utility like bg-indigo-600.
+ */
+
+@theme {
+  /* Surfaces */
+  --color-bg: oklch(99% 0.004 260);
+  --color-surface: oklch(100% 0 0);
+  --color-border: oklch(91% 0.006 260);
+
+  /* Text */
+  --color-fg: oklch(22% 0.02 260);
+  --color-muted: oklch(52% 0.015 260);
+
+  /* Brand */
+  --color-primary: oklch(48% 0.16 268);
+  --color-primary-hover: oklch(42% 0.16 268);
+  --color-primary-fg: oklch(99% 0 0);
+
+  /* Feedback */
+  --color-danger: oklch(56% 0.19 25);
+  --color-danger-soft: oklch(96% 0.03 25);
+  --color-success: oklch(58% 0.13 155);
+
+  /* Shape */
+  --radius-card: 0.75rem;
+  --radius-control: 0.5rem;
+
+  /* Type */
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Same token names, different values. Nothing else in the app changes. */
+:root.dark {
+  --color-bg: oklch(18% 0.015 260);
+  --color-surface: oklch(23% 0.018 260);
+  --color-border: oklch(32% 0.02 260);
+  --color-fg: oklch(96% 0.005 260);
+  --color-muted: oklch(70% 0.015 260);
+  --color-primary: oklch(66% 0.15 268);
+  --color-primary-hover: oklch(72% 0.15 268);
+  --color-primary-fg: oklch(18% 0.015 260);
+  --color-danger-soft: oklch(28% 0.06 25);
+}
