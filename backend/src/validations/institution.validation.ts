@@ -125,3 +125,67 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── ACADEMIC YEARS ──────────────────────────────────────────────────────────
+
+export const createAcademicYearSchema = {
+  body: z.object({
+    name: z.string().min(1, 'Name is required'),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
+    isCurrent: z.boolean().optional(),
+  }),
+};
+
+export const academicYearSchema = registry.register(
+  'AcademicYear',
+  z.object({
+    id: z.uuid(),
+    name: z.string(),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
+    isCurrent: z.boolean(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/academic-years',
+  tags: ['Institution'],
+  request: {
+    body: {
+      content: {
+        'application/json': { schema: createAcademicYearSchema.body },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description:
+        'Academic year created. If isCurrent was true, the previous current year is unset',
+      content: {
+        'application/json': { schema: envelope(academicYearSchema) },
+      },
+    },
+    400: { description: 'Validation failed' },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/academic-years',
+  tags: ['Institution'],
+  responses: {
+    200: {
+      description: 'List of academic years',
+      content: {
+        'application/json': { schema: envelope(z.array(academicYearSchema)) },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});

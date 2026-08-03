@@ -1,9 +1,10 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
-import type { ProgramCreationAttributes, ClassCreationAttributes } from '../types/institution.types.js';
+import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes } from '../types/institution.types.js';
 import { programRepository } from '../repositories/programs.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
-import { serializeProgram, serializeClass } from '../serializers/institution.serializer.js';
+import { academicYearRepository } from '../repositories/academicYears.repository.js';
+import { serializeProgram, serializeClass, serializeAcademicYear } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -54,5 +55,30 @@ export const listClasses = asyncHandler(
     const { programId } = req.validated?.query as { programId?: string };
     const classes = await classRepository.findAll({ programId });
     return ok(res, classes.map(serializeClass), 'Classes retrieved');
+  },
+);
+
+// ── ACADEMIC YEARS ──────────────────────────────────────────────────────────
+
+export const createAcademicYear = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { name, startDate, endDate, isCurrent } =
+      req.validated?.body as AcademicYearCreationAttributes;
+
+    const year = await academicYearRepository.create({
+      name,
+      startDate,
+      endDate,
+      isCurrent: isCurrent ?? false,
+    });
+
+    return ok(res, serializeAcademicYear(year), 'Academic year created', 201);
+  },
+);
+
+export const listAcademicYears = asyncHandler(
+  async (_req: AuthRequest, res: Response) => {
+    const years = await academicYearRepository.findAll();
+    return ok(res, years.map(serializeAcademicYear), 'Academic years retrieved');
   },
 );

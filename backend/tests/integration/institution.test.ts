@@ -192,3 +192,48 @@ describe('GET /admin/classes', () => {
     expect(res.body.data[0].name).toBe('Grade 10');
   });
 });
+
+const YEARS = '/api/v1/admin/academic-years';
+
+describe('POST /admin/academic-years', () => {
+  it('creates a non-current year by default', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({ name: '2025-2026', startDate: '2025-06-01', endDate: '2026-05-31' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.isCurrent).toBe(false);
+  });
+
+  it('flips the previous current year when a new one is created current', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const yearA = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2025-2026',
+        startDate: '2025-06-01',
+        endDate: '2026-05-31',
+        isCurrent: true,
+      });
+    expect(yearA.body.data.isCurrent).toBe(true);
+
+    const yearB = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2026-2027',
+        startDate: '2026-06-01',
+        endDate: '2027-05-31',
+        isCurrent: true,
+      });
+    expect(yearB.body.data.isCurrent).toBe(true);
+
+    const list = await request(app).get(YEARS).set('Cookie', cookies);
+    const current = list.body.data.filter((y: { isCurrent: boolean }) => y.isCurrent);
+    expect(current).toHaveLength(1);
+    expect(current[0].id).toBe(yearB.body.data.id);
+  });
+});

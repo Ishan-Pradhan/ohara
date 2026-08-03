@@ -2,7 +2,7 @@ import { sequelize } from '../../src/config/db.js';
 
 export const truncateAll = async (): Promise<void> => {
   await sequelize.query(
-    'TRUNCATE TABLE "Verifications", "Classes", "Programs", "Users" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "Verifications", "Classes", "AcademicYears", "Programs", "Users" RESTART IDENTITY CASCADE',
   );
 };
 

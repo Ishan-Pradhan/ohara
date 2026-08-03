@@ -31,3 +31,18 @@ export type ClassCreationAttributes = Optional<
   ClassAttributes,
   'id' | 'createdAt' | 'updatedAt'
 >;
+
+export interface AcademicYearAttributes {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type AcademicYearCreationAttributes = Optional<
+  AcademicYearAttributes,
+  'id' | 'isCurrent' | 'createdAt' | 'updatedAt'
+>;
