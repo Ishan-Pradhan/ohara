@@ -13,6 +13,18 @@ export const getStudentPlacement = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { studentId } = req.validated?.params as { studentId: string };
 
+    const user = req.user;
+    if (!user) {
+      throw new ApiError(401, 'Unauthorized request');
+    }
+
+    const isAdmin = user.role === 'admin';
+    const isSelf = user.id === studentId;
+
+    if (!isAdmin && !isSelf && user.role !== 'teacher') {
+      throw new ApiError(403, "Not authorized to view this student's placement");
+    }
+
     const student = await userRepository.findById(studentId);
     if (!student || student.role !== 'student') {
       throw new ApiError(404, 'Student not found');
@@ -36,13 +48,6 @@ export const getStudentPlacement = asyncHandler(
       currentYear.id,
     );
 
-    const user = req.user;
-    if (!user) {
-      throw new ApiError(401, 'Unauthorized request');
-    }
-
-    const isAdmin = user.role === 'admin';
-    const isSelf = user.id === studentId;
     const isTeachingTeacher =
       user.role === 'teacher' &&
       enrollments.some((enrollment) =>
