@@ -7,7 +7,10 @@ import {
   Default,
   AllowNull,
   PrimaryKey,
+  HasMany,
 } from 'sequelize-typescript';
+
+import { Section } from './sections.model.js';
 
 @Table({ tableName: 'AcademicYears', timestamps: true })
 export class AcademicYear extends Model {
@@ -32,4 +35,7 @@ export class AcademicYear extends Model {
   @Default(false)
   @Column(DataType.BOOLEAN)
   declare isCurrent: boolean;
+
+  @HasMany(() => Section)
+  declare sections?: Section[];
 }

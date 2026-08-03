@@ -8,7 +8,14 @@ import {
   AllowNull,
   Unique,
   PrimaryKey,
+  ForeignKey,
+  BelongsTo,
+  BelongsToMany,
 } from 'sequelize-typescript';
+
+import { Class } from './classes.model.js';
+import { User } from './users.model.js';
+import { CourseTeacher } from './courseTeachers.model.js';
 
 @Table({ tableName: 'Courses', timestamps: true })
 export class Course extends Model {
@@ -17,9 +24,13 @@ export class Course extends Model {
   @Column(DataType.UUID)
   declare id: string;
 
+  @ForeignKey(() => Class)
   @AllowNull(false)
   @Column(DataType.UUID)
   declare classId: string;
+
+  @BelongsTo(() => Class)
+  declare class?: Class;
 
   @AllowNull(false)
   @Column(DataType.STRING)
@@ -33,4 +44,7 @@ export class Course extends Model {
   @Default(null)
   @Column(DataType.STRING)
   declare description: string | null;
+
+  @BelongsToMany(() => User, () => CourseTeacher)
+  declare teachers?: User[];
 }

@@ -7,10 +7,12 @@ import {
   Default,
   AllowNull,
   PrimaryKey,
+  HasMany,
 } from 'sequelize-typescript';
 
 import { INSTITUTION_TYPES } from '../constants/index.js';
 import type { InstitutionType } from '../types/institution.types.js';
+import { Class } from './classes.model.js';
 
 @Table({ tableName: 'Programs', timestamps: true })
 export class Program extends Model {
@@ -36,4 +38,7 @@ export class Program extends Model {
   @Default(null)
   @Column(DataType.STRING)
   declare description: string | null;
+
+  @HasMany(() => Class)
+  declare classes?: Class[];
 }
