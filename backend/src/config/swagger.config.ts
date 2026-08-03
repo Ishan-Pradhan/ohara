@@ -7,6 +7,7 @@ import { registry } from '../validations/registry.js';
 import '../validations/user.response.js';
 import '../validations/auth.validation.js';
 import '../validations/admin.validation.js';
+import '../validations/institution.validation.js';
 
 registry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',
@@ -38,5 +39,6 @@ export const swaggerSpec = generator.generateDocument({
     { name: 'Password', description: 'Forgot, reset and change password' },
     { name: 'OAuth', description: 'Google and GitHub OAuth 2.0 flows' },
     { name: 'Admin', description: 'User management (admin only)' },
+    { name: 'Institution', description: 'Academic hierarchy: programs, classes, academic years, sections, courses (admin only)' },
   ],
 });
