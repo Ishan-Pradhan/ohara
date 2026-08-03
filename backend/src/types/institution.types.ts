@@ -17,3 +17,17 @@ export type ProgramCreationAttributes = Optional<
   ProgramAttributes,
   'id' | 'description' | 'createdAt' | 'updatedAt'
 >;
+
+export interface ClassAttributes {
+  id: string;
+  programId: string;
+  name: string;
+  orderIndex: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type ClassCreationAttributes = Optional<
+  ClassAttributes,
+  'id' | 'createdAt' | 'updatedAt'
+>;

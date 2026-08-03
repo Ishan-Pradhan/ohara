@@ -1,4 +1,5 @@
 import type { Program } from '../models/programs.model.js';
+import type { Class } from '../models/classes.model.js';
 
 export const serializeProgram = (p: Program) => ({
   id: p.id,
@@ -6,4 +7,12 @@ export const serializeProgram = (p: Program) => ({
   institutionType: p.institutionType,
   description: p.description,
   createdAt: p.createdAt,
+});
+
+export const serializeClass = (c: Class) => ({
+  id: c.id,
+  programId: c.programId,
+  name: c.name,
+  orderIndex: c.orderIndex,
+  createdAt: c.createdAt,
 });

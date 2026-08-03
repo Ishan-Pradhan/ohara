@@ -60,3 +60,68 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── CLASSES ─────────────────────────────────────────────────────────────────
+
+export const createClassSchema = {
+  body: z.object({
+    programId: z.uuid(),
+    name: z.string().min(1, 'Name is required'),
+    orderIndex: z.number().int(),
+  }),
+};
+
+export const listClassesSchema = {
+  query: z.object({
+    programId: z.uuid().optional(),
+  }),
+};
+
+export const classSchema = registry.register(
+  'Class',
+  z.object({
+    id: z.uuid(),
+    programId: z.uuid(),
+    name: z.string(),
+    orderIndex: z.number(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/classes',
+  tags: ['Institution'],
+  request: {
+    body: {
+      content: { 'application/json': { schema: createClassSchema.body } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Class created',
+      content: { 'application/json': { schema: envelope(classSchema) } },
+    },
+    400: { description: 'Validation failed, or (programId, orderIndex) already in use' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Program not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/classes',
+  tags: ['Institution'],
+  request: { query: listClassesSchema.query },
+  responses: {
+    200: {
+      description: 'List of classes',
+      content: {
+        'application/json': { schema: envelope(z.array(classSchema)) },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});

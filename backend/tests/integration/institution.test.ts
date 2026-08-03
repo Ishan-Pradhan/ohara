@@ -99,3 +99,96 @@ describe('GET /admin/programs', () => {
     expect(res.body.data[0].name).toBe('Engineering');
   });
 });
+
+const { createProgram } = await import('../helpers/institution.js');
+
+const CLASSES = '/api/v1/admin/classes';
+
+describe('POST /admin/classes', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const res = await request(app)
+      .post(CLASSES)
+      .send({ programId: 'x', name: 'Grade 10', orderIndex: 1 });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const program = await createProgram();
+    const res = await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Grade 10', orderIndex: 1 });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent programId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({
+        programId: '00000000-0000-0000-0000-000000000000',
+        name: 'Grade 10',
+        orderIndex: 1,
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('creates a class as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const res = await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Grade 10', orderIndex: 1 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({
+      programId: program.id,
+      name: 'Grade 10',
+      orderIndex: 1,
+    });
+  });
+
+  it('rejects a duplicate (programId, orderIndex) with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Grade 10', orderIndex: 1 });
+
+    const res = await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Grade 10 (alt)', orderIndex: 1 });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /admin/classes', () => {
+  it('filters by programId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const programA = await createProgram({ name: 'A' });
+    const programB = await createProgram({ name: 'B' });
+    await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: programA.id, name: 'Grade 10', orderIndex: 1 });
+    await request(app)
+      .post(CLASSES)
+      .set('Cookie', cookies)
+      .send({ programId: programB.id, name: 'Year 1', orderIndex: 1 });
+
+    const res = await request(app)
+      .get(CLASSES)
+      .query({ programId: programA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].name).toBe('Grade 10');
+  });
+});
