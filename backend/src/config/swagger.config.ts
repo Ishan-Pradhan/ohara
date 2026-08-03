@@ -9,6 +9,7 @@ import '../validations/auth.validation.js';
 import '../validations/admin.validation.js';
 import '../validations/institution.validation.js';
 import '../validations/placement.validation.js';
+import '../validations/students.validation.js';
 
 registry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',

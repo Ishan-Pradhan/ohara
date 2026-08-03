@@ -55,4 +55,21 @@ export const classMembershipRepository = {
   ): Promise<ClassMembership | null> => {
     return await ClassMembership.findOne({ where: { studentId, academicYearId } });
   },
+
+  /** Powers the FR-10 combined view (Task 4): one deep-included row per (student, year). */
+  findCurrentWithDetails: async (
+    studentId: string,
+    currentAcademicYearId: string,
+  ): Promise<ClassMembership | null> => {
+    return await ClassMembership.findOne({
+      where: { studentId, academicYearId: currentAcademicYearId },
+      include: [
+        {
+          association: 'section',
+          include: [{ association: 'class', include: ['program'] }],
+        },
+        'academicYear',
+      ],
+    });
+  },
 };
