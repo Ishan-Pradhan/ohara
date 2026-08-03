@@ -87,6 +87,19 @@ export const createSection = async (
   });
 };
 
+/** A verified student-role user, mirrors createTeacherUser. */
+export const createStudentUser = async (
+  overrides: Partial<{ name: string; email: string }> = {},
+) => {
+  return userRepository.create({
+    name: overrides.name ?? 'Test Student',
+    email: overrides.email ?? `student-${Date.now()}-${Math.random()}@example.com`,
+    password: await hashPassword('hunter2secret'),
+    role: 'student',
+    isVerified: true,
+  });
+};
+
 export const createCourse = async (
   overrides: Partial<{
     classId: string;

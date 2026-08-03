@@ -22,3 +22,10 @@ export const INSTITUTION_TYPES = {
   COLLEGE: 'college',
   UNIVERSITY: 'university',
 } as const;
+
+export const CLASS_MEMBERSHIP_OUTCOMES = {
+  ENROLLED: 'enrolled',
+  PROMOTED: 'promoted',
+  RETAINED: 'retained',
+  GRADUATED: 'graduated',
+} as const;
