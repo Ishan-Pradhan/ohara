@@ -1,12 +1,14 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes, SectionCreationAttributes, CourseCreationAttributes } from '../types/institution.types.js';
+import type { CourseTeacherCreationAttributes } from '../types/institution.types.js';
 import { programRepository } from '../repositories/programs.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
-import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection, serializeCourse } from '../serializers/institution.serializer.js';
+import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
+import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection, serializeCourse, serializeCourseTeacher } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -163,5 +165,64 @@ export const listCourses = asyncHandler(
     const { classId } = req.validated?.query as { classId?: string };
     const courses = await courseRepository.findAll({ classId });
     return ok(res, courses.map(serializeCourse), 'Courses retrieved');
+  },
+);
+
+// ── COURSE TEACHERS ──────────────────────────────────────────────────────────
+
+export const assignCourseTeacher = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id: courseId } = req.validated?.params as { id: string };
+    const { teacherId } =
+      req.validated?.body as CourseTeacherCreationAttributes;
+
+    const course = await courseRepository.findById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    const teacher = await userRepository.findById(teacherId);
+    if (!teacher) {
+      throw new ApiError(404, 'Teacher not found');
+    }
+    if (teacher.role !== 'teacher') {
+      throw new ApiError(400, 'teacherId must reference a teacher');
+    }
+
+    const assignment = await courseTeacherRepository.assign({
+      teacherId,
+      courseId,
+    });
+
+    return ok(
+      res,
+      serializeCourseTeacher(assignment, teacher),
+      'Teacher assigned',
+      201,
+    );
+  },
+);
+
+export const listCourseTeachers = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id: courseId } = req.validated?.params as { id: string };
+
+    const course = await courseRepository.findById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    const assignments = await courseTeacherRepository.findByCourseId(courseId);
+    const withTeachers = await Promise.all(
+      assignments.map(async (assignment) => {
+        const teacher = await userRepository.findById(assignment.teacherId);
+        // teacherId is enforced not-null and FK-constrained — a missing user
+        // here would mean the DB is in an inconsistent state, not a normal
+        // 404 case, so let it surface as a 500 rather than silently skipping.
+        return serializeCourseTeacher(assignment, teacher!);
+      }),
+    );
+
+    return ok(res, withTeachers, 'Course teachers retrieved');
   },
 );

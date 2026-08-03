@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError.js';
 import type { AuthRequest, JwtPayload } from '../types/auth.types.js';
 import type { UserRole } from '../types/users.types.js';
 import { userRepository } from '../repositories/users.repository.js';
+import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
 
 export const verifyJWT = async (
   req: AuthRequest,
@@ -67,5 +68,38 @@ export const checkBlockedUser = async (
   if (user.isBlocked) {
     throw new ApiError(403, 'User is blocked');
   }
+  next();
+};
+
+/**
+ * Course-scoped ownership guard (FR-4). Admins always pass. Otherwise the
+ * caller must be an assigned teacher for `req.params.courseId` — every
+ * course-scoped route (Phase 3+) must name that param `:courseId`.
+ */
+export const requireCourseTeacher = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, 'Unauthorized request');
+  }
+
+  if (user.role === 'admin') {
+    return next();
+  }
+
+  // req.params is typed as Record<string, string> with an index signature, so
+  // under noUncheckedIndexedAccess a named lookup widens to `string |
+  // undefined` even though Express always populates a matched route param.
+  // Cast rather than leave an unreachable undefined-check, same as the
+  // req.validated.params casts used elsewhere in these controllers.
+  const { courseId } = req.params as { courseId: string };
+  const isAssigned = await courseTeacherRepository.exists(user.id, courseId);
+  if (!isAssigned) {
+    throw new ApiError(403, 'Not authorized for this course');
+  }
+
   next();
 };

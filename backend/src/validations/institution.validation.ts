@@ -327,3 +327,72 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── COURSE TEACHERS ──────────────────────────────────────────────────────────
+
+const courseIdParams = { params: z.object({ id: z.uuid() }) };
+
+export const assignCourseTeacherSchema = {
+  params: courseIdParams.params,
+  body: z.object({ teacherId: z.uuid() }),
+};
+
+export const listCourseTeachersSchema = courseIdParams;
+
+export const courseTeacherSchema = registry.register(
+  'CourseTeacher',
+  z.object({
+    id: z.uuid(),
+    courseId: z.uuid(),
+    teacherId: z.uuid(),
+    teacherName: z.string(),
+    teacherEmail: z.string(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/courses/{id}/teachers',
+  tags: ['Institution'],
+  request: {
+    params: assignCourseTeacherSchema.params,
+    body: {
+      content: { 'application/json': { schema: assignCourseTeacherSchema.body } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Teacher assigned to the course',
+      content: {
+        'application/json': { schema: envelope(courseTeacherSchema) },
+      },
+    },
+    400: {
+      description: 'teacherId is not a teacher, or already assigned to this course',
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Course or teacher not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/courses/{id}/teachers',
+  tags: ['Institution'],
+  request: { params: listCourseTeachersSchema.params },
+  responses: {
+    200: {
+      description: 'Teachers assigned to the course',
+      content: {
+        'application/json': {
+          schema: envelope(z.array(courseTeacherSchema)),
+        },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Course not found' },
+  },
+});

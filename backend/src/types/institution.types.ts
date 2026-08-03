@@ -76,3 +76,16 @@ export type CourseCreationAttributes = Optional<
   CourseAttributes,
   'id' | 'description' | 'createdAt' | 'updatedAt'
 >;
+
+export interface CourseTeacherAttributes {
+  id: string;
+  teacherId: string;
+  courseId: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type CourseTeacherCreationAttributes = Optional<
+  CourseTeacherAttributes,
+  'id' | 'createdAt' | 'updatedAt'
+>;

@@ -360,3 +360,100 @@ describe('POST /admin/courses', () => {
     expect(res.status).toBe(400);
   });
 });
+
+const { createCourse } = await import('../helpers/institution.js');
+
+const COURSE_TEACHERS = (courseId: string) =>
+  `/api/v1/admin/courses/${courseId}/teachers`;
+
+describe('POST /admin/courses/:id/teachers', () => {
+  it('rejects a non-existent courseId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+    const res = await request(app)
+      .post(COURSE_TEACHERS('00000000-0000-0000-0000-000000000000'))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a non-existent teacherId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const res = await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: '00000000-0000-0000-0000-000000000000' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a teacherId that is not a teacher with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const notATeacher = await request(app)
+      .get('/api/v1/auth/current-user')
+      .set('Cookie', await signInAs('notateacher@example.com', 'student'));
+
+    const res = await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: notATeacher.body.data.id });
+    expect(res.status).toBe(400);
+  });
+
+  it('assigns a teacher to a course', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+
+    const res = await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({
+      courseId: course.id,
+      teacherId: teacher.id,
+      teacherName: teacher.name,
+    });
+  });
+
+  it('rejects assigning the same teacher to the same course twice with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+
+    await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+
+    const res = await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /admin/courses/:id/teachers', () => {
+  it('lists assigned teachers with name and email', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser({ name: 'Ada Lovelace' });
+    await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+
+    const res = await request(app)
+      .get(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].teacherName).toBe('Ada Lovelace');
+  });
+});
