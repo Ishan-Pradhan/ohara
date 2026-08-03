@@ -2,6 +2,7 @@ import type { Program } from '../models/programs.model.js';
 import type { Class } from '../models/classes.model.js';
 import type { AcademicYear } from '../models/academicYears.model.js';
 import type { Section } from '../models/sections.model.js';
+import type { Course } from '../models/courses.model.js';
 
 export const serializeProgram = (p: Program) => ({
   id: p.id,
@@ -35,4 +36,13 @@ export const serializeSection = (s: Section) => ({
   classTeacherId: s.classTeacherId,
   name: s.name,
   createdAt: s.createdAt,
+});
+
+export const serializeCourse = (c: Course) => ({
+  id: c.id,
+  classId: c.classId,
+  title: c.title,
+  code: c.code,
+  description: c.description,
+  createdAt: c.createdAt,
 });

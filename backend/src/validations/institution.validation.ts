@@ -260,3 +260,70 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── COURSES ──────────────────────────────────────────────────────────────────
+
+export const createCourseSchema = {
+  body: z.object({
+    classId: z.uuid(),
+    title: z.string().min(1, 'Title is required'),
+    code: z.string().min(1, 'Code is required'),
+    description: z.string().optional(),
+  }),
+};
+
+export const listCoursesSchema = {
+  query: z.object({
+    classId: z.uuid().optional(),
+  }),
+};
+
+export const courseSchema = registry.register(
+  'Course',
+  z.object({
+    id: z.uuid(),
+    classId: z.uuid(),
+    title: z.string(),
+    code: z.string(),
+    description: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/courses',
+  tags: ['Institution'],
+  request: {
+    body: {
+      content: { 'application/json': { schema: createCourseSchema.body } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Course created',
+      content: { 'application/json': { schema: envelope(courseSchema) } },
+    },
+    400: { description: 'Validation failed, or code already in use' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Class not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/courses',
+  tags: ['Institution'],
+  request: { query: listCoursesSchema.query },
+  responses: {
+    200: {
+      description: 'List of courses',
+      content: {
+        'application/json': { schema: envelope(z.array(courseSchema)) },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});

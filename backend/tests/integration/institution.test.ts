@@ -315,3 +315,48 @@ describe('POST /admin/sections', () => {
     expect(res.status).toBe(400);
   });
 });
+
+const COURSES = '/api/v1/admin/courses';
+
+describe('POST /admin/courses', () => {
+  it('rejects a non-existent classId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({
+        classId: '00000000-0000-0000-0000-000000000000',
+        title: 'Physics',
+        code: 'PHYS-101',
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('creates a course as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const res = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({ title: 'Physics', code: 'PHYS-101' });
+  });
+
+  it('rejects a duplicate code with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101' });
+
+    const res = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics II', code: 'PHYS-101' });
+
+    expect(res.status).toBe(400);
+  });
+});

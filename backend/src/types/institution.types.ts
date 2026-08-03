@@ -61,3 +61,18 @@ export type SectionCreationAttributes = Optional<
   SectionAttributes,
   'id' | 'classTeacherId' | 'createdAt' | 'updatedAt'
 >;
+
+export interface CourseAttributes {
+  id: string;
+  classId: string;
+  title: string;
+  code: string;
+  description: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type CourseCreationAttributes = Optional<
+  CourseAttributes,
+  'id' | 'description' | 'createdAt' | 'updatedAt'
+>;

@@ -1,11 +1,12 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
-import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes, SectionCreationAttributes } from '../types/institution.types.js';
+import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes, SectionCreationAttributes, CourseCreationAttributes } from '../types/institution.types.js';
 import { programRepository } from '../repositories/programs.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
-import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection } from '../serializers/institution.serializer.js';
+import { courseRepository } from '../repositories/courses.repository.js';
+import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection, serializeCourse } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -131,5 +132,36 @@ export const listSections = asyncHandler(
     };
     const sections = await sectionRepository.findAll({ classId, academicYearId });
     return ok(res, sections.map(serializeSection), 'Sections retrieved');
+  },
+);
+
+// ── COURSES ──────────────────────────────────────────────────────────────────
+
+export const createCourse = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { classId, title, code, description } =
+      req.validated?.body as CourseCreationAttributes;
+
+    const cls = await classRepository.findById(classId);
+    if (!cls) {
+      throw new ApiError(404, 'Class not found');
+    }
+
+    const course = await courseRepository.create({
+      classId,
+      title,
+      code,
+      description: description ?? null,
+    });
+
+    return ok(res, serializeCourse(course), 'Course created', 201);
+  },
+);
+
+export const listCourses = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { classId } = req.validated?.query as { classId?: string };
+    const courses = await courseRepository.findAll({ classId });
+    return ok(res, courses.map(serializeCourse), 'Courses retrieved');
   },
 );
