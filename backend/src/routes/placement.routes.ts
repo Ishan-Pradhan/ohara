@@ -5,10 +5,14 @@ import { USER_ROLES } from '../constants/index.js';
 import {
   createClassMembershipSchema,
   listClassMembershipsSchema,
+  createEnrollmentSchema,
+  listEnrollmentsSchema,
 } from '../validations/placement.validation.js';
 import {
   createClassMembership,
   listClassMemberships,
+  createEnrollment,
+  listEnrollments,
 } from '../controllers/placement.controller.js';
 
 const router = Router();
@@ -20,5 +24,10 @@ router
   .route('/class-memberships')
   .post(validate(createClassMembershipSchema), createClassMembership)
   .get(validate(listClassMembershipsSchema), listClassMemberships);
+
+router
+  .route('/enrollments')
+  .post(validate(createEnrollmentSchema), createEnrollment)
+  .get(validate(listEnrollmentsSchema), listEnrollments);
 
 export default router;

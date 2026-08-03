@@ -1,9 +1,39 @@
+import { sequelize } from '../config/db.js';
 import { ClassMembership } from '../models/classMemberships.model.js';
-import type { ClassMembershipCreationAttributes } from '../types/placement.types.js';
+import { enrollmentRepository } from './enrollments.repository.js';
+import type {
+  ClassMembershipCreationAttributes,
+  EnrollmentCreationAttributes,
+} from '../types/placement.types.js';
 
 export const classMembershipRepository = {
-  create: async (data: ClassMembershipCreationAttributes): Promise<ClassMembership> => {
-    return await ClassMembership.create(data);
+  /**
+   * Creates the placement and, if `autoEnrollCourseIds` is non-empty, bulk-creates one
+   * `active` enrollment per course in the same transaction. `autoEnrollCourseIds` is resolved
+   * by the controller (courseRepository.findAll({classId}) when the program is a school)
+   * before calling this — the institutionType branch stays in the controller; this method only
+   * knows "create a membership, optionally with these enrollments, atomically."
+   */
+  create: async (
+    data: ClassMembershipCreationAttributes,
+    autoEnrollCourseIds: string[] = [],
+  ): Promise<ClassMembership> => {
+    return await sequelize.transaction(async (transaction) => {
+      const membership = await ClassMembership.create(data, { transaction });
+
+      if (autoEnrollCourseIds.length > 0) {
+        const enrollments: EnrollmentCreationAttributes[] = autoEnrollCourseIds.map(
+          (courseId) => ({
+            studentId: data.studentId,
+            courseId,
+            academicYearId: data.academicYearId,
+          }),
+        );
+        await enrollmentRepository.bulkCreate(enrollments, transaction);
+      }
+
+      return membership;
+    });
   },
 
   findAll: async (options?: {

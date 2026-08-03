@@ -15,6 +15,10 @@ const {
   createStudentUser,
   createTeacherUser,
   createAcademicYear,
+  createProgram,
+  createClass,
+  createCourse,
+  createEnrollment,
 } = await import('../helpers/institution.js');
 
 const CLASS_MEMBERSHIPS = '/api/v1/admin/class-memberships';
@@ -158,5 +162,161 @@ describe('GET /admin/class-memberships', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].studentId).toBe(studentA.id);
+  });
+});
+
+const ENROLLMENTS = '/api/v1/admin/enrollments';
+
+describe('POST /admin/enrollments', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const res = await request(app)
+      .post(ENROLLMENTS)
+      .send({ studentId: 'x', courseId: 'y' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const course = await createCourse();
+    const student = await createStudentUser();
+    const res = await request(app)
+      .post(ENROLLMENTS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId: course.id });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a student with no current-year placement with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    await createAcademicYear({ isCurrent: true });
+    const course = await createCourse();
+    const student = await createStudentUser();
+
+    const res = await request(app)
+      .post(ENROLLMENTS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId: course.id });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('enrolls a placed student in a course', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'college' });
+    const cls = await createClass({ programId: program.id });
+    const year = await createAcademicYear({ isCurrent: true });
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const course = await createCourse({ classId: cls.id });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id });
+
+    const res = await request(app)
+      .post(ENROLLMENTS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId: course.id });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({
+      studentId: student.id,
+      courseId: course.id,
+      academicYearId: year.id,
+      status: 'active',
+    });
+  });
+
+  it('rejects enrolling the same student in the same course twice with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'college' });
+    const cls = await createClass({ programId: program.id });
+    const year = await createAcademicYear({ isCurrent: true });
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const course = await createCourse({ classId: cls.id });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id });
+    await request(app)
+      .post(ENROLLMENTS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId: course.id });
+
+    const res = await request(app)
+      .post(ENROLLMENTS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId: course.id });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /admin/enrollments', () => {
+  it('filters by studentId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const studentA = await createStudentUser();
+    const studentB = await createStudentUser();
+    await createEnrollment({ studentId: studentA.id });
+    await createEnrollment({ studentId: studentB.id });
+
+    const res = await request(app)
+      .get(ENROLLMENTS)
+      .query({ studentId: studentA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].studentId).toBe(studentA.id);
+  });
+});
+
+describe('POST /admin/class-memberships — auto-enroll behavior', () => {
+  it('auto-enrolls the student in every course of the class for a school program', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'school' });
+    const cls = await createClass({ programId: program.id });
+    const year = await createAcademicYear();
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    await createCourse({ classId: cls.id, title: 'Physics', code: `PHYS-${Date.now()}` });
+    await createCourse({ classId: cls.id, title: 'Chemistry', code: `CHEM-${Date.now()}` });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id });
+
+    const res = await request(app)
+      .get(ENROLLMENTS)
+      .query({ studentId: student.id })
+      .set('Cookie', cookies);
+
+    expect(res.body.data).toHaveLength(2);
+  });
+
+  it('does not auto-enroll for a college program', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'college' });
+    const cls = await createClass({ programId: program.id });
+    const year = await createAcademicYear();
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    await createCourse({ classId: cls.id });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id });
+
+    const res = await request(app)
+      .get(ENROLLMENTS)
+      .query({ studentId: student.id })
+      .set('Cookie', cookies);
+
+    expect(res.body.data).toHaveLength(0);
   });
 });

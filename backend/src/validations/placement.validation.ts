@@ -74,3 +74,69 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── ENROLLMENTS ──────────────────────────────────────────────────────────────
+
+export const createEnrollmentSchema = {
+  body: z.object({
+    studentId: z.uuid(),
+    courseId: z.uuid(),
+  }),
+};
+
+export const listEnrollmentsSchema = {
+  query: z.object({
+    studentId: z.uuid().optional(),
+    courseId: z.uuid().optional(),
+    academicYearId: z.uuid().optional(),
+  }),
+};
+
+export const enrollmentSchema = registry.register(
+  'Enrollment',
+  z.object({
+    id: z.uuid(),
+    studentId: z.uuid(),
+    courseId: z.uuid(),
+    academicYearId: z.uuid(),
+    status: z.enum(['active', 'completed', 'dropped']),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/enrollments',
+  tags: ['Placement'],
+  request: {
+    body: { content: { 'application/json': { schema: createEnrollmentSchema.body } } },
+  },
+  responses: {
+    201: {
+      description: 'Enrollment created',
+      content: { 'application/json': { schema: envelope(enrollmentSchema) } },
+    },
+    400: { description: 'Validation failed, or already enrolled' },
+    401: unauthenticated,
+    403: forbidden,
+    404: {
+      description:
+        'Student, course, current academic year, or current-year placement not found',
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/enrollments',
+  tags: ['Placement'],
+  request: { query: listEnrollmentsSchema.query },
+  responses: {
+    200: {
+      description: 'List of enrollments',
+      content: { 'application/json': { schema: envelope(z.array(enrollmentSchema)) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});

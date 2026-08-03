@@ -29,3 +29,9 @@ export const CLASS_MEMBERSHIP_OUTCOMES = {
   RETAINED: 'retained',
   GRADUATED: 'graduated',
 } as const;
+
+export const ENROLLMENT_STATUSES = {
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  DROPPED: 'dropped',
+} as const;

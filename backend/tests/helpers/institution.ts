@@ -4,11 +4,13 @@ import { academicYearRepository } from '../../src/repositories/academicYears.rep
 import { sectionRepository } from '../../src/repositories/sections.repository.js';
 import { courseRepository } from '../../src/repositories/courses.repository.js';
 import { userRepository } from '../../src/repositories/users.repository.js';
+import { enrollmentRepository } from '../../src/repositories/enrollments.repository.js';
 import type { Program } from '../../src/models/programs.model.js';
 import type { Class } from '../../src/models/classes.model.js';
 import type { AcademicYear } from '../../src/models/academicYears.model.js';
 import type { Section } from '../../src/models/sections.model.js';
 import type { Course } from '../../src/models/courses.model.js';
+import type { Enrollment } from '../../src/models/enrollments.model.js';
 import type { InstitutionType } from '../../src/types/institution.types.js';
 import { hashPassword } from '../../src/utils/security.utils.js';
 
@@ -116,4 +118,14 @@ export const createCourse = async (
     code: overrides.code ?? `PHYS-${Date.now()}-${Math.random()}`,
     description: overrides.description ?? null,
   });
+};
+
+export const createEnrollment = async (
+  overrides: Partial<{ studentId: string; courseId: string; academicYearId: string }> = {},
+): Promise<Enrollment> => {
+  const academicYearId = overrides.academicYearId ?? (await createAcademicYear()).id;
+  const courseId = overrides.courseId ?? (await createCourse()).id;
+  const studentId = overrides.studentId ?? (await createStudentUser()).id;
+
+  return enrollmentRepository.create({ studentId, courseId, academicYearId });
 };

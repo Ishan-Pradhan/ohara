@@ -32,4 +32,8 @@ export const academicYearRepository = {
   findById: async (id: string): Promise<AcademicYear | null> => {
     return await AcademicYear.findByPk(id);
   },
+
+  findCurrent: async (): Promise<AcademicYear | null> => {
+    return await AcademicYear.findOne({ where: { isCurrent: true } });
+  },
 };
