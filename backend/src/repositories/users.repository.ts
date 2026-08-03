@@ -1,5 +1,6 @@
-import { Op, type WhereOptions } from 'sequelize';
+import { Op, type Transaction, type WhereOptions } from 'sequelize';
 import { User } from '../models/users.model.js';
+import { USER_STATUS } from '../constants/index.js';
 import type {
   UserCreationAttributes,
   Users,
@@ -87,10 +88,39 @@ export const userRepository = {
     };
   },
 
+  /** Any status change invalidates outstanding refresh tokens — a safe default. */
   updateStatus: async (id: string, status: UserStatus): Promise<User | null> => {
     const user = await User.findByPk(id);
     if (!user) return null;
     user.status = status;
+    user.refreshToken = null;
+    await user.save();
+    return user;
+  },
+
+  /** Same-transaction variant of `updateStatus`, used by composed repository
+   * methods (e.g. `classMembershipRepository.graduate`) that must land the
+   * user-status write and a related row write atomically. */
+  updateStatusInTransaction: async (
+    id: string,
+    status: UserStatus,
+    transaction: Transaction,
+  ): Promise<void> => {
+    await User.update(
+      { status, refreshToken: null },
+      { where: { id }, transaction },
+    );
+  },
+
+  /** Soft-removal: archives the account, stamps `deletedAt`, and revokes
+   * outstanding refresh tokens. Used instead of `updateStatus` specifically
+   * for archiving (see admin.controller.ts's `archiveUser`). */
+  archive: async (id: string): Promise<User | null> => {
+    const user = await User.findByPk(id);
+    if (!user) return null;
+    user.status = USER_STATUS.ARCHIVED;
+    user.deletedAt = new Date();
+    user.refreshToken = null;
     await user.save();
     return user;
   },

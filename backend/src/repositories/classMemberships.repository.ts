@@ -1,6 +1,7 @@
 import { sequelize } from '../config/db.js';
 import { ClassMembership } from '../models/classMemberships.model.js';
 import { enrollmentRepository } from './enrollments.repository.js';
+import { userRepository } from './users.repository.js';
 import type {
   ClassMembershipCreationAttributes,
   ClassMembershipOutcome,
@@ -86,16 +87,53 @@ export const classMembershipRepository = {
     return membership;
   },
 
-  setOutcome: async (
-    id: string,
+  /** Atomically creates the new membership (+ auto-enroll) and closes out the old one. */
+  promote: async (
+    oldMembershipId: string,
+    newData: ClassMembershipCreationAttributes,
     outcome: ClassMembershipOutcome,
-    promotedToId: string | null,
-  ): Promise<ClassMembership | null> => {
-    const membership = await ClassMembership.findByPk(id);
-    if (!membership) return null;
-    membership.outcome = outcome;
-    membership.promotedToId = promotedToId;
-    await membership.save();
-    return membership;
+    autoEnrollCourseIds: string[] = [],
+  ): Promise<ClassMembership> => {
+    return await sequelize.transaction(async (transaction) => {
+      const newMembership = await ClassMembership.create(newData, { transaction });
+
+      if (autoEnrollCourseIds.length > 0) {
+        const enrollments: EnrollmentCreationAttributes[] = autoEnrollCourseIds.map(
+          (courseId) => ({
+            studentId: newData.studentId,
+            courseId,
+            academicYearId: newData.academicYearId,
+          }),
+        );
+        await enrollmentRepository.bulkCreate(enrollments, transaction);
+      }
+
+      const oldMembership = await ClassMembership.findByPk(oldMembershipId, { transaction });
+      if (!oldMembership) {
+        throw new Error('Class membership disappeared mid-transaction');
+      }
+      oldMembership.outcome = outcome;
+      oldMembership.promotedToId = newMembership.id;
+      await oldMembership.save({ transaction });
+
+      return newMembership;
+    });
+  },
+
+  /** Atomically graduates the student (status + cleared refresh token) and closes out the membership. */
+  graduate: async (id: string, studentId: string): Promise<ClassMembership> => {
+    return await sequelize.transaction(async (transaction) => {
+      await userRepository.updateStatusInTransaction(studentId, 'graduated', transaction);
+
+      const membership = await ClassMembership.findByPk(id, { transaction });
+      if (!membership) {
+        throw new Error('Class membership disappeared mid-transaction');
+      }
+      membership.outcome = 'graduated';
+      membership.promotedToId = null;
+      await membership.save({ transaction });
+
+      return membership;
+    });
   },
 };

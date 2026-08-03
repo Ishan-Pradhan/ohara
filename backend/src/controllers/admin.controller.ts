@@ -10,7 +10,6 @@ import {
   getPaginationParams,
 } from '../utils/pagination.utils.js';
 import type { PaginationQuery } from '../types/pagination.types.js';
-import { USER_STATUS } from '../constants/index.js';
 
 //    GET ALL USERS (ADMIN ONLY)
 export const getAllUsers = asyncHandler(
@@ -92,7 +91,15 @@ export const archiveUser = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
 
-    const user = await userRepository.updateStatus(id, USER_STATUS.ARCHIVED);
+    const existing = await userRepository.findById(id);
+    if (!existing) {
+      throw new ApiError(404, 'User not found');
+    }
+    if (existing.role !== 'student') {
+      throw new ApiError(400, 'Only student accounts can be archived through this endpoint');
+    }
+
+    const user = await userRepository.archive(id);
     if (!user) {
       throw new ApiError(404, 'User not found');
     }
@@ -109,6 +116,9 @@ export const hardDeleteUser = asyncHandler(
     const user = await userRepository.findById(id);
     if (!user) {
       throw new ApiError(404, 'User not found');
+    }
+    if (user.role !== 'student') {
+      throw new ApiError(400, 'Only student accounts can be hard-deleted through this endpoint');
     }
 
     await userRepository.hardDelete(id);

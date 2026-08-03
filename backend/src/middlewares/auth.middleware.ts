@@ -27,6 +27,9 @@ export const verifyJWT = async (
     ) as JwtPayload;
     const user = await userRepository.findById(decodedToken.id);
     if (!user) throw new ApiError(401, 'User not found');
+    if (user.status !== 'active') {
+      throw new ApiError(401, 'Account is no longer active');
+    }
 
     req.user = user;
     next();

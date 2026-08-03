@@ -151,6 +151,14 @@ export const transferClassMembership = asyncHandler(
       throw new ApiError(404, 'Class membership not found');
     }
 
+    const student = await userRepository.findById(membership.studentId);
+    if (!student || student.status !== 'active') {
+      throw new ApiError(
+        400,
+        'This student is not active and cannot be transferred',
+      );
+    }
+
     const currentYear = await academicYearRepository.findCurrent();
     if (!currentYear || membership.academicYearId !== currentYear.id) {
       throw new ApiError(
@@ -168,6 +176,17 @@ export const transferClassMembership = asyncHandler(
       throw new ApiError(
         400,
         'Target section must belong to the current academic year',
+      );
+    }
+
+    // Cross-class transfer would leave the student's existing course enrollments (scoped to
+    // the old class's courses) stale — resyncing them is out of scope for now, so restrict
+    // transfers to the same class until that's built.
+    const currentSection = await sectionRepository.findById(membership.sectionId);
+    if (!currentSection || targetSection.classId !== currentSection.classId) {
+      throw new ApiError(
+        400,
+        'Transfer is only supported within the same class (cross-class transfer is not yet supported)',
       );
     }
 
@@ -193,6 +212,14 @@ export const setClassMembershipOutcome = asyncHandler(
       throw new ApiError(404, 'Class membership not found');
     }
 
+    const student = await userRepository.findById(membership.studentId);
+    if (!student || student.status !== 'active') {
+      throw new ApiError(
+        400,
+        'This student is not active and cannot have an outcome recorded',
+      );
+    }
+
     const currentYear = await academicYearRepository.findCurrent();
     if (!currentYear) {
       throw new ApiError(404, 'No current academic year is set');
@@ -200,12 +227,16 @@ export const setClassMembershipOutcome = asyncHandler(
     if (membership.academicYearId === currentYear.id) {
       throw new ApiError(400, 'This membership is already for the current academic year');
     }
+    if (membership.outcome === 'graduated') {
+      throw new ApiError(
+        400,
+        'This membership has already recorded a graduation and cannot be changed',
+      );
+    }
 
     if (outcome === 'graduated') {
-      await userRepository.updateStatus(membership.studentId, 'graduated');
-      // Existence just confirmed above in the same request — safe to assert non-null.
-      const updated = await classMembershipRepository.setOutcome(id, 'graduated', null);
-      return ok(res, serializeClassMembership(updated!), 'Student graduated', 201);
+      const updated = await classMembershipRepository.graduate(id, membership.studentId);
+      return ok(res, serializeClassMembership(updated), 'Student graduated', 201);
     }
 
     if (!targetSectionId) {
@@ -215,6 +246,10 @@ export const setClassMembershipOutcome = asyncHandler(
     const targetSection = await sectionRepository.findById(targetSectionId);
     if (!targetSection) {
       throw new ApiError(404, 'Target section not found');
+    }
+
+    if (targetSection.academicYearId !== currentYear.id) {
+      throw new ApiError(400, 'Target section must belong to the current academic year');
     }
 
     const cls = await classRepository.findById(targetSection.classId);
@@ -228,16 +263,16 @@ export const setClassMembershipOutcome = asyncHandler(
       autoEnrollCourseIds = courses.map((course) => course.id);
     }
 
-    const newMembership = await classMembershipRepository.create(
+    const newMembership = await classMembershipRepository.promote(
+      id,
       {
         studentId: membership.studentId,
         sectionId: targetSectionId,
-        academicYearId: currentYear.id,
+        academicYearId: targetSection.academicYearId,
       },
+      outcome,
       autoEnrollCourseIds,
     );
-
-    await classMembershipRepository.setOutcome(id, outcome, newMembership.id);
 
     return ok(res, serializeClassMembership(newMembership), 'Outcome recorded', 201);
   },
