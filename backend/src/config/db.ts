@@ -7,6 +7,7 @@ import { Verification } from '../models/verification.model.js';
 import { Program } from '../models/programs.model.js';
 import { Class } from '../models/classes.model.js';
 import { AcademicYear } from '../models/academicYears.model.js';
+import { Section } from '../models/sections.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -22,5 +23,5 @@ export const sequelize = new Sequelize({
   port: env.DB_PORT,
   dialect: 'postgres',
   logging: false,
-  models: [User, Verification, Program, Class, AcademicYear],
+  models: [User, Verification, Program, Class, AcademicYear, Section],
 });

@@ -1,10 +1,14 @@
 import { programRepository } from '../../src/repositories/programs.repository.js';
 import { classRepository } from '../../src/repositories/classes.repository.js';
 import { academicYearRepository } from '../../src/repositories/academicYears.repository.js';
+import { sectionRepository } from '../../src/repositories/sections.repository.js';
+import { userRepository } from '../../src/repositories/users.repository.js';
 import type { Program } from '../../src/models/programs.model.js';
 import type { Class } from '../../src/models/classes.model.js';
 import type { AcademicYear } from '../../src/models/academicYears.model.js';
+import type { Section } from '../../src/models/sections.model.js';
 import type { InstitutionType } from '../../src/types/institution.types.js';
+import { hashPassword } from '../../src/utils/security.utils.js';
 
 export const createProgram = async (
   overrides: Partial<{
@@ -45,5 +49,38 @@ export const createAcademicYear = async (
     startDate: overrides.startDate ?? '2025-06-01',
     endDate: overrides.endDate ?? '2026-05-31',
     isCurrent: overrides.isCurrent ?? false,
+  });
+};
+
+/** A verified teacher-role user, for classTeacherId / course_teachers fixtures. */
+export const createTeacherUser = async (
+  overrides: Partial<{ name: string; email: string }> = {},
+) => {
+  return userRepository.create({
+    name: overrides.name ?? 'Test Teacher',
+    email: overrides.email ?? `teacher-${Date.now()}-${Math.random()}@example.com`,
+    password: await hashPassword('hunter2secret'),
+    role: 'teacher',
+    isVerified: true,
+  });
+};
+
+export const createSection = async (
+  overrides: Partial<{
+    classId: string;
+    academicYearId: string;
+    classTeacherId: string | null;
+    name: string;
+  }> = {},
+): Promise<Section> => {
+  const classId = overrides.classId ?? (await createClass()).id;
+  const academicYearId =
+    overrides.academicYearId ?? (await createAcademicYear()).id;
+
+  return sectionRepository.create({
+    classId,
+    academicYearId,
+    classTeacherId: overrides.classTeacherId ?? null,
+    name: overrides.name ?? 'A',
   });
 };

@@ -189,3 +189,74 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── SECTIONS ─────────────────────────────────────────────────────────────────
+
+export const createSectionSchema = {
+  body: z.object({
+    classId: z.uuid(),
+    academicYearId: z.uuid(),
+    name: z.string().min(1, 'Name is required'),
+    classTeacherId: z.uuid().optional(),
+  }),
+};
+
+export const listSectionsSchema = {
+  query: z.object({
+    classId: z.uuid().optional(),
+    academicYearId: z.uuid().optional(),
+  }),
+};
+
+export const sectionSchema = registry.register(
+  'Section',
+  z.object({
+    id: z.uuid(),
+    classId: z.uuid(),
+    academicYearId: z.uuid(),
+    classTeacherId: z.uuid().nullable(),
+    name: z.string(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/sections',
+  tags: ['Institution'],
+  request: {
+    body: {
+      content: { 'application/json': { schema: createSectionSchema.body } },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Section created',
+      content: { 'application/json': { schema: envelope(sectionSchema) } },
+    },
+    400: {
+      description:
+        'Validation failed, classTeacherId is not a teacher, or (classId, academicYearId, name) already in use',
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Class, academic year, or teacher not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/sections',
+  tags: ['Institution'],
+  request: { query: listSectionsSchema.query },
+  responses: {
+    200: {
+      description: 'List of sections',
+      content: {
+        'application/json': { schema: envelope(z.array(sectionSchema)) },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});

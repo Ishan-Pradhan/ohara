@@ -7,6 +7,8 @@ import {
   createClassSchema,
   listClassesSchema,
   createAcademicYearSchema,
+  createSectionSchema,
+  listSectionsSchema,
 } from '../validations/institution.validation.js';
 import {
   createProgram,
@@ -15,6 +17,8 @@ import {
   listClasses,
   createAcademicYear,
   listAcademicYears,
+  createSection,
+  listSections,
 } from '../controllers/institution.controller.js';
 
 const router = Router();
@@ -36,5 +40,10 @@ router
   .route('/academic-years')
   .post(validate(createAcademicYearSchema), createAcademicYear)
   .get(listAcademicYears);
+
+router
+  .route('/sections')
+  .post(validate(createSectionSchema), createSection)
+  .get(validate(listSectionsSchema), listSections);
 
 export default router;

@@ -237,3 +237,81 @@ describe('POST /admin/academic-years', () => {
     expect(current[0].id).toBe(yearB.body.data.id);
   });
 });
+
+const { createTeacherUser, createClass, createAcademicYear } = await import('../helpers/institution.js');
+
+const SECTIONS = '/api/v1/admin/sections';
+
+describe('POST /admin/sections', () => {
+  it('rejects a non-existent classId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const year = await createAcademicYear();
+    const res = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({
+        classId: '00000000-0000-0000-0000-000000000000',
+        academicYearId: year.id,
+        name: 'A',
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a classTeacherId that is not a teacher with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYear();
+    const notATeacher = await request(app)
+      .get('/api/v1/auth/current-user')
+      .set('Cookie', await signInAs('student2@example.com', 'student'));
+
+    const res = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({
+        classId: cls.id,
+        academicYearId: year.id,
+        name: 'A',
+        classTeacherId: notATeacher.body.data.id,
+      });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates a section with a valid classTeacherId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYear();
+    const teacher = await createTeacherUser();
+
+    const res = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({
+        classId: cls.id,
+        academicYearId: year.id,
+        name: 'A',
+        classTeacherId: teacher.id,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.classTeacherId).toBe(teacher.id);
+  });
+
+  it('rejects a duplicate (classId, academicYearId, name) with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYear();
+
+    await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: year.id, name: 'A' });
+
+    const res = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: year.id, name: 'A' });
+
+    expect(res.status).toBe(400);
+  });
+});

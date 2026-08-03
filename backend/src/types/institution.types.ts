@@ -46,3 +46,18 @@ export type AcademicYearCreationAttributes = Optional<
   AcademicYearAttributes,
   'id' | 'isCurrent' | 'createdAt' | 'updatedAt'
 >;
+
+export interface SectionAttributes {
+  id: string;
+  classId: string;
+  academicYearId: string;
+  classTeacherId: string | null;
+  name: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type SectionCreationAttributes = Optional<
+  SectionAttributes,
+  'id' | 'classTeacherId' | 'createdAt' | 'updatedAt'
+>;

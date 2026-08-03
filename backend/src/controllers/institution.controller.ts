@@ -1,13 +1,15 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
-import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes } from '../types/institution.types.js';
+import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes, SectionCreationAttributes } from '../types/institution.types.js';
 import { programRepository } from '../repositories/programs.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
-import { serializeProgram, serializeClass, serializeAcademicYear } from '../serializers/institution.serializer.js';
+import { sectionRepository } from '../repositories/sections.repository.js';
+import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
+import { userRepository } from '../repositories/users.repository.js';
 
 // ── PROGRAMS ────────────────────────────────────────────────────────────────
 
@@ -80,5 +82,54 @@ export const listAcademicYears = asyncHandler(
   async (_req: AuthRequest, res: Response) => {
     const years = await academicYearRepository.findAll();
     return ok(res, years.map(serializeAcademicYear), 'Academic years retrieved');
+  },
+);
+
+// ── SECTIONS ─────────────────────────────────────────────────────────────────
+
+export const createSection = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { classId, academicYearId, name, classTeacherId } =
+      req.validated?.body as SectionCreationAttributes;
+
+    const cls = await classRepository.findById(classId);
+    if (!cls) {
+      throw new ApiError(404, 'Class not found');
+    }
+
+    const year = await academicYearRepository.findById(academicYearId);
+    if (!year) {
+      throw new ApiError(404, 'Academic year not found');
+    }
+
+    if (classTeacherId) {
+      const teacher = await userRepository.findById(classTeacherId);
+      if (!teacher) {
+        throw new ApiError(404, 'Teacher not found');
+      }
+      if (teacher.role !== 'teacher') {
+        throw new ApiError(400, 'classTeacherId must reference a teacher');
+      }
+    }
+
+    const section = await sectionRepository.create({
+      classId,
+      academicYearId,
+      name,
+      classTeacherId: classTeacherId ?? null,
+    });
+
+    return ok(res, serializeSection(section), 'Section created', 201);
+  },
+);
+
+export const listSections = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { classId, academicYearId } = req.validated?.query as {
+      classId?: string;
+      academicYearId?: string;
+    };
+    const sections = await sectionRepository.findAll({ classId, academicYearId });
+    return ok(res, sections.map(serializeSection), 'Sections retrieved');
   },
 );
