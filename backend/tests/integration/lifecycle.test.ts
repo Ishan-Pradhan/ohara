@@ -217,4 +217,25 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects transferring to a section in a different academic year with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const currentYear = await createAcademicYear({ isCurrent: true });
+    const currentSection = await createSection({ academicYearId: currentYear.id, name: 'A' });
+    const futureYear = await createAcademicYear({ isCurrent: false });
+    const futureSection = await createSection({ academicYearId: futureYear.id, name: 'B' });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: currentSection.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: futureSection.id });
+
+    expect(res.status).toBe(400);
+  });
 });

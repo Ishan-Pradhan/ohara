@@ -164,6 +164,13 @@ export const transferClassMembership = asyncHandler(
       throw new ApiError(404, 'Target section not found');
     }
 
+    if (targetSection.academicYearId !== currentYear.id) {
+      throw new ApiError(
+        400,
+        'Target section must belong to the current academic year',
+      );
+    }
+
     // Existence just confirmed above in the same request — safe to assert non-null.
     const updated = await classMembershipRepository.updateSection(id, targetSectionId);
 
