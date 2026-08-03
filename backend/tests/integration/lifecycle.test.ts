@@ -10,7 +10,9 @@ const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { cookiesFrom } = await import('../helpers/auth.js');
 const { User } = await import('../../src/models/users.model.js');
-const { createStudentUser, createSection } = await import('../helpers/institution.js');
+const { createStudentUser, createSection, createAcademicYear } = await import(
+  '../helpers/institution.js'
+);
 
 const PASSWORD = 'hunter2secret';
 
@@ -124,5 +126,95 @@ describe('DELETE /admin/users/:id', () => {
       .send({ confirmHardDelete: true });
 
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /admin/class-memberships/:id/transfer', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const res = await request(app)
+      .post('/api/v1/admin/class-memberships/00000000-0000-0000-0000-000000000000/transfer')
+      .send({ targetSectionId: '00000000-0000-0000-0000-000000000000' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const res = await request(app)
+      .post('/api/v1/admin/class-memberships/00000000-0000-0000-0000-000000000000/transfer')
+      .set('Cookie', cookies)
+      .send({ targetSectionId: '00000000-0000-0000-0000-000000000000' });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent membership with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const section = await createSection();
+    const res = await request(app)
+      .post('/api/v1/admin/class-memberships/00000000-0000-0000-0000-000000000000/transfer')
+      .set('Cookie', cookies)
+      .send({ targetSectionId: section.id });
+    expect(res.status).toBe(404);
+  });
+
+  it('transfers a student to a new section in the current year', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const year = await createAcademicYear({ isCurrent: true });
+    const sectionA = await createSection({ academicYearId: year.id, name: 'A' });
+    const sectionB = await createSection({ academicYearId: year.id, name: 'B' });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: sectionB.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.sectionId).toBe(sectionB.id);
+  });
+
+  it('rejects a non-existent target section with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const year = await createAcademicYear({ isCurrent: true });
+    const section = await createSection({ academicYearId: year.id });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: '00000000-0000-0000-0000-000000000000' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects transferring a membership from a non-current academic year with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const oldYear = await createAcademicYear();
+    const oldSection = await createSection({ academicYearId: oldYear.id, name: 'A' });
+    const newSection = await createSection({ academicYearId: oldYear.id, name: 'B' });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: oldSection.id });
+
+    await createAcademicYear({ isCurrent: true }); // a different, current year
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: newSection.id });
+
+    expect(res.status).toBe(400);
   });
 });

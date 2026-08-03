@@ -72,4 +72,16 @@ export const classMembershipRepository = {
       ],
     });
   },
+
+  findById: async (id: string): Promise<ClassMembership | null> => {
+    return await ClassMembership.findByPk(id);
+  },
+
+  updateSection: async (id: string, sectionId: string): Promise<ClassMembership | null> => {
+    const membership = await ClassMembership.findByPk(id);
+    if (!membership) return null;
+    membership.sectionId = sectionId;
+    await membership.save();
+    return membership;
+  },
 };

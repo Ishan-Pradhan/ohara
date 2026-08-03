@@ -140,3 +140,36 @@ registry.registerPath({
     403: forbidden,
   },
 });
+
+// ── LIFECYCLE: TRANSFER ──────────────────────────────────────────────────────
+
+const membershipIdParams = { params: z.object({ id: z.uuid() }) };
+
+export const transferClassMembershipSchema = {
+  params: membershipIdParams.params,
+  body: z.object({ targetSectionId: z.uuid() }),
+};
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/class-memberships/{id}/transfer',
+  tags: ['Placement'],
+  request: {
+    params: transferClassMembershipSchema.params,
+    body: {
+      content: { 'application/json': { schema: transferClassMembershipSchema.body } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Class membership transferred to a new section',
+      content: { 'application/json': { schema: envelope(classMembershipSchema) } },
+    },
+    400: {
+      description: 'Validation failed, or membership is not for the current academic year',
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Class membership or target section not found' },
+  },
+});

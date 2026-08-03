@@ -138,3 +138,35 @@ export const listEnrollments = asyncHandler(
     return ok(res, enrollments.map(serializeEnrollment), 'Enrollments retrieved');
   },
 );
+
+// ── LIFECYCLE: TRANSFER ──────────────────────────────────────────────────────
+
+export const transferClassMembership = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const { targetSectionId } = req.validated?.body as { targetSectionId: string };
+
+    const membership = await classMembershipRepository.findById(id);
+    if (!membership) {
+      throw new ApiError(404, 'Class membership not found');
+    }
+
+    const currentYear = await academicYearRepository.findCurrent();
+    if (!currentYear || membership.academicYearId !== currentYear.id) {
+      throw new ApiError(
+        400,
+        'Only a membership for the current academic year can be transferred',
+      );
+    }
+
+    const targetSection = await sectionRepository.findById(targetSectionId);
+    if (!targetSection) {
+      throw new ApiError(404, 'Target section not found');
+    }
+
+    // Existence just confirmed above in the same request — safe to assert non-null.
+    const updated = await classMembershipRepository.updateSection(id, targetSectionId);
+
+    return ok(res, serializeClassMembership(updated!), 'Class membership transferred');
+  },
+);
