@@ -172,7 +172,7 @@ export const listCourses = asyncHandler(
 
 export const assignCourseTeacher = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { id: courseId } = req.validated?.params as { id: string };
+    const { courseId } = req.validated?.params as { courseId: string };
     const { teacherId } =
       req.validated?.body as CourseTeacherCreationAttributes;
 
@@ -205,7 +205,7 @@ export const assignCourseTeacher = asyncHandler(
 
 export const listCourseTeachers = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { id: courseId } = req.validated?.params as { id: string };
+    const { courseId } = req.validated?.params as { courseId: string };
 
     const course = await courseRepository.findById(courseId);
     if (!course) {

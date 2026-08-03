@@ -90,12 +90,21 @@ export const requireCourseTeacher = async (
     return next();
   }
 
-  // req.params is typed as Record<string, string> with an index signature, so
-  // under noUncheckedIndexedAccess a named lookup widens to `string |
-  // undefined` even though Express always populates a matched route param.
-  // Cast rather than leave an unreachable undefined-check, same as the
-  // req.validated.params casts used elsewhere in these controllers.
-  const { courseId } = req.params as { courseId: string };
+  // Express types req.params values as `string | string[]` (repeated params
+  // produce arrays) and, under noUncheckedIndexedAccess, a named lookup also
+  // widens to `undefined`. Unlike the req.validated.params casts elsewhere
+  // (backed by a Zod schema that guarantees the field), this middleware can
+  // be mounted on any route, so a missing/malformed :courseId param is a
+  // real possibility (a misconfigured route) — fail loudly with a 500
+  // instead of silently looking up `undefined` and denying every caller
+  // with a 403.
+  const courseId = req.params.courseId;
+  if (typeof courseId !== 'string' || !courseId) {
+    throw new ApiError(
+      500,
+      'requireCourseTeacher: route is missing the :courseId param',
+    );
+  }
   const isAssigned = await courseTeacherRepository.exists(user.id, courseId);
   if (!isAssigned) {
     throw new ApiError(403, 'Not authorized for this course');

@@ -330,7 +330,7 @@ registry.registerPath({
 
 // ── COURSE TEACHERS ──────────────────────────────────────────────────────────
 
-const courseIdParams = { params: z.object({ id: z.uuid() }) };
+const courseIdParams = { params: z.object({ courseId: z.uuid() }) };
 
 export const assignCourseTeacherSchema = {
   params: courseIdParams.params,
@@ -353,7 +353,7 @@ export const courseTeacherSchema = registry.register(
 
 registry.registerPath({
   method: 'post',
-  path: '/admin/courses/{id}/teachers',
+  path: '/admin/courses/{courseId}/teachers',
   tags: ['Institution'],
   request: {
     params: assignCourseTeacherSchema.params,
@@ -379,7 +379,7 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'get',
-  path: '/admin/courses/{id}/teachers',
+  path: '/admin/courses/{courseId}/teachers',
   tags: ['Institution'],
   request: { params: listCourseTeachersSchema.params },
   responses: {

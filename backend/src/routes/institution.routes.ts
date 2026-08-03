@@ -60,7 +60,7 @@ router
   .get(validate(listCoursesSchema), listCourses);
 
 router
-  .route('/courses/:id/teachers')
+  .route('/courses/:courseId/teachers')
   .post(validate(assignCourseTeacherSchema), assignCourseTeacher)
   .get(validate(listCourseTeachersSchema), listCourseTeachers);
 

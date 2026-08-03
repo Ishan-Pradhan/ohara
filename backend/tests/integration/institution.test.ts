@@ -316,6 +316,62 @@ describe('POST /admin/sections', () => {
   });
 });
 
+describe('GET /admin/sections', () => {
+  it('filters by classId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const classA = await createClass();
+    const classB = await createClass();
+    const year = await createAcademicYear();
+
+    await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: classA.id, academicYearId: year.id, name: 'A' });
+    await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: classB.id, academicYearId: year.id, name: 'A' });
+
+    const res = await request(app)
+      .get(SECTIONS)
+      .query({ classId: classA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].classId).toBe(classA.id);
+  });
+
+  it('filters by academicYearId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const yearA = await createAcademicYear({ name: '2025-2026' });
+    const yearB = await createAcademicYear({
+      name: '2026-2027',
+      startDate: '2026-06-01',
+      endDate: '2027-05-31',
+    });
+
+    await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: yearA.id, name: 'A' });
+    await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: yearB.id, name: 'A' });
+
+    const res = await request(app)
+      .get(SECTIONS)
+      .query({ academicYearId: yearA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].academicYearId).toBe(yearA.id);
+  });
+});
+
 const COURSES = '/api/v1/admin/courses';
 
 describe('POST /admin/courses', () => {
@@ -361,12 +417,38 @@ describe('POST /admin/courses', () => {
   });
 });
 
+describe('GET /admin/courses', () => {
+  it('filters by classId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const classA = await createClass();
+    const classB = await createClass();
+
+    await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: classA.id, title: 'Physics', code: 'PHYS-101' });
+    await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: classB.id, title: 'Chemistry', code: 'CHEM-101' });
+
+    const res = await request(app)
+      .get(COURSES)
+      .query({ classId: classA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].title).toBe('Physics');
+  });
+});
+
 const { createCourse } = await import('../helpers/institution.js');
 
 const COURSE_TEACHERS = (courseId: string) =>
   `/api/v1/admin/courses/${courseId}/teachers`;
 
-describe('POST /admin/courses/:id/teachers', () => {
+describe('POST /admin/courses/:courseId/teachers', () => {
   it('rejects a non-existent courseId with 404', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const teacher = await createTeacherUser();
@@ -438,7 +520,7 @@ describe('POST /admin/courses/:id/teachers', () => {
   });
 });
 
-describe('GET /admin/courses/:id/teachers', () => {
+describe('GET /admin/courses/:courseId/teachers', () => {
   it('lists assigned teachers with name and email', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const course = await createCourse();
