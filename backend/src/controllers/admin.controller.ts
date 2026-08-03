@@ -10,6 +10,7 @@ import {
   getPaginationParams,
 } from '../utils/pagination.utils.js';
 import type { PaginationQuery } from '../types/pagination.types.js';
+import { USER_STATUS } from '../constants/index.js';
 
 //    GET ALL USERS (ADMIN ONLY)
 export const getAllUsers = asyncHandler(
@@ -83,5 +84,35 @@ export const blockAndUnblockUser = asyncHandler(
       null,
       `User ${newStatus ? 'blocked' : 'unblocked'} successfully`,
     );
+  },
+);
+
+// ARCHIVE USER (SOFT REMOVAL)
+export const archiveUser = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const user = await userRepository.updateStatus(id, USER_STATUS.ARCHIVED);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    return ok(res, serializeUser(user), 'User archived successfully');
+  },
+);
+
+// HARD DELETE USER (RARE, ADMIN-ONLY)
+export const hardDeleteUser = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    await userRepository.hardDelete(id);
+
+    return ok(res, null, 'User permanently deleted');
   },
 );

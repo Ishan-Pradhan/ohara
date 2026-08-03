@@ -3,6 +3,7 @@ import { User } from '../models/users.model.js';
 import type {
   UserCreationAttributes,
   Users,
+  UserStatus,
 } from '../types/users.types.js';
 
 const buildUserWhere = (search?: string): WhereOptions<Users> => {
@@ -84,5 +85,21 @@ export const userRepository = {
       blockedCount,
       adminsCount,
     };
+  },
+
+  updateStatus: async (id: string, status: UserStatus): Promise<User | null> => {
+    const user = await User.findByPk(id);
+    if (!user) return null;
+    user.status = status;
+    await user.save();
+    return user;
+  },
+
+  /** Real hard delete — `Users` isn't `paranoid`, so `.destroy()` removes the row.
+   * Any RESTRICT-guarded FK still pointing at this user (class_memberships, enrollments)
+   * throws `ForeignKeyConstraintError`, which error.middleware.ts now maps to a clean 409. */
+  hardDelete: async (id: string): Promise<boolean> => {
+    const deleted = await User.destroy({ where: { id } });
+    return deleted > 0;
   },
 };

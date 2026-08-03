@@ -2,10 +2,15 @@ import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { ValidationError } from 'sequelize';
+import { ValidationError, ForeignKeyConstraintError } from 'sequelize';
 import { ApiError } from '../utils/ApiError.js';
 
-type AppError = ApiError | Error | multer.MulterError | ValidationError;
+type AppError =
+  | ApiError
+  | Error
+  | multer.MulterError
+  | ValidationError
+  | ForeignKeyConstraintError;
 
 const errorHandler = (
   err: AppError,
@@ -32,6 +37,12 @@ const errorHandler = (
       message: e.message,
       field: e.path,
     }));
+  }
+
+  // Sequelize FK constraint violation (e.g. hard-deleting a row still referenced elsewhere)
+  else if (err instanceof ForeignKeyConstraintError) {
+    statusCode = 409;
+    message = 'This record is still referenced by other data and cannot be deleted';
   }
 
   // Multer error
