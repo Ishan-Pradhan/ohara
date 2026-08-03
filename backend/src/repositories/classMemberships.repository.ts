@@ -3,6 +3,7 @@ import { ClassMembership } from '../models/classMemberships.model.js';
 import { enrollmentRepository } from './enrollments.repository.js';
 import type {
   ClassMembershipCreationAttributes,
+  ClassMembershipOutcome,
   EnrollmentCreationAttributes,
 } from '../types/placement.types.js';
 
@@ -81,6 +82,19 @@ export const classMembershipRepository = {
     const membership = await ClassMembership.findByPk(id);
     if (!membership) return null;
     membership.sectionId = sectionId;
+    await membership.save();
+    return membership;
+  },
+
+  setOutcome: async (
+    id: string,
+    outcome: ClassMembershipOutcome,
+    promotedToId: string | null,
+  ): Promise<ClassMembership | null> => {
+    const membership = await ClassMembership.findByPk(id);
+    if (!membership) return null;
+    membership.outcome = outcome;
+    membership.promotedToId = promotedToId;
     await membership.save();
     return membership;
   },

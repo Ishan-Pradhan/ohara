@@ -173,3 +173,39 @@ registry.registerPath({
     404: { description: 'Class membership or target section not found' },
   },
 });
+
+// ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
+
+export const setClassMembershipOutcomeSchema = {
+  params: membershipIdParams.params,
+  body: z.object({
+    outcome: z.enum(['promoted', 'retained', 'graduated']),
+    targetSectionId: z.uuid().optional(),
+  }),
+};
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/class-memberships/{id}/outcome',
+  tags: ['Placement'],
+  request: {
+    params: setClassMembershipOutcomeSchema.params,
+    body: {
+      content: { 'application/json': { schema: setClassMembershipOutcomeSchema.body } },
+    },
+  },
+  responses: {
+    201: {
+      description:
+        "Outcome recorded. For promoted/retained, a new class membership is created for the current academic year (auto-enrolling if the target program is school-type); for graduated, the student's status is set to graduated and no new membership is created",
+      content: { 'application/json': { schema: envelope(classMembershipSchema) } },
+    },
+    400: {
+      description:
+        'Validation failed, targetSectionId missing for promoted/retained, or membership is already for the current academic year',
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Class membership or target section not found' },
+  },
+});

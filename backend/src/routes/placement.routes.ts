@@ -8,6 +8,7 @@ import {
   createEnrollmentSchema,
   listEnrollmentsSchema,
   transferClassMembershipSchema,
+  setClassMembershipOutcomeSchema,
 } from '../validations/placement.validation.js';
 import {
   createClassMembership,
@@ -15,6 +16,7 @@ import {
   createEnrollment,
   listEnrollments,
   transferClassMembership,
+  setClassMembershipOutcome,
 } from '../controllers/placement.controller.js';
 
 const router = Router();
@@ -35,5 +37,9 @@ router
 router
   .route('/class-memberships/:id/transfer')
   .post(validate(transferClassMembershipSchema), transferClassMembership);
+
+router
+  .route('/class-memberships/:id/outcome')
+  .post(validate(setClassMembershipOutcomeSchema), setClassMembershipOutcome);
 
 export default router;

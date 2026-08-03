@@ -177,3 +177,68 @@ export const transferClassMembership = asyncHandler(
     return ok(res, serializeClassMembership(updated!), 'Class membership transferred');
   },
 );
+
+// ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
+
+export const setClassMembershipOutcome = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const { outcome, targetSectionId } = req.validated?.body as {
+      outcome: 'promoted' | 'retained' | 'graduated';
+      targetSectionId?: string;
+    };
+
+    const membership = await classMembershipRepository.findById(id);
+    if (!membership) {
+      throw new ApiError(404, 'Class membership not found');
+    }
+
+    const currentYear = await academicYearRepository.findCurrent();
+    if (!currentYear) {
+      throw new ApiError(404, 'No current academic year is set');
+    }
+    if (membership.academicYearId === currentYear.id) {
+      throw new ApiError(400, 'This membership is already for the current academic year');
+    }
+
+    if (outcome === 'graduated') {
+      await userRepository.updateStatus(membership.studentId, 'graduated');
+      // Existence just confirmed above in the same request — safe to assert non-null.
+      const updated = await classMembershipRepository.setOutcome(id, 'graduated', null);
+      return ok(res, serializeClassMembership(updated!), 'Student graduated', 201);
+    }
+
+    if (!targetSectionId) {
+      throw new ApiError(400, 'targetSectionId is required for promoted/retained');
+    }
+
+    const targetSection = await sectionRepository.findById(targetSectionId);
+    if (!targetSection) {
+      throw new ApiError(404, 'Target section not found');
+    }
+
+    const cls = await classRepository.findById(targetSection.classId);
+    // Section.classId is FK-enforced against Classes — a missing class here would mean the
+    // DB is in an inconsistent state, not a normal 404 case, so let it surface as a 500.
+    const program = await programRepository.findById(cls!.programId);
+
+    let autoEnrollCourseIds: string[] = [];
+    if (program?.institutionType === 'school') {
+      const courses = await courseRepository.findAll({ classId: targetSection.classId });
+      autoEnrollCourseIds = courses.map((course) => course.id);
+    }
+
+    const newMembership = await classMembershipRepository.create(
+      {
+        studentId: membership.studentId,
+        sectionId: targetSectionId,
+        academicYearId: currentYear.id,
+      },
+      autoEnrollCourseIds,
+    );
+
+    await classMembershipRepository.setOutcome(id, outcome, newMembership.id);
+
+    return ok(res, serializeClassMembership(newMembership), 'Outcome recorded', 201);
+  },
+);
