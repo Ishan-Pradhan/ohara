@@ -17,14 +17,11 @@ import {
 } from '../prompts/courseStructure.prompt.js';
 import { generatedCourseStructureSchema } from '../validations/courseContent.validation.js';
 import { DOCUMENT_STATUS } from '../constants/index.js';
+import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import type { Module } from '../models/modules.model.js';
-
-// A single chapter-sized PDF fits comfortably; a whole textbook in one
-// upload doesn't (known limitation — see design doc, not solved here).
-const MAX_SOURCE_CHARS = 50_000;
 
 /** Calls the LLM, parses and Zod-validates the response, and retries once
  * with a corrective re-prompt if it isn't valid JSON matching the required
@@ -72,7 +69,10 @@ export const generateCourseStructure = asyncHandler(
 
     const fileBuffer = await fs.readFile(document.storageKey);
     const fullText = await extractText(fileBuffer);
-    const sourceText = fullText.slice(0, MAX_SOURCE_CHARS);
+    // A single chapter-sized PDF fits comfortably within MAX_LLM_SOURCE_CHARS;
+    // a whole textbook in one upload doesn't (known limitation — see design
+    // doc, not solved here).
+    const sourceText = fullText.slice(0, env.MAX_LLM_SOURCE_CHARS);
 
     const structure = await generateStructure(sourceText);
 

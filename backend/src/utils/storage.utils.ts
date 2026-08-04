@@ -1,7 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
-export const DOCUMENTS_DIR = path.join(process.cwd(), 'uploads', 'documents');
+import { env } from '../config/env.js';
+
+export const DOCUMENTS_DIR = path.join(process.cwd(), env.UPLOAD_DIR, 'documents');
 
 export const ensureDocumentsDir = async (): Promise<void> => {
   await fs.mkdir(DOCUMENTS_DIR, { recursive: true });

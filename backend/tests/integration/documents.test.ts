@@ -19,6 +19,7 @@ const { createCourse, createTeacherUser } = await import('../helpers/institution
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
+const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_PDF = path.join(__dirname, '..', 'fixtures', 'sample.pdf');
@@ -143,7 +144,7 @@ describe('POST /courses/:courseId/documents', () => {
       const chunks = await DocumentChunk.findAll({ where: { documentId: ready.id } });
       expect(chunks.length).toBeGreaterThan(0);
       expect(chunks[0]?.content).toContain('photosynthesis');
-      expect(chunks[0]?.embedding).toHaveLength(384);
+      expect(chunks[0]?.embedding).toHaveLength(EMBEDDING_DIMENSIONS);
     },
     30000,
   );

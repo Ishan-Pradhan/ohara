@@ -1,5 +1,9 @@
-const DEFAULT_CHUNK_SIZE = 1000;
-const DEFAULT_OVERLAP = 100;
+import { CHUNK_SIZE_CHARS, CHUNK_OVERLAP_CHARS } from '../constants/index.js';
+
+// How far past a chunk boundary to look for a space before cutting a word in
+// half. Not model-tuned like CHUNK_SIZE_CHARS/CHUNK_OVERLAP_CHARS — just a
+// small local slack, so it stays a plain local constant.
+const WORD_BOUNDARY_SLACK_CHARS = 50;
 
 export interface ChunkOptions {
   chunkSize?: number;
@@ -14,8 +18,8 @@ export interface ChunkOptions {
  * mid-token.
  */
 export const chunkText = (text: string, options: ChunkOptions = {}): string[] => {
-  const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
-  const overlap = options.overlap ?? DEFAULT_OVERLAP;
+  const chunkSize = options.chunkSize ?? CHUNK_SIZE_CHARS;
+  const overlap = options.overlap ?? CHUNK_OVERLAP_CHARS;
 
   const normalized = text.replace(/\s+/g, ' ').trim();
   if (!normalized) return [];
@@ -28,7 +32,7 @@ export const chunkText = (text: string, options: ChunkOptions = {}): string[] =>
 
     if (end < normalized.length) {
       const nextSpace = normalized.indexOf(' ', end);
-      if (nextSpace !== -1 && nextSpace - end < 50) {
+      if (nextSpace !== -1 && nextSpace - end < WORD_BOUNDARY_SLACK_CHARS) {
         end = nextSpace;
       }
     }

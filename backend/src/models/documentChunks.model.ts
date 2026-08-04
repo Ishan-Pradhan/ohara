@@ -12,6 +12,7 @@ import {
 } from 'sequelize-typescript';
 
 import { vectorType } from '../config/pgvector.js';
+import { EMBEDDING_DIMENSIONS } from '../constants/index.js';
 import { Document } from './documents.model.js';
 
 @Table({ tableName: 'DocumentChunks', timestamps: false })
@@ -38,6 +39,6 @@ export class DocumentChunk extends Model {
   declare content: string;
 
   @AllowNull(false)
-  @Column(vectorType(384))
+  @Column(vectorType(EMBEDDING_DIMENSIONS))
   declare embedding: number[];
 }

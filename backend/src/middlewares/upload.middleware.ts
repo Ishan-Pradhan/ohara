@@ -1,9 +1,8 @@
 import multer, { type FileFilterCallback } from 'multer';
 import type { Request } from 'express';
 
+import { env } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
-
-const MAX_PDF_BYTES = 20 * 1024 * 1024;
 
 const pdfFileFilter = (
   _req: Request,
@@ -22,6 +21,6 @@ const pdfFileFilter = (
 // naming the file before the row exists.
 export const uploadPdf = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_PDF_BYTES },
+  limits: { fileSize: env.MAX_UPLOAD_PDF_BYTES },
   fileFilter: pdfFileFilter,
 }).single('file');

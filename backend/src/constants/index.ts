@@ -41,3 +41,15 @@ export const DOCUMENT_STATUS = {
   READY: 'ready',
   FAILED: 'failed',
 } as const;
+
+// Not env-configurable, unlike GROQ_MODEL (env.ts) — changing the embedding
+// model changes its output dimension, which is baked into the
+// document_chunks.embedding column type by a migration. Swapping models
+// means a code change + a migration + re-embedding every existing chunk,
+// not a runtime env flip, so this is a code constant on purpose.
+export const EMBEDDING_MODEL = 'Xenova/bge-small-en-v1.5';
+export const EMBEDDING_DIMENSIONS = 384;
+
+// Chunking is tuned to the embedding model above, not a deployment concern.
+export const CHUNK_SIZE_CHARS = 1000;
+export const CHUNK_OVERLAP_CHARS = 100;

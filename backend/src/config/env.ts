@@ -30,8 +30,16 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1),
   EMAIL_FROM: z.string().min(1),
 
-  // LLM (Groq) — course structure generation, quiz/grading later, tutor in Phase 4
+  // LLM (Groq) — course structure generation, quiz/grading later, tutor in Phase 4.
+  // Model is env-configurable (no schema dependency, unlike the embedding
+  // model — see EMBEDDING_MODEL in constants/index.ts for why that one isn't).
   GROQ_API_KEY: z.string().min(1),
+  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+
+  // Document uploads (Phase 3) — deployment-tunable limits, no schema dependency.
+  MAX_UPLOAD_PDF_BYTES: z.coerce.number().default(20 * 1024 * 1024),
+  MAX_LLM_SOURCE_CHARS: z.coerce.number().default(50_000),
+  UPLOAD_DIR: z.string().default('uploads'),
 
   // OAuth
   GOOGLE_CLIENT_ID: z.string().min(1),

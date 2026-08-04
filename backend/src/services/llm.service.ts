@@ -4,8 +4,6 @@ import { env } from '../config/env.js';
 
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
-const MODEL = 'llama-3.3-70b-versatile';
-
 /** One-shot JSON-mode chat completion. Callers are responsible for
  * validating the returned string is both valid JSON and matches whatever
  * shape they asked for — this is a thin transport wrapper, not a schema
@@ -17,7 +15,7 @@ export const generateJson = async (
   userPrompt: string,
 ): Promise<string> => {
   const completion = await groq.chat.completions.create({
-    model: MODEL,
+    model: env.GROQ_MODEL,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
