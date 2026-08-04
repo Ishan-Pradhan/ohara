@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { BookOpen, MoreVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
 
-import { createCourseSchema, type Course } from '../../../features/institution/institution.schema.js';
+import { type Course } from '../../../features/institution/institution.schema.js';
 import {
   useCourses,
   useCreateCourse,
@@ -21,6 +21,8 @@ import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
 import { Alert } from '../../../components/ui/Alert.js';
+import { Select } from '../../../components/ui/Select.js';
+import { Badge } from '../../../components/ui/Badge.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,8 +39,18 @@ import {
 } from '../../../components/ui/Table.js';
 import { CourseTeachersDialog } from '../CourseTeachersDialog.js';
 
-const courseFormSchema = createCourseSchema.omit({ classId: true });
+const courseFormSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  code: z.string().min(1, 'Code is required'),
+  description: z.string().optional(),
+  courseType: z.enum(['compulsory', 'elective']),
+});
 type CourseFormInput = z.infer<typeof courseFormSchema>;
+
+const courseTypeOptions = [
+  { value: 'compulsory', label: 'Compulsory' },
+  { value: 'elective', label: 'Elective' },
+];
 
 interface CoursesTabProps {
   classId: string;
@@ -58,6 +70,7 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
   const courses = (allCourses ?? []).filter((c) => c.classId === classId);
 
   const {
+    control,
     register: field,
     handleSubmit,
     reset: resetForm,
@@ -66,13 +79,18 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ title: '', code: '', description: '' });
+    resetForm({ title: '', code: '', description: '', courseType: 'compulsory' });
     setDialogOpen(true);
   };
 
   const openEdit = (course: Course) => {
     setEditing(course);
-    resetForm({ title: course.title, code: course.code, description: course.description ?? '' });
+    resetForm({
+      title: course.title,
+      code: course.code,
+      description: course.description ?? '',
+      courseType: course.courseType,
+    });
     setDialogOpen(true);
   };
 
@@ -150,7 +168,12 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
           <TableBody>
             {courses.map((course) => (
               <TableRow key={course.id}>
-                <TableCell className="font-medium">{course.title}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    {course.title}
+                    {course.courseType === 'elective' ? <Badge variant="accent">Elective</Badge> : null}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted">{course.code}</TableCell>
                 <TableCell>
                   <Link
@@ -217,6 +240,23 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
             hint="Optional"
           >
             <Input id="description" {...field('description')} />
+          </Field>
+
+          <Field label="Type" htmlFor="courseType" error={errors.courseType?.message}>
+            <Controller
+              control={control}
+              name="courseType"
+              render={({ field: selectField }) => (
+                <Select
+                  id="courseType"
+                  options={courseTypeOptions}
+                  value={selectField.value}
+                  onValueChange={selectField.onChange}
+                  invalid={Boolean(errors.courseType)}
+                  placeholder="Select a type"
+                />
+              )}
+            />
           </Field>
 
           <div className="mt-2 flex justify-end gap-3">
