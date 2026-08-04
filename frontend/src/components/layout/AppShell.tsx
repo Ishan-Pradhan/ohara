@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
 import {
-  BookOpen,
   CalendarRange,
-  GraduationCap,
   LayoutDashboard,
-  LayoutGrid,
   Layers,
   LogOut,
   Settings,
@@ -45,11 +42,8 @@ const navGroups: NavGroup[] = [
   {
     label: 'Institution',
     items: [
-      { to: '/admin/programs', label: 'Programs', icon: GraduationCap, roles: ['admin'] },
-      { to: '/admin/classes', label: 'Classes', icon: Layers, roles: ['admin'] },
+      { to: '/admin/structure', label: 'Structure', icon: Layers, roles: ['admin'] },
       { to: '/admin/academic-years', label: 'Academic years', icon: CalendarRange, roles: ['admin'] },
-      { to: '/admin/sections', label: 'Sections', icon: LayoutGrid, roles: ['admin'] },
-      { to: '/admin/courses', label: 'Courses', icon: BookOpen, roles: ['admin'] },
     ],
   },
   {

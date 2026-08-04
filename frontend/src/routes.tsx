@@ -11,11 +11,10 @@ import { DashboardPage } from './pages/DashboardPage.js';
 import { ForbiddenPage } from './pages/ForbiddenPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
-import { ProgramsPage } from './pages/admin/ProgramsPage.js';
-import { ClassesPage } from './pages/admin/ClassesPage.js';
 import { AcademicYearsPage } from './pages/admin/AcademicYearsPage.js';
-import { SectionsPage } from './pages/admin/SectionsPage.js';
-import { CoursesPage } from './pages/admin/CoursesPage.js';
+import { ProgramsExplorerPage } from './pages/admin/structure/ProgramsExplorerPage.js';
+import { ClassesExplorerPage } from './pages/admin/structure/ClassesExplorerPage.js';
+import { ClassDetailPage } from './pages/admin/structure/ClassDetailPage.js';
 import { CourseContentPage } from './pages/admin/course-content/CourseContentPage.js';
 import { StudentsPage } from './pages/admin/StudentsPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
@@ -46,11 +45,10 @@ export const router = createBrowserRouter([
     ),
     errorElement: <ErrorPage />,
   },
-  adminRoute('/admin/programs', <ProgramsPage />),
-  adminRoute('/admin/classes', <ClassesPage />),
   adminRoute('/admin/academic-years', <AcademicYearsPage />),
-  adminRoute('/admin/sections', <SectionsPage />),
-  adminRoute('/admin/courses', <CoursesPage />),
+  adminRoute('/admin/structure', <ProgramsExplorerPage />),
+  adminRoute('/admin/structure/:programId', <ClassesExplorerPage />),
+  adminRoute('/admin/structure/:programId/:classId', <ClassDetailPage />),
   adminRoute('/admin/courses/:courseId', <CourseContentPage />),
   adminRoute('/admin/students', <StudentsPage />),
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
