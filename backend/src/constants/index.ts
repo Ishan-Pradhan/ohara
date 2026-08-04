@@ -47,6 +47,11 @@ export const DOCUMENT_STATUS = {
   FAILED: 'failed',
 } as const;
 
+export const STUDENT_FLAG_STATUSES = {
+  OPEN: 'open',
+  RESOLVED: 'resolved',
+} as const;
+
 // Not env-configurable, unlike GROQ_MODEL (env.ts) — changing the embedding
 // model changes its output dimension, which is baked into the
 // document_chunks.embedding column type by a migration. Swapping models

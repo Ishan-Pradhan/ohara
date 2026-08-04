@@ -21,6 +21,13 @@ export const sectionRepository = {
     return await Section.findByPk(id);
   },
 
+  /** Powers "My Section" — a class teacher is assigned to at most one section
+   * at a time in practice, but this returns every section they're assigned to
+   * (e.g. across years) in case that ever isn't true. */
+  findByClassTeacherId: async (classTeacherId: string): Promise<Section[]> => {
+    return await Section.findAll({ where: { classTeacherId } });
+  },
+
   update: async (
     id: string,
     data: Partial<Pick<SectionCreationAttributes, 'name' | 'classTeacherId' | 'capacity'>>,

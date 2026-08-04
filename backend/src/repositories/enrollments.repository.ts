@@ -37,4 +37,13 @@ export const enrollmentRepository = {
       include: [{ association: 'course', include: ['teachers'] }],
     });
   },
+
+  /** Powers a course's roster view (teacher/admin) — each row's `student` is included. */
+  findByCourseWithStudents: async (courseId: string): Promise<Enrollment[]> => {
+    return await Enrollment.findAll({
+      where: { courseId },
+      include: ['student'],
+      order: [['createdAt', 'ASC']],
+    });
+  },
 };

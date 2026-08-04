@@ -18,6 +18,7 @@ import { DocumentChunk } from '../models/documentChunks.model.js';
 import { Module } from '../models/modules.model.js';
 import { Lesson } from '../models/lessons.model.js';
 import { StudentProfile } from '../models/studentProfiles.model.js';
+import { StudentFlag } from '../models/studentFlags.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -50,5 +51,6 @@ export const sequelize = new Sequelize({
     Module,
     Lesson,
     StudentProfile,
+    StudentFlag,
   ],
 });

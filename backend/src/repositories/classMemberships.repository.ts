@@ -153,4 +153,14 @@ export const classMembershipRepository = {
       return membership;
     });
   },
+
+  /** Powers a section's roster view (class teacher/admin) — active (`enrolled`)
+   * memberships only, each row's `student` included. */
+  findBySectionWithStudents: async (sectionId: string): Promise<ClassMembership[]> => {
+    return await ClassMembership.findAll({
+      where: { sectionId, outcome: CLASS_MEMBERSHIP_OUTCOMES.ENROLLED },
+      include: ['student'],
+      order: [['createdAt', 'ASC']],
+    });
+  },
 };

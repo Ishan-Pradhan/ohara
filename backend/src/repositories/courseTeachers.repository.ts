@@ -12,6 +12,14 @@ export const courseTeacherRepository = {
     return await CourseTeacher.findAll({ where: { courseId } });
   },
 
+  /** Powers the teacher's "My Courses" list — each row's `course` is included. */
+  findByTeacherId: async (teacherId: string): Promise<CourseTeacher[]> => {
+    return await CourseTeacher.findAll({
+      where: { teacherId },
+      include: ['course'],
+    });
+  },
+
   /** Powers requireCourseTeacher — the one method Phase 3+ will call. */
   exists: async (teacherId: string, courseId: string): Promise<boolean> => {
     const found = await CourseTeacher.findOne({
