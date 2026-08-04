@@ -1,18 +1,21 @@
 import { z } from 'zod';
 
 import { api } from '../../lib/axios.js';
-import { courseSchema, sectionSchema, type Course, type Section } from '../institution/institution.schema.js';
 import {
+  teacherCourseSchema,
+  teacherSectionSchema,
   rosterStudentSchema,
   studentFlagSchema,
+  type TeacherCourse,
+  type TeacherSection,
   type RosterStudent,
   type CreateFlagInput,
   type StudentFlag,
 } from './teacher.schema.js';
 
-export const fetchMyCourses = async (): Promise<Course[]> => {
+export const fetchMyCourses = async (): Promise<TeacherCourse[]> => {
   const res = await api.get('/teacher/courses');
-  return z.array(courseSchema).parse(res.data.data);
+  return z.array(teacherCourseSchema).parse(res.data.data);
 };
 
 export const fetchCourseRoster = async (courseId: string): Promise<RosterStudent[]> => {
@@ -20,9 +23,9 @@ export const fetchCourseRoster = async (courseId: string): Promise<RosterStudent
   return z.array(rosterStudentSchema).parse(res.data.data);
 };
 
-export const fetchMySection = async (): Promise<Section | null> => {
+export const fetchMySection = async (): Promise<TeacherSection | null> => {
   const res = await api.get('/teacher/section');
-  const sections = z.array(sectionSchema).parse(res.data.data);
+  const sections = z.array(teacherSectionSchema).parse(res.data.data);
   return sections[0] ?? null;
 };
 

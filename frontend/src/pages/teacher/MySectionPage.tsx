@@ -23,9 +23,15 @@ export const MySectionPage = () => {
   return (
     <AppShell>
       <PageHeader
-        title="My Section"
+        title={
+          section
+            ? `${section.programName ?? '—'} · ${section.className ?? '—'} · Section ${section.name}`
+            : 'My Section'
+        }
         description={
-          section ? `Students placed in ${section.name}.` : 'The section you are the class teacher for.'
+          section
+            ? 'Students placed in this section for the current academic year.'
+            : 'The section you are the class teacher for.'
         }
       />
 

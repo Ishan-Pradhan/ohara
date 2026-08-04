@@ -36,7 +36,11 @@ export const MyCoursesPage = () => {
             <Card key={course.id} padding="sm" className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-fg">{course.title}</p>
-                <p className="truncate text-xs text-muted">{course.code}</p>
+                <p className="truncate text-xs text-muted">
+                  {course.code}
+                  {course.programName ? ` · ${course.programName}` : ''}
+                  {course.className ? ` · ${course.className}` : ''}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Badge variant={course.isPublished ? 'success' : 'neutral'}>

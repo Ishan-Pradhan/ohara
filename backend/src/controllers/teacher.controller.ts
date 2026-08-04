@@ -5,6 +5,8 @@ import { courseTeacherRepository } from '../repositories/courseTeachers.reposito
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
+import { classRepository } from '../repositories/classes.repository.js';
+import { programRepository } from '../repositories/programs.repository.js';
 import { serializeCourse, serializeSection } from '../serializers/institution.serializer.js';
 import { serializeRosterStudent } from '../serializers/user.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -16,10 +18,24 @@ import { ApiError } from '../utils/ApiError.js';
 export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response) => {
   const teacherId = req.user!.id;
   const assignments = await courseTeacherRepository.findByTeacherId(teacherId);
-  const courses = assignments
+  const rawCourses = assignments
     .map((a) => a.course)
-    .filter((c): c is NonNullable<typeof c> => Boolean(c))
-    .map(serializeCourse);
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+  // Small N (a teacher's own course list), so a per-course class/program
+  // lookup is simpler than adding a bulk-join method for a one-place need.
+  const courses = await Promise.all(
+    rawCourses.map(async (course) => {
+      const cls = await classRepository.findById(course.classId);
+      const program = cls ? await programRepository.findById(cls.programId) : null;
+      return {
+        ...serializeCourse(course),
+        className: cls?.name ?? null,
+        programName: program?.name ?? null,
+      };
+    }),
+  );
+
   return ok(res, courses, 'Courses retrieved');
 });
 
@@ -39,7 +55,20 @@ export const listCourseStudents = asyncHandler(async (req: AuthRequest, res: Res
 export const getMySection = asyncHandler(async (req: AuthRequest, res: Response) => {
   const teacherId = req.user!.id;
   const sections = await sectionRepository.findByClassTeacherId(teacherId);
-  return ok(res, sections.map(serializeSection), 'Section retrieved');
+
+  const withContext = await Promise.all(
+    sections.map(async (section) => {
+      const cls = await classRepository.findById(section.classId);
+      const program = cls ? await programRepository.findById(cls.programId) : null;
+      return {
+        ...serializeSection(section),
+        className: cls?.name ?? null,
+        programName: program?.name ?? null,
+      };
+    }),
+  );
+
+  return ok(res, withContext, 'Section retrieved');
 });
 
 export const listSectionStudents = asyncHandler(async (req: AuthRequest, res: Response) => {

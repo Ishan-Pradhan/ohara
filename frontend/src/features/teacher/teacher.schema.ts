@@ -1,6 +1,18 @@
 import { z } from 'zod';
 
+import { courseSchema, sectionSchema } from '../institution/institution.schema.js';
+
 /* Mirrors backend/src/validations/teacher.validation.ts and the roster/flag serializers. */
+
+export const teacherCourseSchema = courseSchema.extend({
+  className: z.string().nullable(),
+  programName: z.string().nullable(),
+});
+
+export const teacherSectionSchema = sectionSchema.extend({
+  className: z.string().nullable(),
+  programName: z.string().nullable(),
+});
 
 export const rosterStudentSchema = z.object({
   id: z.string(),
@@ -34,6 +46,8 @@ export const studentFlagSchema = z.object({
   createdAt: z.string(),
 });
 
+export type TeacherCourse = z.infer<typeof teacherCourseSchema>;
+export type TeacherSection = z.infer<typeof teacherSectionSchema>;
 export type RosterStudent = z.infer<typeof rosterStudentSchema>;
 export type CreateFlagInput = z.infer<typeof createFlagSchema>;
 export type StudentFlag = z.infer<typeof studentFlagSchema>;
