@@ -61,7 +61,7 @@ type InvitableRole = 'teacher' | 'admin' | 'student';
  * reach an authenticated session via that link, which also flips
  * isVerified (auth.controller.ts resetPassword). Throws ApiError(400) on a
  * duplicate email — callers decide whether that's fatal or a skippable row. */
-const inviteUser = async (
+export const inviteUser = async (
   name: string,
   email: string,
   role: InvitableRole,

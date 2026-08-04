@@ -10,6 +10,7 @@ import '../validations/admin.validation.js';
 import '../validations/institution.validation.js';
 import '../validations/placement.validation.js';
 import '../validations/students.validation.js';
+import '../validations/admission.validation.js';
 
 registry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',
@@ -43,5 +44,6 @@ export const swaggerSpec = generator.generateDocument({
     { name: 'Admin', description: 'User management (admin only)' },
     { name: 'Institution', description: 'Academic hierarchy: programs, classes, academic years, sections, courses (admin only)' },
     { name: 'Placement', description: 'Student placement & enrollment (admin CRUD, plus a self-service view)' },
+    { name: 'Admission', description: 'Single-request student admission: invite, place, and auto-enroll (admin only)' },
   ],
 });
