@@ -61,7 +61,12 @@ export const StudentDetailPage = () => {
   const sectionOptions = (sections ?? []).map((s) => ({ value: s.id, label: s.name }));
   const enrolledCourseIds = new Set((placement?.courses ?? []).map((c) => c.id));
   const enrollableCourseOptions = (courses ?? [])
-    .filter((c) => !enrolledCourseIds.has(c.id))
+    .filter(
+      (c) =>
+        !enrolledCourseIds.has(c.id) &&
+        c.classId === placement?.class?.id &&
+        c.courseType === 'elective',
+    )
     .map((c) => ({ value: c.id, label: c.title }));
 
   const notPlaced = isError;
@@ -141,7 +146,7 @@ export const StudentDetailPage = () => {
               <h2 className="text-base font-semibold text-fg">Enrolled courses</h2>
               <Button size="sm" onClick={() => setEnrollOpen(true)}>
                 <Plus className="size-4" aria-hidden />
-                Enroll
+                Add elective
               </Button>
             </div>
             {placement.courses.length === 0 ? (
@@ -318,16 +323,16 @@ const EnrollDialog = ({ open, onOpenChange, courseOptions, onSubmit, loading, er
   const [courseId, setCourseId] = useState('');
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Enroll in a course">
+    <Dialog open={open} onOpenChange={onOpenChange} title="Choose an elective">
       <div className="flex flex-col gap-4">
         {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
-        <Field label="Course" htmlFor="enroll-course">
+        <Field label="Elective course" htmlFor="enroll-course">
           <Select
             id="enroll-course"
             options={courseOptions}
             value={courseId}
             onValueChange={setCourseId}
-            placeholder={courseOptions.length ? 'Select a course' : 'No courses available'}
+            placeholder={courseOptions.length ? 'Select an elective' : 'No electives available for this class'}
           />
         </Field>
         <div className="mt-2 flex justify-end gap-3">
