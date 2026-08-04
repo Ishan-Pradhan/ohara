@@ -18,7 +18,7 @@ import {
   type OutcomeInput,
   type TransferInput,
 } from '../../features/placement/placement.schema.js';
-import { useCourses, useSections } from '../../features/institution/useInstitution.js';
+import { useAcademicYears, useClasses, useCourses, useSections } from '../../features/institution/useInstitution.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -58,7 +58,15 @@ export const StudentDetailPage = () => {
   const transfer = useTransferClassMembership(studentId);
   const setOutcome = useSetClassMembershipOutcome(studentId);
 
-  const sectionOptions = (sections ?? []).map((s) => ({ value: s.id, label: s.name }));
+  const { data: classes } = useClasses();
+  const { data: years } = useAcademicYears();
+
+  const sectionOptions = (sections ?? []).map((s) => {
+    const className = classes?.find((c) => c.id === s.classId)?.name ?? '—';
+    const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
+    const fill = s.capacity !== null ? `${s.enrolledCount}/${s.capacity}` : `${s.enrolledCount}`;
+    return { value: s.id, label: `${className} — ${s.name} (${yearName}) · ${fill}` };
+  });
   const enrolledCourseIds = new Set((placement?.courses ?? []).map((c) => c.id));
   const enrollableCourseOptions = (courses ?? [])
     .filter(
