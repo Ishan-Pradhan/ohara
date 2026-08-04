@@ -1,6 +1,11 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 
-import { useCourses } from '../../../features/institution/useInstitution.js';
+import {
+  useClasses,
+  useCourses,
+  usePrograms,
+} from '../../../features/institution/useInstitution.js';
 import { usePublishCourse } from '../../../features/courseContent/useCourseContent.js';
 import { toast } from '../../../lib/toast.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
@@ -14,7 +19,11 @@ import { ModulesSection } from './ModulesSection.js';
 export const CourseContentPage = () => {
   const { courseId = '' } = useParams();
   const { data: courses, isLoading } = useCourses();
+  const { data: classes, isLoading: classesLoading } = useClasses();
+  const { data: programs, isLoading: programsLoading } = usePrograms();
   const course = courses?.find((c) => c.id === courseId);
+  const cls = classes?.find((c) => c.id === course?.classId);
+  const program = programs?.find((p) => p.id === cls?.programId);
   const publishCourse = usePublishCourse(courseId);
 
   const onTogglePublish = async (checked: boolean) => {
@@ -24,7 +33,37 @@ export const CourseContentPage = () => {
 
   return (
     <AppShell>
-      {isLoading ? (
+      <div className="mb-1 flex items-center gap-1.5 text-sm text-muted">
+        <Link to="/admin/structure" className="hover:text-fg hover:underline">
+          Structure
+        </Link>
+        <ChevronRight className="size-3.5" aria-hidden />
+        {program ? (
+          <Link
+            to={`/admin/structure/${program.id}`}
+            className="hover:text-fg hover:underline"
+          >
+            {program.name}
+          </Link>
+        ) : (
+          <span>…</span>
+        )}
+        <ChevronRight className="size-3.5" aria-hidden />
+        {program && cls ? (
+          <Link
+            to={`/admin/structure/${program.id}/${cls.id}`}
+            className="hover:text-fg hover:underline"
+          >
+            {cls.name}
+          </Link>
+        ) : (
+          <span>…</span>
+        )}
+        <ChevronRight className="size-3.5" aria-hidden />
+        <span className="text-fg">{course?.title ?? '…'}</span>
+      </div>
+
+      {isLoading || classesLoading || programsLoading ? (
         <Skeleton className="h-10 w-64" />
       ) : (
         <PageHeader

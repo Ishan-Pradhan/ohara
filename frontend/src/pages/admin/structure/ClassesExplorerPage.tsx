@@ -9,6 +9,7 @@ import {
   type Class,
 } from '../../../features/institution/institution.schema.js';
 import {
+  useAcademicYears,
   useClasses,
   useCourses,
   useCreateClass,
@@ -48,6 +49,7 @@ export const ClassesExplorerPage = () => {
   const { data: classes, isLoading: classesLoading } = useClasses();
   const { data: sections } = useSections();
   const { data: courses } = useCourses();
+  const { data: years } = useAcademicYears();
   const createClass = useCreateClass();
   const updateClass = useUpdateClass();
   const deleteClass = useDeleteClass();
@@ -64,14 +66,17 @@ export const ClassesExplorerPage = () => {
     resolver: zodResolver(classFormSchema),
   });
 
+  const currentYearId = years?.find((y) => y.isCurrent)?.id;
   const sectionCount = (classId: string) =>
-    sections?.filter((s) => s.classId === classId).length ?? 0;
+    sections?.filter((s) => s.classId === classId && s.academicYearId === currentYearId).length ??
+    0;
   const courseCount = (classId: string) =>
     courses?.filter((c) => c.classId === classId).length ?? 0;
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ name: '', orderIndex: programClasses.length });
+    const nextOrderIndex = Math.max(-1, ...programClasses.map((c) => c.orderIndex)) + 1;
+    resetForm({ name: '', orderIndex: nextOrderIndex });
     setDialogOpen(true);
   };
 
