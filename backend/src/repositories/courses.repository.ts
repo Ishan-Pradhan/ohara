@@ -32,4 +32,10 @@ export const courseRepository = {
     const deleted = await Course.destroy({ where: { id } });
     return deleted > 0;
   },
+
+  setPublished: async (id: string, isPublished: boolean): Promise<Course | null> => {
+    const course = await Course.findByPk(id);
+    if (!course) return null;
+    return await course.update({ isPublished });
+  },
 };

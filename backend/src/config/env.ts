@@ -30,6 +30,9 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1),
   EMAIL_FROM: z.string().min(1),
 
+  // LLM (Groq) — course structure generation, quiz/grading later, tutor in Phase 4
+  GROQ_API_KEY: z.string().min(1),
+
   // OAuth
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
