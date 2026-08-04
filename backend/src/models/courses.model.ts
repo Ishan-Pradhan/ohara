@@ -54,6 +54,11 @@ export class Course extends Model {
   @Column(DataType.BOOLEAN)
   declare isPublished: boolean;
 
+  @AllowNull(false)
+  @Default('compulsory')
+  @Column(DataType.ENUM('compulsory', 'elective'))
+  declare courseType: 'compulsory' | 'elective';
+
   @BelongsToMany(() => User, () => CourseTeacher)
   declare teachers?: User[];
 

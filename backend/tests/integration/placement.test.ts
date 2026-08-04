@@ -206,7 +206,9 @@ describe('POST /admin/enrollments', () => {
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
+    // Elective so placement doesn't auto-enroll it — this test is about the
+    // explicit enrollment endpoint, not auto-enroll.
+    const course = await createCourse({ classId: cls.id, courseType: 'elective' });
     const student = await createStudentUser();
 
     await request(app)
@@ -234,7 +236,7 @@ describe('POST /admin/enrollments', () => {
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
+    const course = await createCourse({ classId: cls.id, courseType: 'elective' });
     const student = await createStudentUser();
 
     await request(app)
@@ -298,25 +300,40 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
     expect(res.body.data).toHaveLength(2);
   });
 
-  it('does not auto-enroll for a college program', async () => {
+  it('auto-enrolls compulsory courses but not electives, for a college program', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram({ institutionType: 'college' });
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear();
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    await createCourse({ classId: cls.id });
+    const compulsoryCourse = await createCourse({
+      classId: cls.id,
+      title: 'Physics',
+      code: `PHYS-${Date.now()}`,
+      courseType: 'compulsory',
+    });
+    const electiveCourse = await createCourse({
+      classId: cls.id,
+      title: 'Art',
+      code: `ART-${Date.now()}`,
+      courseType: 'elective',
+    });
     const student = await createStudentUser();
 
-    await request(app)
+    const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: section.id });
 
-    const res = await request(app)
+    expect(res.status).toBe(201);
+
+    const enrollments = await request(app)
       .get(ENROLLMENTS)
       .query({ studentId: student.id })
       .set('Cookie', cookies);
 
-    expect(res.body.data).toHaveLength(0);
+    const enrolledCourseIds = enrollments.body.data.map((e: { courseId: string }) => e.courseId);
+    expect(enrolledCourseIds).toContain(compulsoryCourse.id);
+    expect(enrolledCourseIds).not.toContain(electiveCourse.id);
   });
 });

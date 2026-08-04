@@ -17,7 +17,7 @@ export const courseRepository = {
 
   update: async (
     id: string,
-    data: Partial<Pick<CourseCreationAttributes, 'title' | 'code' | 'description'>>,
+    data: Partial<Pick<CourseCreationAttributes, 'title' | 'code' | 'description' | 'courseType'>>,
   ): Promise<Course | null> => {
     const course = await Course.findByPk(id);
     if (!course) return null;

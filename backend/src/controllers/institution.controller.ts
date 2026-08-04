@@ -272,7 +272,7 @@ export const deleteSection = asyncHandler(
 
 export const createCourse = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, title, code, description } =
+    const { classId, title, code, description, courseType } =
       req.validated?.body as CourseCreationAttributes;
 
     const cls = await classRepository.findById(classId);
@@ -285,6 +285,7 @@ export const createCourse = asyncHandler(
       title,
       code,
       description: description ?? null,
+      courseType,
     });
 
     return ok(res, serializeCourse(course), 'Course created', 201);

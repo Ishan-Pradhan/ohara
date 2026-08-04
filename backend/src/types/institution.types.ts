@@ -1,8 +1,10 @@
 import type { Optional } from 'sequelize';
-import type { INSTITUTION_TYPES } from '../constants/index.js';
+import type { INSTITUTION_TYPES, COURSE_TYPES } from '../constants/index.js';
 
 export type InstitutionType =
   (typeof INSTITUTION_TYPES)[keyof typeof INSTITUTION_TYPES];
+
+export type CourseType = (typeof COURSE_TYPES)[keyof typeof COURSE_TYPES];
 
 export interface ProgramAttributes {
   id: string;
@@ -69,13 +71,14 @@ export interface CourseAttributes {
   title: string;
   code: string;
   description: string | null;
+  courseType: CourseType;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type CourseCreationAttributes = Optional<
   CourseAttributes,
-  'id' | 'description' | 'createdAt' | 'updatedAt'
+  'id' | 'description' | 'courseType' | 'createdAt' | 'updatedAt'
 >;
 
 export interface CourseTeacherAttributes {

@@ -10,8 +10,6 @@ import { userRepository } from '../repositories/users.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
-import { classRepository } from '../repositories/classes.repository.js';
-import { programRepository } from '../repositories/programs.repository.js';
 import {
   serializeClassMembership,
   serializeEnrollment,
@@ -40,16 +38,10 @@ export const createClassMembership = asyncHandler(
       throw new ApiError(404, 'Section not found');
     }
 
-    const cls = await classRepository.findById(section.classId);
-    // Section.classId is FK-enforced against Classes — a missing class here would mean the
-    // DB is in an inconsistent state, not a normal 404 case, so let it surface as a 500.
-    const program = await programRepository.findById(cls!.programId);
-
-    let autoEnrollCourseIds: string[] = [];
-    if (program?.institutionType === 'school') {
-      const courses = await courseRepository.findAll({ classId: section.classId });
-      autoEnrollCourseIds = courses.map((course) => course.id);
-    }
+    const classCourses = await courseRepository.findAll({ classId: section.classId });
+    const autoEnrollCourseIds = classCourses
+      .filter((course) => course.courseType === 'compulsory')
+      .map((course) => course.id);
 
     const membership = await classMembershipRepository.create(
       {
@@ -252,16 +244,10 @@ export const setClassMembershipOutcome = asyncHandler(
       throw new ApiError(400, 'Target section must belong to the current academic year');
     }
 
-    const cls = await classRepository.findById(targetSection.classId);
-    // Section.classId is FK-enforced against Classes — a missing class here would mean the
-    // DB is in an inconsistent state, not a normal 404 case, so let it surface as a 500.
-    const program = await programRepository.findById(cls!.programId);
-
-    let autoEnrollCourseIds: string[] = [];
-    if (program?.institutionType === 'school') {
-      const courses = await courseRepository.findAll({ classId: targetSection.classId });
-      autoEnrollCourseIds = courses.map((course) => course.id);
-    }
+    const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
+    const autoEnrollCourseIds = classCourses
+      .filter((course) => course.courseType === 'compulsory')
+      .map((course) => course.id);
 
     const newMembership = await classMembershipRepository.promote(
       id,

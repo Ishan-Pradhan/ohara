@@ -11,7 +11,7 @@ import type { AcademicYear } from '../../src/models/academicYears.model.js';
 import type { Section } from '../../src/models/sections.model.js';
 import type { Course } from '../../src/models/courses.model.js';
 import type { Enrollment } from '../../src/models/enrollments.model.js';
-import type { InstitutionType } from '../../src/types/institution.types.js';
+import type { InstitutionType, CourseType } from '../../src/types/institution.types.js';
 import { hashPassword } from '../../src/utils/security.utils.js';
 
 export const createProgram = async (
@@ -108,6 +108,7 @@ export const createCourse = async (
     title: string;
     code: string;
     description: string | null;
+    courseType: CourseType;
   }> = {},
 ): Promise<Course> => {
   const classId = overrides.classId ?? (await createClass()).id;
@@ -117,6 +118,7 @@ export const createCourse = async (
     title: overrides.title ?? 'Physics',
     code: overrides.code ?? `PHYS-${Date.now()}-${Math.random()}`,
     description: overrides.description ?? null,
+    courseType: overrides.courseType ?? 'compulsory',
   });
 };
 

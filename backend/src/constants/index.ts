@@ -23,6 +23,11 @@ export const INSTITUTION_TYPES = {
   UNIVERSITY: 'university',
 } as const;
 
+export const COURSE_TYPES = {
+  COMPULSORY: 'compulsory',
+  ELECTIVE: 'elective',
+} as const;
+
 export const CLASS_MEMBERSHIP_OUTCOMES = {
   ENROLLED: 'enrolled',
   PROMOTED: 'promoted',
