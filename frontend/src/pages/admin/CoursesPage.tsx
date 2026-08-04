@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BookOpen, MoreVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { BookOpen, Layers, MoreVertical, Pencil, Plus, Trash2, Users } from 'lucide-react';
 
 import {
   createCourseSchema,
@@ -166,14 +167,23 @@ export const CoursesPage = () => {
                 <TableCell className="text-muted">{course.code}</TableCell>
                 <TableCell className="text-muted">{className(course.classId)}</TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setTeachersFor({ id: course.id, title: course.title })}
-                  >
-                    <Users className="size-4" aria-hidden />
-                    Teachers
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/admin/courses/${course.id}`}
+                      className="inline-flex items-center justify-center gap-2 rounded-control px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover"
+                    >
+                      <Layers className="size-4" aria-hidden />
+                      Content
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTeachersFor({ id: course.id, title: course.title })}
+                    >
+                      <Users className="size-4" aria-hidden />
+                      Teachers
+                    </Button>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>

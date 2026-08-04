@@ -47,6 +47,7 @@ export const serializeCourse = (c: Course) => ({
   title: c.title,
   code: c.code,
   description: c.description,
+  isPublished: c.isPublished,
   createdAt: c.createdAt,
 });
 

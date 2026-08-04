@@ -16,6 +16,7 @@ import { ClassesPage } from './pages/admin/ClassesPage.js';
 import { AcademicYearsPage } from './pages/admin/AcademicYearsPage.js';
 import { SectionsPage } from './pages/admin/SectionsPage.js';
 import { CoursesPage } from './pages/admin/CoursesPage.js';
+import { CourseContentPage } from './pages/admin/course-content/CourseContentPage.js';
 import { StudentsPage } from './pages/admin/StudentsPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
 import { StaffPage } from './pages/admin/StaffPage.js';
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
   adminRoute('/admin/academic-years', <AcademicYearsPage />),
   adminRoute('/admin/sections', <SectionsPage />),
   adminRoute('/admin/courses', <CoursesPage />),
+  adminRoute('/admin/courses/:courseId', <CourseContentPage />),
   adminRoute('/admin/students', <StudentsPage />),
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
   adminRoute('/admin/staff', <StaffPage />),

@@ -84,6 +84,7 @@ export const courseSchema = z.object({
   title: z.string(),
   code: z.string(),
   description: z.string().nullable(),
+  isPublished: z.boolean(),
   createdAt: z.string(),
 });
 

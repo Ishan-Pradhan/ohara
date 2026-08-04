@@ -485,6 +485,7 @@ export const courseSchema = registry.register(
     title: z.string(),
     code: z.string(),
     description: z.string().nullable(),
+    isPublished: z.boolean(),
     createdAt: z.iso.datetime(),
   }),
 );
