@@ -50,6 +50,12 @@ export const createRefreshInterceptor = <T>({
       throw new Error(`Request to ${failed.config.url} failed`);
     }
 
+    // Only the caller that actually starts the refresh (inFlight was null)
+    // reports giving up on it — otherwise a burst of N concurrent 401s
+    // calls onGiveUp N times (e.g. N parallel dashboard queries all firing
+    // queryClient.clear() + a navigate), once per request instead of once
+    // for the whole burst.
+    const startedThisRefresh = inFlight === null;
     inFlight ??= refresh().finally(() => {
       inFlight = null;
     });
@@ -57,7 +63,7 @@ export const createRefreshInterceptor = <T>({
     try {
       await inFlight;
     } catch (error) {
-      onGiveUp();
+      if (startedThisRefresh) onGiveUp();
       throw error;
     }
 
@@ -74,9 +80,11 @@ export const setUnauthenticatedHandler = (handler: () => void): void => {
 
 type Retryable = AxiosRequestConfig & { _retried?: boolean };
 
+const REFRESH_URL = '/auth/refresh-access-token';
+
 const handle401 = createRefreshInterceptor<AxiosResponse>({
   refresh: async () => {
-    await api.post('/auth/refresh-access-token');
+    await api.post(REFRESH_URL);
   },
   retry: async (config) => api.request(config as AxiosRequestConfig),
   onGiveUp: () => onUnauthenticated(),
@@ -88,8 +96,23 @@ api.interceptors.response.use(
     const status = error.response?.status ?? 0;
     const config = (error.config ?? {}) as Retryable;
 
-    // _retried is set before retrying, so a refresh that itself 401s falls
-    // through to the error path instead of recursing.
+    // A 401 from the refresh endpoint itself means there's no session left
+    // to recover — routing it through handle401 would call refresh() again
+    // (this exact request), and the single-flight `inFlight` guard would
+    // then await a promise whose own resolution depends on this call
+    // finishing first: a permanent deadlock, not a rejection. `_retried`
+    // doesn't catch this because it's set per-request-config, and the
+    // refresh call is a fresh request that's never had it set. Reject
+    // immediately instead of ever entering handle401 for this one — the
+    // rejection propagates back up through refresh()'s `await`, so
+    // handle401's own catch block (which calls onGiveUp) still runs for
+    // whichever original request triggered the refresh in the first place.
+    // REFRESH_URL is only ever requested from inside refresh() below, so
+    // this branch has exactly one caller to unwind back to.
+    if (status === 401 && config.url === REFRESH_URL) {
+      throw toApiError(status, error.response?.data);
+    }
+
     if (status === 401 && !config._retried) {
       config._retried = true;
       return handle401({ status, config, alreadyRetried: false });

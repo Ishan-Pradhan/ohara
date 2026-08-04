@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 
 import {
   fetchCurrentUser,
@@ -41,9 +42,16 @@ export const useRegister = () => {
 
 export const useLogout = () => {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
     mutationFn: logoutRequest,
-    onSuccess: () => qc.clear(),
+    // Navigates directly rather than relying on ProtectedRoute reacting to
+    // the next current-user refetch failing — immediate, and doesn't depend
+    // on some other query re-firing after the cache clears.
+    onSuccess: () => {
+      qc.clear();
+      navigate('/login', { replace: true });
+    },
   });
 };
 
