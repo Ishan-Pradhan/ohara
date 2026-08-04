@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { BookOpen, MapPin, Plus } from 'lucide-react';
@@ -72,6 +72,20 @@ export const StudentDetailPage = () => {
 
       {isLoading ? (
         <Skeleton className="h-48 w-full" />
+      ) : notPlaced && (!sections || sections.length === 0) ? (
+        <EmptyState
+          icon={MapPin}
+          title="No sections exist yet"
+          description="Create a program, class, and section before placing students."
+          action={
+            <Link
+              to="/admin/structure"
+              className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+            >
+              Go to Structure
+            </Link>
+          }
+        />
       ) : notPlaced ? (
         <EmptyState
           icon={MapPin}
