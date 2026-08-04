@@ -3,6 +3,7 @@ import { z } from 'zod';
 /* Mirrors backend/src/validations/institution.validation.ts. */
 
 export const institutionTypes = ['school', 'college', 'university'] as const;
+export type InstitutionType = (typeof institutionTypes)[number];
 
 export const createProgramSchema = z.object({
   name: z.string().min(1, 'Name is required'),

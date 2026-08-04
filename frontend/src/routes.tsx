@@ -17,6 +17,7 @@ import { ClassesExplorerPage } from './pages/admin/structure/ClassesExplorerPage
 import { ClassDetailPage } from './pages/admin/structure/ClassDetailPage.js';
 import { CourseContentPage } from './pages/admin/course-content/CourseContentPage.js';
 import { StudentsPage } from './pages/admin/StudentsPage.js';
+import { AdmitStudentPage } from './pages/admin/AdmitStudentPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
 import { StaffPage } from './pages/admin/StaffPage.js';
 import { SettingsPage } from './pages/admin/SettingsPage.js';
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
   adminRoute('/admin/structure/:programId/:classId', <ClassDetailPage />),
   adminRoute('/admin/courses/:courseId', <CourseContentPage />),
   adminRoute('/admin/students', <StudentsPage />),
+  adminRoute('/admin/students/admit', <AdmitStudentPage />),
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
   adminRoute('/admin/staff', <StaffPage />),
   adminRoute('/admin/settings', <SettingsPage />),

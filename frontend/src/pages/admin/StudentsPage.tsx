@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, GraduationCap, Mail, MoreVertical, Search, Trash2 } from 'lucide-react';
+import { Archive, GraduationCap, Mail, MoreVertical, Search, Trash2, UserPlus } from 'lucide-react';
 
 import { useArchiveUser, useHardDeleteUser, useUsers } from '../../features/users/useUsers.js';
 import type { AdminUser } from '../../features/users/users.schema.js';
@@ -76,10 +76,19 @@ export const StudentsPage = () => {
         title="Students"
         description="Place students into sections, enroll them in courses, and manage their lifecycle."
         actions={
-          <Button onClick={() => setInviteOpen(true)}>
-            <Mail className="size-4" aria-hidden />
-            Invite students
-          </Button>
+          <div className="flex gap-3">
+            <Link
+              to="/admin/students/admit"
+              className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              <UserPlus className="size-4" aria-hidden />
+              Admit student
+            </Link>
+            <Button onClick={() => setInviteOpen(true)}>
+              <Mail className="size-4" aria-hidden />
+              Invite students
+            </Button>
+          </div>
         }
       />
 

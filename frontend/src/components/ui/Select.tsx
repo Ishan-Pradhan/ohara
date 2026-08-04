@@ -7,6 +7,7 @@ import { cn } from '../../lib/cn.js';
 interface SelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -53,7 +54,7 @@ export const Select = ({
       >
         <RadixSelect.Viewport>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </SelectItem>
           ))}
@@ -63,12 +64,22 @@ export const Select = ({
   </RadixSelect.Root>
 );
 
-const SelectItem = ({ value, children }: { value: string; children: ReactNode }) => (
+const SelectItem = ({
+  value,
+  children,
+  disabled,
+}: {
+  value: string;
+  children: ReactNode;
+  disabled?: boolean;
+}) => (
   <RadixSelect.Item
     value={value}
+    disabled={disabled}
     className={cn(
       'flex cursor-pointer select-none items-center justify-between gap-2 rounded-control px-2.5 py-2 text-sm outline-none transition-colors',
       'text-fg data-[highlighted]:bg-surface-hover',
+      'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
     )}
   >
     <RadixSelect.ItemText>{children}</RadixSelect.ItemText>
