@@ -35,3 +35,9 @@ export const ENROLLMENT_STATUSES = {
   COMPLETED: 'completed',
   DROPPED: 'dropped',
 } as const;
+
+export const DOCUMENT_STATUS = {
+  PROCESSING: 'processing',
+  READY: 'ready',
+  FAILED: 'failed',
+} as const;
