@@ -37,15 +37,21 @@ import {
 
 const router = Router();
 
-router.use(authLimiter);
+// authLimiter is applied per-route, not via router.use() — /current-user and
+// /logout are called routinely (every session check, on a 30s staleTime) and
+// are already JWT-gated, so they're not a credential-guessing target. Lumping
+// them in with login/register under the same 20-req/15min budget meant normal
+// multi-tab usage could lock an already-authenticated user out of the whole
+// /auth router. See NFR-3 in docs/REQUIREMENTS.md — the intent is a stricter
+// limiter on credential/token endpoints, not on every route under /auth.
 
 // ─────────────────────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────────────────────
 
-router.route('/register').post(validate(registerSchema), registerUser);
+router.route('/register').post(authLimiter, validate(registerSchema), registerUser);
 
-router.route('/login').post(validate(loginSchema), loginUser);
+router.route('/login').post(authLimiter, validate(loginSchema), loginUser);
 
 router.route('/logout').post(verifyJWT, logoutUser);
 
@@ -53,17 +59,17 @@ router.route('/current-user').get(verifyJWT, getCurrentUser);
 
 router
   .route('/refresh-access-token')
-  .post(validate(refreshAccessTokenSchema), refreshAccessToken);
+  .post(authLimiter, validate(refreshAccessTokenSchema), refreshAccessToken);
 
 // ─────────────────────────────────────────────────────────────
 // EMAIL VERIFICATION
 // ─────────────────────────────────────────────────────────────
 
-router.route('/verify-email').get(validate(verifyEmailSchema), verifyEmail);
+router.route('/verify-email').get(authLimiter, validate(verifyEmailSchema), verifyEmail);
 
 router
   .route('/resend-verification-email')
-  .post(validate(resendVerificationEmailSchema), resendVerificationEmail);
+  .post(authLimiter, validate(resendVerificationEmailSchema), resendVerificationEmail);
 
 // ─────────────────────────────────────────────────────────────
 // PASSWORD
@@ -71,32 +77,32 @@ router
 
 router
   .route('/forgot-password')
-  .post(validate(forgotPasswordSchema), forgotPassword);
+  .post(authLimiter, validate(forgotPasswordSchema), forgotPassword);
 
 router
   .route('/reset-password')
-  .post(validate(resetPasswordSchema), resetPassword);
+  .post(authLimiter, validate(resetPasswordSchema), resetPassword);
 
 router
   .route('/change-password')
-  .post(verifyJWT, validate(changePasswordSchema), changePassword);
+  .post(authLimiter, verifyJWT, validate(changePasswordSchema), changePassword);
 
 // ─────────────────────────────────────────────────────────────
 // OAUTH
 // ─────────────────────────────────────────────────────────────
 
-router.route('/google').get(googleAuthRedirect);
+router.route('/google').get(authLimiter, googleAuthRedirect);
 
-router.route('/google/callback').get(googleAuthCallback);
+router.route('/google/callback').get(authLimiter, googleAuthCallback);
 
-router.route('/github').get(githubAuthRedirect);
+router.route('/github').get(authLimiter, githubAuthRedirect);
 
-router.route('/github/callback').get(githubAuthCallback);
+router.route('/github/callback').get(authLimiter, githubAuthCallback);
 
 // Aliases (in case Google Console redirect URI uses /oauth/google/*)
-router.route('/oauth/google').get(googleAuthRedirect);
-router.route('/oauth/google/callback').get(googleAuthCallback);
-router.route('/oauth/github').get(githubAuthRedirect);
-router.route('/oauth/github/callback').get(githubAuthCallback);
+router.route('/oauth/google').get(authLimiter, googleAuthRedirect);
+router.route('/oauth/google/callback').get(authLimiter, googleAuthCallback);
+router.route('/oauth/github').get(authLimiter, githubAuthRedirect);
+router.route('/oauth/github/callback').get(authLimiter, githubAuthCallback);
 
 export default router;
