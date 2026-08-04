@@ -1,19 +1,19 @@
 import { Link } from 'react-router-dom';
+import { ShieldAlert } from 'lucide-react';
 
-import { AuthLayout } from '../components/AuthLayout.js';
+import { StatusPage } from '../components/StatusPage.js';
+import { Button } from '../components/ui/Button.js';
 
 export const ForbiddenPage = () => (
-  <AuthLayout
-    title="Not authorized"
-    subtitle="403"
-    footer={
-      <Link to="/" className="text-primary underline">
-        Back to dashboard
+  <StatusPage
+    icon={ShieldAlert}
+    code="403 — Not authorized"
+    title="You don't have access to this page"
+    description="Your account doesn't have permission to view this area. If you think that's wrong, contact your administrator."
+    action={
+      <Link to="/">
+        <Button type="button">Back to dashboard</Button>
       </Link>
     }
-  >
-    <p className="text-sm text-muted">
-      Your account does not have access to this area.
-    </p>
-  </AuthLayout>
+  />
 );

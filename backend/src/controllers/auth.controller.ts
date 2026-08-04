@@ -11,6 +11,7 @@ import {
 } from '../constants/index.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
+import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -50,8 +51,30 @@ export const registerUser = asyncHandler(
     const userCount = await userRepository.count();
     // The first account to register bootstraps the institution as its admin.
     // Everyone else self-registers as a student; teachers and admins are
-    // provisioned by an admin (REQUIREMENTS.md FR-5..FR-7).
+    // provisioned by an admin (REQUIREMENTS.md FR-1a, admin.controller.ts createStaff).
     const role = userCount === 0 ? USER_ROLES.ADMIN : USER_ROLES.STUDENT;
+
+    // Student self-registration can be closed entirely, or scoped to the
+    // institution's own email domain (REQUIREMENTS.md FR-1c/FR-1d) — the
+    // bootstrap admin above is exempt, since nobody has configured anything yet.
+    if (role === USER_ROLES.STUDENT) {
+      const profile = await institutionProfileRepository.get();
+      if (profile && !profile.selfRegistrationEnabled) {
+        throw new ApiError(
+          403,
+          'Self-registration is closed. Ask your administrator for an invite.',
+        );
+      }
+      if (profile?.allowedEmailDomain) {
+        const emailDomain = email.split('@')[1]?.toLowerCase();
+        if (emailDomain !== profile.allowedEmailDomain) {
+          throw new ApiError(
+            400,
+            `Registration is limited to @${profile.allowedEmailDomain} email addresses`,
+          );
+        }
+      }
+    }
 
     const newUser = await userRepository.create({
       name,
@@ -351,6 +374,10 @@ export const resetPassword = asyncHandler(
     }
 
     user.password = await hashPassword(newPassword);
+    // No-op for an already-verified user resetting their password; this is
+    // also how an admin-invited teacher/admin account (created unverified,
+    // see admin.controller.ts createStaff) activates itself.
+    user.isVerified = true;
     await user.save();
 
     await verificationRepository.deletePasswordResetTokensForUser(user.id);

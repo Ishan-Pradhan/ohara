@@ -39,6 +39,13 @@ export class Program extends Model {
   @Column(DataType.STRING)
   declare description: string | null;
 
+  /** e.g. "Affiliated to Tribhuwan University" — set on degree-granting
+   * programs, left null for a school/+2 program that isn't externally
+   * affiliated. */
+  @Default(null)
+  @Column(DataType.STRING)
+  declare affiliation: string | null;
+
   @HasMany(() => Class)
   declare classes?: Class[];
 }

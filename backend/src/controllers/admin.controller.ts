@@ -1,5 +1,7 @@
 import type { Response } from 'express';
 import { userRepository } from '../repositories/users.repository.js';
+import { verificationRepository } from '../repositories/verification.repository.js';
+import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
 import type { AuthRequest } from '../types/auth.types.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -10,11 +12,17 @@ import {
   getPaginationParams,
 } from '../utils/pagination.utils.js';
 import type { PaginationQuery } from '../types/pagination.types.js';
+import type { UserRole } from '../types/users.types.js';
+import { TWENTY_FOUR_HOURS_IN_MS } from '../constants/index.js';
+import { generateToken, hashPassword } from '../utils/security.utils.js';
+import { getGravatar } from '../utils/gravatar.utils.js';
+import { sendStaffInviteEmail } from '../services/email.service.js';
+import { logger } from '../utils/logger.js';
 
 //    GET ALL USERS (ADMIN ONLY)
 export const getAllUsers = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const query = (req.validated?.query ?? {}) as PaginationQuery;
+    const query = (req.validated?.query ?? {}) as PaginationQuery & { role?: UserRole };
     const { page, limit, offset } = getPaginationParams(query);
 
     const search = String(query.search || '').trim();
@@ -24,6 +32,7 @@ export const getAllUsers = asyncHandler(
         limit,
         offset,
         search,
+        role: query.role,
       });
 
     const safeUsers = users.map(serializeUser);
@@ -40,6 +49,105 @@ export const getAllUsers = asyncHandler(
         }),
       },
       'Users retrieved successfully',
+    );
+  },
+);
+
+type InvitableRole = 'teacher' | 'admin' | 'student';
+
+/** Shared by the single-account invite (createStaff) and the batch invite
+ * (inviteUsersBatch): creates one unverified account with an unguessable
+ * placeholder password and emails a set-password link. The invitee can only
+ * reach an authenticated session via that link, which also flips
+ * isVerified (auth.controller.ts resetPassword). Throws ApiError(400) on a
+ * duplicate email — callers decide whether that's fatal or a skippable row. */
+const inviteUser = async (
+  name: string,
+  email: string,
+  role: InvitableRole,
+  institutionName: string,
+) => {
+  const existing = await userRepository.findByEmail(email);
+  if (existing) {
+    throw new ApiError(400, 'Email already exists');
+  }
+
+  const placeholderPassword = await hashPassword(generateToken());
+
+  const user = await userRepository.create({
+    name,
+    email,
+    password: placeholderPassword,
+    avatarUrl: getGravatar(email),
+    role,
+  });
+
+  const resetToken = generateToken();
+  const expiresAt = new Date(Date.now() + TWENTY_FOUR_HOURS_IN_MS);
+  await verificationRepository.deletePasswordResetTokensForUser(user.id);
+  await verificationRepository.createPasswordResetToken(user.id, resetToken, expiresAt);
+
+  try {
+    await sendStaffInviteEmail(user.email, user.name, role, resetToken, institutionName);
+  } catch (emailError) {
+    logger.error({ err: emailError, email: user.email }, 'Failed to send invite email');
+  }
+
+  return user;
+};
+
+// CREATE TEACHER OR ADMIN ACCOUNT (ADMIN ONLY)
+// Students self-register (auth.controller.ts) or are batch-invited
+// (inviteUsersBatch below). This is the only path to a teacher or admin
+// account.
+export const createStaff = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { name, email, role } = req.validated?.body as {
+      name: string;
+      email: string;
+      role: 'teacher' | 'admin';
+    };
+
+    const profile = await institutionProfileRepository.get();
+    const user = await inviteUser(name, email, role, profile?.name ?? 'Ohara');
+
+    return ok(res, serializeUser(user), 'Account created and invite sent', 201);
+  },
+);
+
+// BATCH-INVITE ACCOUNTS (ADMIN ONLY)
+// Typically a whole class of students at once — see FR-1d. One bad row
+// (duplicate email, etc.) doesn't fail the rest of the batch.
+export const inviteUsersBatch = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { role, users } = req.validated?.body as {
+      role: InvitableRole;
+      users: { name: string; email: string }[];
+    };
+
+    const profile = await institutionProfileRepository.get();
+    const institutionName = profile?.name ?? 'Ohara';
+
+    const invited: ReturnType<typeof serializeUser>[] = [];
+    const skipped: { email: string; reason: string }[] = [];
+
+    for (const row of users) {
+      try {
+        const user = await inviteUser(row.name, row.email, role, institutionName);
+        invited.push(serializeUser(user));
+      } catch (err) {
+        skipped.push({
+          email: row.email,
+          reason: err instanceof ApiError ? err.message : 'Could not create this account',
+        });
+      }
+    }
+
+    return ok(
+      res,
+      { invited, skipped },
+      `Invited ${invited.length} of ${users.length}`,
+      201,
     );
   },
 );

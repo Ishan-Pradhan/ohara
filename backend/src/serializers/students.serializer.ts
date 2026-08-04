@@ -13,6 +13,7 @@ export const serializeStudentPlacement = (
         id: membership.section.class.program.id,
         name: membership.section.class.program.name,
         institutionType: membership.section.class.program.institutionType,
+        affiliation: membership.section.class.program.affiliation,
       }
     : null,
   class: membership.section?.class

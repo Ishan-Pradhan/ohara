@@ -100,7 +100,71 @@ describe('GET /admin/programs', () => {
   });
 });
 
-const { createProgram } = await import('../helpers/institution.js');
+describe('PATCH /admin/programs/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${PROGRAMS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates a program as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const created = await request(app)
+      .post(PROGRAMS)
+      .set('Cookie', cookies)
+      .send({ name: 'Engineering', institutionType: 'college' });
+
+    const res = await request(app)
+      .patch(`${PROGRAMS}/${created.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ name: 'Engineering & Applied Science' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.name).toBe('Engineering & Applied Science');
+  });
+});
+
+describe('DELETE /admin/programs/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${PROGRAMS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a program with no classes', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const created = await request(app)
+      .post(PROGRAMS)
+      .set('Cookie', cookies)
+      .send({ name: 'Engineering', institutionType: 'college' });
+
+    const res = await request(app)
+      .delete(`${PROGRAMS}/${created.body.data.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    const list = await request(app).get(PROGRAMS).set('Cookie', cookies);
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it('rejects deleting a program that still has classes with 409', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    await createClassHelper({ programId: program.id });
+
+    const res = await request(app)
+      .delete(`${PROGRAMS}/${program.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(409);
+  });
+});
+
+const { createProgram, createClass: createClassHelper } = await import('../helpers/institution.js');
 
 const CLASSES = '/api/v1/admin/classes';
 
@@ -193,6 +257,62 @@ describe('GET /admin/classes', () => {
   });
 });
 
+describe('PATCH /admin/classes/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${CLASSES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates a class as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClassHelper();
+
+    const res = await request(app)
+      .patch(`${CLASSES}/${cls.id}`)
+      .set('Cookie', cookies)
+      .send({ name: 'Grade 11', orderIndex: 2 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ name: 'Grade 11', orderIndex: 2 });
+  });
+});
+
+describe('DELETE /admin/classes/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${CLASSES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a class with no sections or courses', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClassHelper();
+
+    const res = await request(app)
+      .delete(`${CLASSES}/${cls.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects deleting a class that still has courses with 409', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClassHelper();
+    const { createCourse: createCourseHelper } = await import('../helpers/institution.js');
+    await createCourseHelper({ classId: cls.id });
+
+    const res = await request(app)
+      .delete(`${CLASSES}/${cls.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(409);
+  });
+});
+
 const YEARS = '/api/v1/admin/academic-years';
 
 describe('POST /admin/academic-years', () => {
@@ -235,6 +355,83 @@ describe('POST /admin/academic-years', () => {
     const current = list.body.data.filter((y: { isCurrent: boolean }) => y.isCurrent);
     expect(current).toHaveLength(1);
     expect(current[0].id).toBe(yearB.body.data.id);
+  });
+});
+
+describe('PATCH /admin/academic-years/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${YEARS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('flips the previous current year when isCurrent is set to true', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const yearA = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2025-2026',
+        startDate: '2025-06-01',
+        endDate: '2026-05-31',
+        isCurrent: true,
+      });
+    const yearB = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({ name: '2026-2027', startDate: '2026-06-01', endDate: '2027-05-31' });
+
+    const res = await request(app)
+      .patch(`${YEARS}/${yearB.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ isCurrent: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data.isCurrent).toBe(true);
+
+    const list = await request(app).get(YEARS).set('Cookie', cookies);
+    const current = list.body.data.filter((y: { isCurrent: boolean }) => y.isCurrent);
+    expect(current).toHaveLength(1);
+    expect(current[0].id).toBe(yearB.body.data.id);
+    expect(yearA.body.data.id).not.toBe(current[0].id);
+  });
+});
+
+describe('DELETE /admin/academic-years/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${YEARS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes an academic year with no sections', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const created = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({ name: '2025-2026', startDate: '2025-06-01', endDate: '2026-05-31' });
+
+    const res = await request(app)
+      .delete(`${YEARS}/${created.body.data.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects deleting an academic year that still has sections with 409', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const { createAcademicYear: createYearHelper, createSection: createSectionHelper } =
+      await import('../helpers/institution.js');
+    const year = await createYearHelper();
+    await createSectionHelper({ academicYearId: year.id });
+
+    const res = await request(app)
+      .delete(`${YEARS}/${year.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(409);
   });
 });
 
@@ -372,6 +569,87 @@ describe('GET /admin/sections', () => {
   });
 });
 
+const { createSection } = await import('../helpers/institution.js');
+
+describe('PATCH /admin/sections/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${SECTIONS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ name: 'B' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a classTeacherId that is not a teacher with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const section = await createSection();
+    const notATeacher = await request(app)
+      .get('/api/v1/auth/current-user')
+      .set('Cookie', await signInAs('notateacher2@example.com', 'student'));
+
+    const res = await request(app)
+      .patch(`${SECTIONS}/${section.id}`)
+      .set('Cookie', cookies)
+      .send({ classTeacherId: notATeacher.body.data.id });
+    expect(res.status).toBe(400);
+  });
+
+  it('updates a section as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const section = await createSection();
+    const teacher = await createTeacherUser();
+
+    const res = await request(app)
+      .patch(`${SECTIONS}/${section.id}`)
+      .set('Cookie', cookies)
+      .send({ name: 'B', classTeacherId: teacher.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ name: 'B', classTeacherId: teacher.id });
+  });
+});
+
+describe('DELETE /admin/sections/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${SECTIONS}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a section with no students placed in it', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const section = await createSection();
+
+    const res = await request(app)
+      .delete(`${SECTIONS}/${section.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects deleting a section that still has students placed in it with 409', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const section = await createSection();
+    const { classMembershipRepository } = await import(
+      '../../src/repositories/classMemberships.repository.js'
+    );
+    const { createStudentUser } = await import('../helpers/institution.js');
+    const student = await createStudentUser();
+    await classMembershipRepository.create({
+      studentId: student.id,
+      sectionId: section.id,
+      academicYearId: section.academicYearId,
+    });
+
+    const res = await request(app)
+      .delete(`${SECTIONS}/${section.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(409);
+  });
+});
+
 const COURSES = '/api/v1/admin/courses';
 
 describe('POST /admin/courses', () => {
@@ -440,6 +718,84 @@ describe('GET /admin/courses', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].title).toBe('Physics');
+  });
+});
+
+describe('PATCH /admin/courses/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${COURSES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ title: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates a course as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const created = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101' });
+
+    const res = await request(app)
+      .patch(`${COURSES}/${created.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ title: 'Physics I', code: 'PHYS-101A' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ title: 'Physics I', code: 'PHYS-101A' });
+  });
+
+  it('rejects a duplicate code with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Chemistry', code: 'CHEM-101' });
+    const created = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101' });
+
+    const res = await request(app)
+      .patch(`${COURSES}/${created.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ code: 'CHEM-101' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /admin/courses/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${COURSES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a course and cascades its teacher assignments and enrollments', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const { createCourse: createCourseHelper, createEnrollment, createTeacherUser: createTeacher } =
+      await import('../helpers/institution.js');
+    const course = await createCourseHelper();
+    const teacher = await createTeacher();
+    await request(app)
+      .post(`${COURSES}/${course.id}/teachers`)
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+    await createEnrollment({ courseId: course.id });
+
+    const res = await request(app)
+      .delete(`${COURSES}/${course.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    const list = await request(app).get(COURSES).set('Cookie', cookies);
+    expect(list.body.data).toHaveLength(0);
   });
 });
 

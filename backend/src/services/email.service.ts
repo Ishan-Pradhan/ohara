@@ -39,6 +39,68 @@ export const sendPasswordResetEmail = async (to: string, token: string) => {
   return { resetLink };
 };
 
+// send an account invite email (teacher/admin one-off, or student batch invite)
+export const sendStaffInviteEmail = async (
+  to: string,
+  name: string,
+  role: 'teacher' | 'admin' | 'student',
+  token: string,
+  institutionName: string,
+) => {
+  const setPasswordLink = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
+
+  const from = env.EMAIL_FROM;
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `You've been added to ${institutionName}`,
+    html: staffInviteTemplate(name, role, institutionName, setPasswordLink),
+  });
+
+  return { setPasswordLink };
+};
+
+const staffInviteTemplate = (
+  name: string,
+  role: 'teacher' | 'admin' | 'student',
+  institutionName: string,
+  setPasswordLink: string,
+) => `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #2aaad5;">Welcome to ${institutionName}</h2>
+
+      <p>Hi ${name},</p>
+
+      <p>An administrator has added you to ${institutionName} on Ohara as a <strong>${role}</strong>.</p>
+
+      <p>Set your password to activate your account:</p>
+
+      <a href="${setPasswordLink}"
+         style="
+           display: inline-block;
+           padding: 12px 20px;
+           margin: 16px 0;
+           background-color: #2aaad5;
+           color: #ffffff;
+           text-decoration: none;
+           border-radius: 6px;
+           font-weight: bold;
+         ">
+         Set your password
+      </a>
+
+      <p>If the button doesn't work, you can also use this link:</p>
+      <p><a href="${setPasswordLink}">${setPasswordLink}</a></p>
+
+      <hr style="margin: 24px 0;" />
+
+      <p style="font-size: 12px; color: #777;">
+        If you weren't expecting this, you can safely ignore this email.
+      </p>
+    </div>
+  `;
+
 const verifyEmailTemplate = (verifyLink: string) => `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
       <h2 style="color: #2aaad5;">Verify your email</h2>

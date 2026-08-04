@@ -3,19 +3,28 @@ import { User } from '../models/users.model.js';
 import { USER_STATUS } from '../constants/index.js';
 import type {
   UserCreationAttributes,
+  UserRole,
   Users,
   UserStatus,
 } from '../types/users.types.js';
 
-const buildUserWhere = (search?: string): WhereOptions<Users> => {
-  if (!search) return {};
+const buildUserWhere = (search?: string, role?: UserRole): WhereOptions<Users> => {
+  const where: WhereOptions<Users> = {};
 
-  return {
-    [Op.or]: [
-      { name: { [Op.iLike]: `%${search}%` } },
-      { email: { [Op.iLike]: `%${search}%` } },
-    ],
-  };
+  if (search) {
+    Object.assign(where, {
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+      ],
+    });
+  }
+
+  if (role) {
+    Object.assign(where, { role });
+  }
+
+  return where;
 };
 
 export const userRepository = {
@@ -23,11 +32,12 @@ export const userRepository = {
     limit?: number;
     offset?: number;
     search?: string;
+    role?: UserRole;
   }) => {
-    const { limit, offset, search } = options || {};
+    const { limit, offset, search, role } = options || {};
 
     return await User.findAll({
-      where: buildUserWhere(search),
+      where: buildUserWhere(search, role),
       order: [['createdAt', 'DESC']],
       ...(limit !== undefined && { limit }),
       ...(offset !== undefined && { offset }),
@@ -38,11 +48,12 @@ export const userRepository = {
     limit?: number;
     offset?: number;
     search?: string;
+    role?: UserRole;
   }) => {
-    const { limit, offset, search } = options || {};
+    const { limit, offset, search, role } = options || {};
 
     return await User.findAndCountAll({
-      where: buildUserWhere(search),
+      where: buildUserWhere(search, role),
       ...(limit !== undefined && { limit }),
       ...(offset !== undefined && { offset }),
       order: [['createdAt', 'DESC']],

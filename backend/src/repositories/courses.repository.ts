@@ -14,4 +14,22 @@ export const courseRepository = {
   findById: async (id: string): Promise<Course | null> => {
     return await Course.findByPk(id);
   },
+
+  update: async (
+    id: string,
+    data: Partial<Pick<CourseCreationAttributes, 'title' | 'code' | 'description'>>,
+  ): Promise<Course | null> => {
+    const course = await Course.findByPk(id);
+    if (!course) return null;
+    return await course.update(data);
+  },
+
+  /** `course_teachers.courseId` and `enrollments.courseId` are both ON DELETE
+   * CASCADE — deleting a course sweeps away its teacher assignments and
+   * enrollments too, per SCHEMA.md (a course is the aggregate root for its
+   * content). No dependent-record guard applies here. */
+  delete: async (id: string): Promise<boolean> => {
+    const deleted = await Course.destroy({ where: { id } });
+    return deleted > 0;
+  },
 };

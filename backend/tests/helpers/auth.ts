@@ -14,6 +14,9 @@ export const emailServiceStub = () => ({
   sendPasswordResetEmail: vi.fn(async () => ({
     resetLink: 'http://test/reset',
   })),
+  sendStaffInviteEmail: vi.fn(async () => ({
+    setPasswordLink: 'http://test/reset',
+  })),
 });
 
 export const cookiesFrom = (res: Response): string[] => {

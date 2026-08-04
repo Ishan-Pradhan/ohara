@@ -20,6 +20,7 @@ import adminRoutes from './routes/admin.routes.js';
 import institutionRoutes from './routes/institution.routes.js';
 import placementRoutes from './routes/placement.routes.js';
 import studentsRoutes from './routes/students.routes.js';
+import institutionProfileRoutes from './routes/institutionProfile.routes.js';
 import healthRoutes from './routes/health.routes.js';
 
 export const app = express();
@@ -48,6 +49,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/admin', institutionRoutes);
 app.use('/api/v1/admin', placementRoutes);
 app.use('/api/v1/students', studentsRoutes);
+app.use('/api/v1', institutionProfileRoutes);
 app.use('/api/v1', healthRoutes);
 
 app.use(

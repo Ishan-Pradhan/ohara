@@ -14,6 +14,7 @@ export const getAllUsersSchema = {
     page: z.string().optional(),
     limit: z.string().optional(),
     search: z.string().optional(),
+    role: z.enum(['admin', 'teacher', 'student', 'alumni']).optional(),
   }),
 };
 
@@ -21,9 +22,38 @@ export const archiveUserSchema = {
   params: z.object({ id: uuid }),
 };
 
+// Students self-register (auth.controller.ts); teacher and admin accounts
+// only ever come from here — there is deliberately no role picker at
+// self-registration.
+export const createStaffSchema = {
+  body: z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.email('Invalid email'),
+    role: z.enum(['teacher', 'admin']),
+  }),
+};
+
 export const hardDeleteUserSchema = {
   params: z.object({ id: uuid }),
   body: z.object({ confirmHardDelete: z.literal(true) }),
+};
+
+// One request, one role — "invite this class of students" or "invite these
+// two new teachers." Capped at 200 rows: each row hashes a placeholder
+// password and sends an email, so an unbounded batch is a real request-time cost.
+export const inviteUsersBatchSchema = {
+  body: z.object({
+    role: z.enum(['teacher', 'admin', 'student']),
+    users: z
+      .array(
+        z.object({
+          name: z.string().min(1, 'Name is required'),
+          email: z.email('Invalid email'),
+        }),
+      )
+      .min(1, 'Add at least one person')
+      .max(200, 'Invite at most 200 at a time'),
+  }),
 };
 
 // ── OpenAPI path registrations ─────────────────────────────────────────────
@@ -50,6 +80,53 @@ registry.registerPath({
         },
       },
     },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/users',
+  tags: ['Admin'],
+  request: {
+    body: { content: { 'application/json': { schema: createStaffSchema.body } } },
+  },
+  responses: {
+    201: {
+      description:
+        'Teacher or admin account created (unverified) and sent a set-password email',
+      content: { 'application/json': { schema: envelope(userPublicSchema) } },
+    },
+    400: { description: 'Email already exists or validation failed' },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/users/batch',
+  tags: ['Admin'],
+  request: {
+    body: { content: { 'application/json': { schema: inviteUsersBatchSchema.body } } },
+  },
+  responses: {
+    201: {
+      description:
+        'Per-row results — invited accounts (unverified, set-password email sent) and skipped rows with a reason (e.g. duplicate email)',
+      content: {
+        'application/json': {
+          schema: envelope(
+            z.object({
+              invited: z.array(userPublicSchema),
+              skipped: z.array(z.object({ email: z.string(), reason: z.string() })),
+            }),
+          ),
+        },
+      },
+    },
+    400: { description: 'Validation failed' },
     401: unauthenticated,
     403: forbidden,
   },

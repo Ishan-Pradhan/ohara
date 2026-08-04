@@ -10,7 +10,12 @@ const placementResponseSchema = registry.register(
   z.object({
     studentId: z.uuid(),
     program: z
-      .object({ id: z.uuid(), name: z.string(), institutionType: z.string() })
+      .object({
+        id: z.uuid(),
+        name: z.string(),
+        institutionType: z.string(),
+        affiliation: z.string().nullable(),
+      })
       .nullable(),
     class: z.object({ id: z.uuid(), name: z.string() }).nullable(),
     section: z.object({ id: z.uuid(), name: z.string() }).nullable(),

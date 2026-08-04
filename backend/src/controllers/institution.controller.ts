@@ -18,13 +18,14 @@ import { userRepository } from '../repositories/users.repository.js';
 
 export const createProgram = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { name, institutionType, description } =
+    const { name, institutionType, description, affiliation } =
       req.validated?.body as ProgramCreationAttributes;
 
     const program = await programRepository.create({
       name,
       institutionType,
       description: description ?? null,
+      affiliation: affiliation ?? null,
     });
 
     return ok(res, serializeProgram(program), 'Program created', 201);
@@ -35,6 +36,38 @@ export const listPrograms = asyncHandler(
   async (_req: AuthRequest, res: Response) => {
     const programs = await programRepository.findAll();
     return ok(res, programs.map(serializeProgram), 'Programs retrieved');
+  },
+);
+
+export const updateProgram = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as Partial<
+      Pick<
+        ProgramCreationAttributes,
+        'name' | 'institutionType' | 'description' | 'affiliation'
+      >
+    >;
+
+    const program = await programRepository.update(id, body);
+    if (!program) {
+      throw new ApiError(404, 'Program not found');
+    }
+
+    return ok(res, serializeProgram(program), 'Program updated');
+  },
+);
+
+export const deleteProgram = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await programRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Program not found');
+    }
+
+    return ok(res, null, 'Program deleted');
   },
 );
 
@@ -63,6 +96,35 @@ export const listClasses = asyncHandler(
   },
 );
 
+export const updateClass = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as Partial<
+      Pick<ClassCreationAttributes, 'name' | 'orderIndex'>
+    >;
+
+    const cls = await classRepository.update(id, body);
+    if (!cls) {
+      throw new ApiError(404, 'Class not found');
+    }
+
+    return ok(res, serializeClass(cls), 'Class updated');
+  },
+);
+
+export const deleteClass = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await classRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Class not found');
+    }
+
+    return ok(res, null, 'Class deleted');
+  },
+);
+
 // ── ACADEMIC YEARS ──────────────────────────────────────────────────────────
 
 export const createAcademicYear = asyncHandler(
@@ -85,6 +147,35 @@ export const listAcademicYears = asyncHandler(
   async (_req: AuthRequest, res: Response) => {
     const years = await academicYearRepository.findAll();
     return ok(res, years.map(serializeAcademicYear), 'Academic years retrieved');
+  },
+);
+
+export const updateAcademicYear = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as Partial<
+      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent'>
+    >;
+
+    const year = await academicYearRepository.update(id, body);
+    if (!year) {
+      throw new ApiError(404, 'Academic year not found');
+    }
+
+    return ok(res, serializeAcademicYear(year), 'Academic year updated');
+  },
+);
+
+export const deleteAcademicYear = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await academicYearRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Academic year not found');
+    }
+
+    return ok(res, null, 'Academic year deleted');
   },
 );
 
@@ -137,6 +228,46 @@ export const listSections = asyncHandler(
   },
 );
 
+export const updateSection = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as {
+      name?: string;
+      classTeacherId?: string | null;
+    };
+
+    if (body.classTeacherId) {
+      const teacher = await userRepository.findById(body.classTeacherId);
+      if (!teacher) {
+        throw new ApiError(404, 'Teacher not found');
+      }
+      if (teacher.role !== 'teacher') {
+        throw new ApiError(400, 'classTeacherId must reference a teacher');
+      }
+    }
+
+    const section = await sectionRepository.update(id, body);
+    if (!section) {
+      throw new ApiError(404, 'Section not found');
+    }
+
+    return ok(res, serializeSection(section), 'Section updated');
+  },
+);
+
+export const deleteSection = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await sectionRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Section not found');
+    }
+
+    return ok(res, null, 'Section deleted');
+  },
+);
+
 // ── COURSES ──────────────────────────────────────────────────────────────────
 
 export const createCourse = asyncHandler(
@@ -165,6 +296,35 @@ export const listCourses = asyncHandler(
     const { classId } = req.validated?.query as { classId?: string };
     const courses = await courseRepository.findAll({ classId });
     return ok(res, courses.map(serializeCourse), 'Courses retrieved');
+  },
+);
+
+export const updateCourse = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as Partial<
+      Pick<CourseCreationAttributes, 'title' | 'code' | 'description'>
+    >;
+
+    const course = await courseRepository.update(id, body);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    return ok(res, serializeCourse(course), 'Course updated');
+  },
+);
+
+export const deleteCourse = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await courseRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    return ok(res, null, 'Course deleted');
   },
 );
 

@@ -1,7 +1,24 @@
-export const Spinner = () => (
+import { cn } from '../../lib/cn.js';
+
+interface SpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+const sizes = {
+  sm: 'size-4 border-2',
+  md: 'size-5 border-2',
+  lg: 'size-8 border-[3px]',
+} as const;
+
+export const Spinner = ({ size = 'md', className }: SpinnerProps) => (
   <div
     role="status"
     aria-label="Loading"
-    className="size-5 animate-spin rounded-full border-2 border-border border-t-primary"
+    className={cn(
+      'animate-spin rounded-full border-border border-t-primary',
+      sizes[size],
+      className,
+    )}
   />
 );

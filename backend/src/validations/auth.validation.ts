@@ -81,7 +81,10 @@ registry.registerPath({
   request: { body: jsonBody(registerSchema.body) },
   responses: {
     201: okUser('User registered; sets accessToken and refreshToken cookies'),
-    400: { description: 'Email already exists or validation failed' },
+    400: {
+      description:
+        'Email already exists, validation failed, or the email domain is not allowed by the institution profile',
+    },
   },
 });
 

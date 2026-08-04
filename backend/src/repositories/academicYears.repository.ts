@@ -36,4 +36,37 @@ export const academicYearRepository = {
   findCurrent: async (): Promise<AcademicYear | null> => {
     return await AcademicYear.findOne({ where: { isCurrent: true } });
   },
+
+  /** Same current-year invariant as `create`: flipping `isCurrent` to true
+   * unsets whichever row previously held it, in one transaction. */
+  update: async (
+    id: string,
+    data: Partial<
+      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent'>
+    >,
+  ): Promise<AcademicYear | null> => {
+    if (!data.isCurrent) {
+      const year = await AcademicYear.findByPk(id);
+      if (!year) return null;
+      return await year.update(data);
+    }
+
+    return await sequelize.transaction(async (transaction) => {
+      const year = await AcademicYear.findByPk(id, { transaction });
+      if (!year) return null;
+      await AcademicYear.update(
+        { isCurrent: false },
+        { where: { isCurrent: true }, transaction },
+      );
+      return await year.update(data, { transaction });
+    });
+  },
+
+  /** `sections`, `class_memberships` and `enrollments` all reference
+   * `academicYearId` with ON DELETE RESTRICT — any of them existing throws
+   * `ForeignKeyConstraintError`, mapped to a 409. */
+  delete: async (id: string): Promise<boolean> => {
+    const deleted = await AcademicYear.destroy({ where: { id } });
+    return deleted > 0;
+  },
 };

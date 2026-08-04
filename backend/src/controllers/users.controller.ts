@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 import type { Response } from 'express';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
+import { serializeUser } from '../serializers/user.serializer.js';
 import type { AuthRequest } from '../types/auth.types.js';
 
 // Controller function to get current user details
@@ -20,17 +21,6 @@ export const getCurrentUser = asyncHandler(
       throw new ApiError(404, 'User not found');
     }
 
-    return ok(
-      res,
-      {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        isVerified: user.isVerified,
-        role: user.role,
-      },
-      'Current user retrieved successfully',
-    );
+    return ok(res, serializeUser(user), 'Current user retrieved successfully');
   },
 );

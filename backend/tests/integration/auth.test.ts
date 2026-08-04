@@ -113,6 +113,95 @@ describe('POST /auth/register', () => {
   });
 });
 
+describe('POST /auth/register — student email domain gating', () => {
+  const setAllowedDomain = async (domain: string) => {
+    const { institutionProfileRepository } = await import(
+      '../../src/repositories/institutionProfile.repository.js'
+    );
+    await institutionProfileRepository.upsert({
+      name: 'NCCS College',
+      allowedEmailDomain: domain,
+    });
+  };
+
+  it('bootstraps the first account as admin even with a domain configured for a different email', async () => {
+    // No profile exists yet at this point — this is the very first account,
+    // so it becomes admin regardless of any domain restriction.
+    const res = await request(app).post(REGISTER).send(credentials);
+    expect(res.status).toBe(201);
+
+    const { User } = await import('../../src/models/users.model.js');
+    const user = await User.findOne({ where: { email: credentials.email } });
+    expect(user?.role).toBe('admin');
+  });
+
+  it('rejects a student registration with a non-matching email domain', async () => {
+    await request(app).post(REGISTER).send(credentials); // bootstrap admin
+    await setAllowedDomain('nccs.edu.np');
+
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ name: 'Outsider', email: 'outsider@gmail.com', password: 'hunter2secret' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts a student registration with a matching email domain', async () => {
+    await request(app).post(REGISTER).send(credentials); // bootstrap admin
+    await setAllowedDomain('nccs.edu.np');
+
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ name: 'Student', email: 'student@nccs.edu.np', password: 'hunter2secret' });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('matches the domain case-insensitively', async () => {
+    await request(app).post(REGISTER).send(credentials); // bootstrap admin
+    await setAllowedDomain('nccs.edu.np');
+
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ name: 'Student', email: 'student@NCCS.EDU.NP', password: 'hunter2secret' });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('allows any email domain when none is configured', async () => {
+    await request(app).post(REGISTER).send(credentials); // bootstrap admin
+
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ name: 'Anyone', email: 'anyone@example.org', password: 'hunter2secret' });
+
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('POST /auth/register — self-registration switch', () => {
+  const disableSelfRegistration = async () => {
+    const { institutionProfileRepository } = await import(
+      '../../src/repositories/institutionProfile.repository.js'
+    );
+    await institutionProfileRepository.upsert({
+      name: 'NCCS College',
+      selfRegistrationEnabled: false,
+    });
+  };
+
+  it('rejects student self-registration with 403 once closed', async () => {
+    await request(app).post(REGISTER).send(credentials); // bootstrap admin
+    await disableSelfRegistration();
+
+    const res = await request(app)
+      .post(REGISTER)
+      .send({ name: 'Latecomer', email: 'latecomer@example.com', password: 'hunter2secret' });
+
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('POST /auth/login', () => {
   it('refuses an unverified account', async () => {
     await request(app).post(REGISTER).send(credentials);

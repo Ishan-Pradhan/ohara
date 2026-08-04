@@ -9,13 +9,14 @@ export interface ProgramAttributes {
   name: string;
   institutionType: InstitutionType;
   description: string | null;
+  affiliation: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type ProgramCreationAttributes = Optional<
   ProgramAttributes,
-  'id' | 'description' | 'createdAt' | 'updatedAt'
+  'id' | 'description' | 'affiliation' | 'createdAt' | 'updatedAt'
 >;
 
 export interface ClassAttributes {

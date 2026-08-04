@@ -11,6 +11,7 @@ export const serializeProgram = (p: Program) => ({
   name: p.name,
   institutionType: p.institutionType,
   description: p.description,
+  affiliation: p.affiliation,
   createdAt: p.createdAt,
 });
 

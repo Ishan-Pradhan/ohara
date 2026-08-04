@@ -1,16 +1,77 @@
 @import 'tailwindcss';
 @import './theme.css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-h1,
-h2,
-h3 {
+.font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.015em;
+}
+
+::selection {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/*
+ * Enter/exit animations for Radix primitives (Dialog, DropdownMenu, Tooltip,
+ * Select). Applied via data-[state=open|closed]:[animation:...] utilities
+ * rather than a JS plugin — Tailwind v4 is CSS-first, so keyframes live here.
+ */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+@keyframes scale-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes slide-out-to-top {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -12,6 +12,7 @@ import { Course } from '../models/courses.model.js';
 import { CourseTeacher } from '../models/courseTeachers.model.js';
 import { ClassMembership } from '../models/classMemberships.model.js';
 import { Enrollment } from '../models/enrollments.model.js';
+import { InstitutionProfile } from '../models/institutionProfile.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -38,5 +39,6 @@ export const sequelize = new Sequelize({
     CourseTeacher,
     ClassMembership,
     Enrollment,
+    InstitutionProfile,
   ],
 });
