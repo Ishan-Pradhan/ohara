@@ -60,6 +60,7 @@ export const createSectionSchema = z.object({
   academicYearId: z.string().min(1, 'Choose an academic year'),
   name: z.string().min(1, 'Name is required'),
   classTeacherId: z.string().optional(),
+  capacity: z.number().int().positive().optional(),
 });
 
 export const sectionSchema = z.object({
@@ -68,6 +69,8 @@ export const sectionSchema = z.object({
   academicYearId: z.string(),
   classTeacherId: z.string().nullable(),
   name: z.string(),
+  capacity: z.number().nullable(),
+  enrolledCount: z.number(),
   createdAt: z.string(),
 });
 

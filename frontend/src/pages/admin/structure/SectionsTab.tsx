@@ -36,6 +36,7 @@ import {
 const sectionFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   classTeacherId: z.string().optional(),
+  capacity: z.number().int().positive().optional(),
 });
 
 type SectionFormInput = z.infer<typeof sectionFormSchema>;
@@ -78,13 +79,13 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ name: '', classTeacherId: undefined });
+    resetForm({ name: '', classTeacherId: undefined, capacity: undefined });
     setDialogOpen(true);
   };
 
   const openEdit = (section: Section) => {
     setEditing(section);
-    resetForm({ name: section.name, classTeacherId: section.classTeacherId ?? undefined });
+    resetForm({ name: section.name, classTeacherId: section.classTeacherId ?? undefined, capacity: section.capacity ?? undefined });
     setDialogOpen(true);
   };
 
@@ -187,6 +188,13 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
                 ) : (
                   <Badge>Unassigned</Badge>
                 )}
+                {section.capacity !== null ? (
+                  <Badge variant={section.enrolledCount >= section.capacity ? 'warning' : 'neutral'}>
+                    {section.enrolledCount}/{section.capacity}
+                  </Badge>
+                ) : (
+                  <Badge>{section.enrolledCount} student{section.enrolledCount === 1 ? '' : 's'}</Badge>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger className="rounded-control p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-fg">
                     <MoreVertical className="size-4" aria-hidden />
@@ -240,6 +248,19 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
                   placeholder="No class teacher assigned"
                 />
               )}
+            />
+          </Field>
+
+          <Field
+            label="Capacity"
+            htmlFor="capacity"
+            error={errors.capacity?.message}
+            hint="Optional — leave blank for no limit"
+          >
+            <Input
+              id="capacity"
+              type="number"
+              {...field('capacity', { valueAsNumber: true })}
             />
           </Field>
 
