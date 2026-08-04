@@ -23,7 +23,7 @@ export const sectionRepository = {
 
   update: async (
     id: string,
-    data: Partial<Pick<SectionCreationAttributes, 'name' | 'classTeacherId'>>,
+    data: Partial<Pick<SectionCreationAttributes, 'name' | 'classTeacherId' | 'capacity'>>,
   ): Promise<Section | null> => {
     const section = await Section.findByPk(id);
     if (!section) return null;

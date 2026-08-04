@@ -435,9 +435,11 @@ describe('DELETE /admin/academic-years/:id', () => {
   });
 });
 
-const { createTeacherUser, createClass, createAcademicYear } = await import('../helpers/institution.js');
+const { createTeacherUser, createClass, createAcademicYear, createStudentUser } =
+  await import('../helpers/institution.js');
 
 const SECTIONS = '/api/v1/admin/sections';
+const CLASS_MEMBERSHIPS = '/api/v1/admin/class-memberships';
 
 describe('POST /admin/sections', () => {
   it('rejects a non-existent classId with 404', async () => {
@@ -566,6 +568,39 @@ describe('GET /admin/sections', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].academicYearId).toBe(yearA.id);
+  });
+
+  it('returns capacity and enrolledCount, counting only active placements', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYear();
+
+    const createRes = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: year.id, name: 'A', capacity: 2 });
+    const sectionId: string = createRes.body.data.id;
+
+    const studentA = await createStudentUser();
+    const studentB = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: studentA.id, sectionId });
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: studentB.id, sectionId });
+
+    const res = await request(app)
+      .get(SECTIONS)
+      .query({ classId: cls.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    const section = (res.body.data as { id: string }[]).find((s) => s.id === sectionId);
+    expect(section).toMatchObject({ capacity: 2, enrolledCount: 2 });
   });
 });
 

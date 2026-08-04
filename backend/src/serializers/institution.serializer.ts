@@ -32,12 +32,14 @@ export const serializeAcademicYear = (y: AcademicYear) => ({
   createdAt: y.createdAt,
 });
 
-export const serializeSection = (s: Section) => ({
+export const serializeSection = (s: Section, enrolledCount = 0) => ({
   id: s.id,
   classId: s.classId,
   academicYearId: s.academicYearId,
   classTeacherId: s.classTeacherId,
   name: s.name,
+  capacity: s.capacity,
+  enrolledCount,
   createdAt: s.createdAt,
 });
 

@@ -348,6 +348,7 @@ export const createSectionSchema = {
     academicYearId: z.uuid(),
     name: z.string().min(1, 'Name is required'),
     classTeacherId: z.uuid().optional(),
+    capacity: z.number().int().positive().optional(),
   }),
 };
 
@@ -366,6 +367,8 @@ export const sectionSchema = registry.register(
     academicYearId: z.uuid(),
     classTeacherId: z.uuid().nullable(),
     name: z.string(),
+    capacity: z.number().nullable(),
+    enrolledCount: z.number(),
     createdAt: z.iso.datetime(),
   }),
 );
@@ -416,6 +419,7 @@ export const updateSectionSchema = {
   body: z.object({
     name: z.string().min(1, 'Name is required').optional(),
     classTeacherId: z.uuid().nullable().optional(),
+    capacity: z.number().int().positive().nullable().optional(),
   }),
 };
 

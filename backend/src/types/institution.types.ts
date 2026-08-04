@@ -56,13 +56,14 @@ export interface SectionAttributes {
   academicYearId: string;
   classTeacherId: string | null;
   name: string;
+  capacity: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type SectionCreationAttributes = Optional<
   SectionAttributes,
-  'id' | 'classTeacherId' | 'createdAt' | 'updatedAt'
+  'id' | 'classTeacherId' | 'capacity' | 'createdAt' | 'updatedAt'
 >;
 
 export interface CourseAttributes {

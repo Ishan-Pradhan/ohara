@@ -2,6 +2,7 @@ import { sequelize } from '../config/db.js';
 import { ClassMembership } from '../models/classMemberships.model.js';
 import { enrollmentRepository } from './enrollments.repository.js';
 import { userRepository } from './users.repository.js';
+import { CLASS_MEMBERSHIP_OUTCOMES } from '../constants/index.js';
 import type {
   ClassMembershipCreationAttributes,
   ClassMembershipOutcome,
@@ -77,6 +78,22 @@ export const classMembershipRepository = {
 
   findById: async (id: string): Promise<ClassMembership | null> => {
     return await ClassMembership.findByPk(id);
+  },
+
+  /** Active (not yet promoted/retained/graduated out) headcount per section —
+   * powers the fill-vs-capacity display in the Structure explorer and the
+   * admission form's section picker. */
+  countBySections: async (sectionIds: string[]): Promise<Record<string, number>> => {
+    if (sectionIds.length === 0) return {};
+
+    const rows = (await ClassMembership.findAll({
+      where: { sectionId: sectionIds, outcome: CLASS_MEMBERSHIP_OUTCOMES.ENROLLED },
+      attributes: ['sectionId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['sectionId'],
+      raw: true,
+    })) as unknown as { sectionId: string; count: string }[];
+
+    return Object.fromEntries(rows.map((r) => [r.sectionId, Number(r.count)]));
   },
 
   updateSection: async (id: string, sectionId: string): Promise<ClassMembership | null> => {

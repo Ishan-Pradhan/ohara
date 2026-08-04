@@ -6,6 +6,7 @@ import { programRepository } from '../repositories/programs.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
+import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
 import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection, serializeCourse, serializeCourseTeacher } from '../serializers/institution.serializer.js';
@@ -183,7 +184,7 @@ export const deleteAcademicYear = asyncHandler(
 
 export const createSection = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, academicYearId, name, classTeacherId } =
+    const { classId, academicYearId, name, classTeacherId, capacity } =
       req.validated?.body as SectionCreationAttributes;
 
     const cls = await classRepository.findById(classId);
@@ -211,6 +212,7 @@ export const createSection = asyncHandler(
       academicYearId,
       name,
       classTeacherId: classTeacherId ?? null,
+      capacity: capacity ?? null,
     });
 
     return ok(res, serializeSection(section), 'Section created', 201);
@@ -224,7 +226,12 @@ export const listSections = asyncHandler(
       academicYearId?: string;
     };
     const sections = await sectionRepository.findAll({ classId, academicYearId });
-    return ok(res, sections.map(serializeSection), 'Sections retrieved');
+    const counts = await classMembershipRepository.countBySections(sections.map((s) => s.id));
+    return ok(
+      res,
+      sections.map((s) => serializeSection(s, counts[s.id] ?? 0)),
+      'Sections retrieved',
+    );
   },
 );
 
@@ -234,6 +241,7 @@ export const updateSection = asyncHandler(
     const body = req.validated?.body as {
       name?: string;
       classTeacherId?: string | null;
+      capacity?: number | null;
     };
 
     if (body.classTeacherId) {

@@ -49,4 +49,9 @@ export class Section extends Model {
   @AllowNull(false)
   @Column(DataType.STRING)
   declare name: string;
+
+  /** Null means uncapped — not every institution needs a hard limit per section. */
+  @Default(null)
+  @Column(DataType.INTEGER)
+  declare capacity: number | null;
 }
