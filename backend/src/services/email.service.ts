@@ -5,11 +5,11 @@ const resend = new Resend(env.RESEND_API_KEY);
 
 // Send email verification link
 export const sendVerificationEmail = async (to: string, token: string) => {
-  const backendUrl = env.PORT
-    ? `http://localhost:${env.PORT}`
-    : 'http://localhost:8080';
-
-  const verifyLink = `${backendUrl}/api/v1/auth/verify-email?token=${token}`;
+  // Points at the frontend's VerifyEmailPage, which calls the API itself and
+  // shows a real UI (spinner -> success/failure) — not the backend directly,
+  // which would just hand the browser raw JSON. Same pattern as
+  // sendPasswordResetEmail below.
+  const verifyLink = `${env.FRONTEND_URL.replace(/\/$/, '')}/verify-email?token=${token}`;
 
   const from = env.EMAIL_FROM;
 
