@@ -2,7 +2,6 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import { inviteUser } from './admin.controller.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
-import { classRepository } from '../repositories/classes.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
@@ -48,11 +47,6 @@ export const admitStudent = asyncHandler(async (req: AuthRequest, res: Response)
   if (!section) {
     throw new ApiError(404, 'Section not found');
   }
-
-  const cls = await classRepository.findById(section.classId);
-  // Section.classId is FK-enforced against Classes — a missing class here would mean the
-  // DB is in an inconsistent state, not a normal 404 case, so let it surface as a 500.
-  void cls;
 
   const profile = await institutionProfileRepository.get();
   const institutionName = profile?.name ?? 'Ohara';
