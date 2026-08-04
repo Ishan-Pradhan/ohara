@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
+import { SetupChecklist } from './SetupChecklist.js';
 
 const roleBadge = {
   admin: { label: 'Administrator', variant: 'primary' as const },
@@ -42,21 +43,25 @@ export const DashboardPage = () => {
 
           {user.role === 'student' ? <PlacementCard studentId={user.id} /> : null}
 
-          <Card>
-            <div className="flex items-start gap-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-soft">
-                <GraduationCap className="size-5.5 text-primary" aria-hidden />
+          {user.role === 'admin' ? (
+            <SetupChecklist />
+          ) : (
+            <Card>
+              <div className="flex items-start gap-4">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-soft">
+                  <GraduationCap className="size-5.5 text-primary" aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-fg">Academic tools are on the way</h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Your account, sign-in, and this dashboard are ready. Courses, quizzes, the AI
+                    tutor, and everything else your role needs will appear here as each part of the
+                    institution rolls out.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-semibold text-fg">Academic tools are on the way</h2>
-                <p className="mt-1 text-sm text-muted">
-                  Your account, sign-in, and this dashboard are ready. Courses, quizzes, the AI
-                  tutor, and everything else your role needs will appear here as each part of the
-                  institution rolls out.
-                </p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </>
       )}
     </AppShell>
