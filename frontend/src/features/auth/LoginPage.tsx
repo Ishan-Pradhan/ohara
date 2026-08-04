@@ -8,8 +8,11 @@ import { ApiError } from '../../lib/apiError.js';
 import { AuthLayout } from '../../components/AuthLayout.js';
 import { Button } from '../../components/ui/Button.js';
 import { Input } from '../../components/ui/Input.js';
+import { PasswordInput } from '../../components/ui/PasswordInput.js';
 import { Field } from '../../components/ui/Field.js';
 import { Alert } from '../../components/ui/Alert.js';
+import { GoogleIcon } from '../../components/ui/icons/GoogleIcon.js';
+import { GithubIcon } from '../../components/ui/icons/GithubIcon.js';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -45,13 +48,13 @@ export const LoginPage = () => {
 
   return (
     <AuthLayout
+      eyebrow="Institution access"
       title="Sign in"
-      subtitle="Your institution's learning portal"
       footer={
         <>
           No account?{' '}
-          <Link to="/register" className="text-primary underline">
-            Register
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            Create one
           </Link>
         </>
       }
@@ -74,22 +77,26 @@ export const LoginPage = () => {
           htmlFor="password"
           error={errors.password?.message}
         >
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             invalid={Boolean(errors.password)}
             {...field('password')}
           />
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
         </Field>
 
         <Button type="submit" loading={isPending}>
           Sign in
         </Button>
 
-        <div className="flex items-center gap-3 my-1">
+        <div className="my-1 flex items-center gap-3">
           <span className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted">or</span>
+          <span className="text-xs text-subtle">or continue with</span>
           <span className="h-px flex-1 bg-border" />
         </div>
 
@@ -99,12 +106,14 @@ export const LoginPage = () => {
         */}
         <div className="flex gap-3">
           <a href="/api/v1/auth/google" className="flex-1">
-            <Button type="button" variant="ghost" className="w-full">
+            <Button type="button" variant="secondary" className="w-full">
+              <GoogleIcon />
               Google
             </Button>
           </a>
           <a href="/api/v1/auth/github" className="flex-1">
-            <Button type="button" variant="ghost" className="w-full">
+            <Button type="button" variant="secondary" className="w-full">
+              <GithubIcon />
               GitHub
             </Button>
           </a>

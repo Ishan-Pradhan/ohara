@@ -7,16 +7,19 @@ import {
   type RegisterInput,
 } from '../../schemas/auth.schema.js';
 import { useRegister } from './useAuth.js';
+import { useInstitutionProfile } from '../institution/useInstitution.js';
 import { ApiError } from '../../lib/apiError.js';
 import { AuthLayout } from '../../components/AuthLayout.js';
 import { Button } from '../../components/ui/Button.js';
 import { Input } from '../../components/ui/Input.js';
+import { PasswordInput } from '../../components/ui/PasswordInput.js';
 import { Field } from '../../components/ui/Field.js';
 import { Alert } from '../../components/ui/Alert.js';
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const { mutateAsync, isPending, error } = useRegister();
+  const { data: institution } = useInstitutionProfile();
 
   const {
     register: field,
@@ -40,12 +43,12 @@ export const RegisterPage = () => {
 
   return (
     <AuthLayout
+      eyebrow="New registration"
       title="Create your account"
-      subtitle="Your institution's learning portal"
       footer={
         <>
           Already registered?{' '}
-          <Link to="/login" className="text-primary underline">
+          <Link to="/login" className="font-medium text-primary hover:underline">
             Sign in
           </Link>
         </>
@@ -63,7 +66,16 @@ export const RegisterPage = () => {
           />
         </Field>
 
-        <Field label="Email" htmlFor="email" error={errors.email?.message}>
+        <Field
+          label="Email"
+          htmlFor="email"
+          error={errors.email?.message}
+          hint={
+            !errors.email && institution?.allowedEmailDomain
+              ? `Use your @${institution.allowedEmailDomain} email`
+              : undefined
+          }
+        >
           <Input
             id="email"
             type="email"
@@ -77,10 +89,10 @@ export const RegisterPage = () => {
           label="Password"
           htmlFor="password"
           error={errors.password?.message}
+          hint={errors.password ? undefined : 'At least 6 characters'}
         >
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             invalid={Boolean(errors.password)}
             {...field('password')}

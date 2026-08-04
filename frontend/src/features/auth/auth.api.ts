@@ -2,8 +2,10 @@ import { api } from '../../lib/axios.js';
 import {
   currentUserSchema,
   type CurrentUser,
+  type ForgotPasswordInput,
   type LoginInput,
   type RegisterInput,
+  type ResetPasswordInput,
 } from '../../schemas/auth.schema.js';
 
 /**
@@ -29,4 +31,15 @@ export const logout = async (): Promise<void> => {
 
 export const verifyEmail = async (token: string): Promise<void> => {
   await api.get('/auth/verify-email', { params: { token } });
+};
+
+export const forgotPassword = async (input: ForgotPasswordInput): Promise<void> => {
+  await api.post('/auth/forgot-password', input);
+};
+
+export const resetPassword = async (
+  token: string,
+  input: ResetPasswordInput,
+): Promise<void> => {
+  await api.post('/auth/reset-password', { token, newPassword: input.newPassword });
 };

@@ -18,6 +18,14 @@ export const registerSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.email('Enter a valid email address'),
+});
+
+export const resetPasswordSchema = z.object({
+  newPassword: z.string().min(6, 'New password must be at least 6 characters'),
+});
+
 /*
  * Mirrors the UserPublic schema the API documents. `status` is omitted on
  * purpose: the backend refuses to authenticate a non-active account, so any
@@ -36,4 +44,6 @@ export const currentUserSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type CurrentUser = z.infer<typeof currentUserSchema>;
