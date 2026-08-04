@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BookOpen, MapPin, Plus } from 'lucide-react';
+import { BookOpen, Check, Flag, MapPin, Plus } from 'lucide-react';
+
+import { useStudentFlags, useResolveFlag } from '../../features/teacher/useTeacher.js';
 
 import {
   useClassMemberships,
@@ -183,6 +185,8 @@ export const StudentDetailPage = () => {
               </div>
             )}
           </div>
+
+          <FlagsCard studentId={studentId} />
 
           {memberships && memberships.length > 1 ? (
             <div>
@@ -480,5 +484,49 @@ const OutcomeDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, 
         </div>
       </form>
     </Dialog>
+  );
+};
+
+const FlagsCard = ({ studentId }: { studentId: string }) => {
+  const { data: flags, isLoading } = useStudentFlags(studentId);
+  const resolveFlag = useResolveFlag(studentId);
+
+  if (isLoading) {
+    return <Skeleton className="h-16 w-full" />;
+  }
+
+  const openFlags = (flags ?? []).filter((f) => f.status === 'open');
+  if (openFlags.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-fg">
+        <Flag className="size-4 text-warning" aria-hidden />
+        Flagged by a teacher
+      </h2>
+      <div className="flex flex-col gap-2">
+        {openFlags.map((flag) => (
+          <Card key={flag.id} padding="sm" className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-fg">{flag.reason}</p>
+              <p className="mt-0.5 text-xs text-muted">
+                {flag.raisedByName ?? 'A teacher'} · {new Date(flag.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={resolveFlag.isPending}
+              onClick={() => resolveFlag.mutate(flag.id)}
+            >
+              <Check className="size-4" aria-hidden />
+              Resolve
+            </Button>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 };

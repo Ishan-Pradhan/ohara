@@ -21,7 +21,11 @@ import { AdmitStudentPage } from './pages/admin/AdmitStudentPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
 import { StaffPage } from './pages/admin/StaffPage.js';
 import { SettingsPage } from './pages/admin/SettingsPage.js';
+import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
+import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
+import { MySectionPage } from './pages/teacher/MySectionPage.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
+import { GuestOnlyRoute } from './components/GuestOnlyRoute.js';
 
 const adminRoute = (path: string, element: ReactElement) => ({
   path,
@@ -29,11 +33,23 @@ const adminRoute = (path: string, element: ReactElement) => ({
   errorElement: <ErrorPage />,
 });
 
+const teacherRoute = (path: string, element: ReactElement) => ({
+  path,
+  element: <ProtectedRoute roles={['teacher']}>{element}</ProtectedRoute>,
+  errorElement: <ErrorPage />,
+});
+
+const guestRoute = (path: string, element: ReactElement) => ({
+  path,
+  element: <GuestOnlyRoute>{element}</GuestOnlyRoute>,
+  errorElement: <ErrorPage />,
+});
+
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage />, errorElement: <ErrorPage /> },
-  { path: '/register', element: <RegisterPage />, errorElement: <ErrorPage /> },
-  { path: '/forgot-password', element: <ForgotPasswordPage />, errorElement: <ErrorPage /> },
-  { path: '/reset-password', element: <ResetPasswordPage />, errorElement: <ErrorPage /> },
+  guestRoute('/login', <LoginPage />),
+  guestRoute('/register', <RegisterPage />),
+  guestRoute('/forgot-password', <ForgotPasswordPage />),
+  guestRoute('/reset-password', <ResetPasswordPage />),
   { path: '/verify-email', element: <VerifyEmailPage />, errorElement: <ErrorPage /> },
   { path: '/verify-email-sent', element: <VerifyEmailSentPage />, errorElement: <ErrorPage /> },
   { path: '/forbidden', element: <ForbiddenPage />, errorElement: <ErrorPage /> },
@@ -50,11 +66,18 @@ export const router = createBrowserRouter([
   adminRoute('/admin/structure', <ProgramsExplorerPage />),
   adminRoute('/admin/structure/:programId', <ClassesExplorerPage />),
   adminRoute('/admin/structure/:programId/:classId', <ClassDetailPage />),
-  adminRoute('/admin/courses/:courseId', <CourseContentPage />),
+  {
+    path: '/admin/courses/:courseId',
+    element: <ProtectedRoute roles={['admin', 'teacher']}><CourseContentPage /></ProtectedRoute>,
+    errorElement: <ErrorPage />,
+  },
   adminRoute('/admin/students', <StudentsPage />),
   adminRoute('/admin/students/admit', <AdmitStudentPage />),
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
   adminRoute('/admin/staff', <StaffPage />),
   adminRoute('/admin/settings', <SettingsPage />),
+  teacherRoute('/teacher/courses', <MyCoursesPage />),
+  teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
+  teacherRoute('/teacher/section', <MySectionPage />),
   { path: '*', element: <NotFoundPage /> },
 ]);

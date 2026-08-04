@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import {
+  BookOpen,
   CalendarRange,
   LayoutDashboard,
+  LayoutGrid,
   Layers,
   LogOut,
   Settings,
@@ -51,6 +53,13 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/admin/students', label: 'Students', icon: Users, roles: ['admin'] },
       { to: '/admin/staff', label: 'Staff', icon: UserCog, roles: ['admin'] },
+    ],
+  },
+  {
+    label: 'Teaching',
+    items: [
+      { to: '/teacher/courses', label: 'My Courses', icon: BookOpen, roles: ['teacher'] },
+      { to: '/teacher/section', label: 'My Section', icon: LayoutGrid, roles: ['teacher'] },
     ],
   },
   {

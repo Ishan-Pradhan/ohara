@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import {
   useClasses,
@@ -7,6 +7,8 @@ import {
   usePrograms,
 } from '../../../features/institution/useInstitution.js';
 import { usePublishCourse } from '../../../features/courseContent/useCourseContent.js';
+import { useMyCourses } from '../../../features/teacher/useTeacher.js';
+import { useCurrentUser } from '../../../features/auth/useAuth.js';
 import { toast } from '../../../lib/toast.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
 import { PageHeader } from '../../../components/layout/PageHeader.js';
@@ -18,13 +20,27 @@ import { ModulesSection } from './ModulesSection.js';
 
 export const CourseContentPage = () => {
   const { courseId = '' } = useParams();
-  const { data: courses, isLoading } = useCourses();
+  const { data: currentUser } = useCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+
+  // A teacher can't reach /admin/programs or /admin/classes (admin-only),
+  // so the breadcrumb below and the course lookup itself branch on role —
+  // teachers resolve their course from /teacher/courses instead.
+  const { data: adminCourses, isLoading: adminCoursesLoading } = useCourses();
   const { data: classes, isLoading: classesLoading } = useClasses();
   const { data: programs, isLoading: programsLoading } = usePrograms();
-  const course = courses?.find((c) => c.id === courseId);
-  const cls = classes?.find((c) => c.id === course?.classId);
-  const program = programs?.find((p) => p.id === cls?.programId);
+  const { data: myCourses, isLoading: myCoursesLoading } = useMyCourses();
+
+  const course = isAdmin
+    ? adminCourses?.find((c) => c.id === courseId)
+    : myCourses?.find((c) => c.id === courseId);
+  const cls = isAdmin ? classes?.find((c) => c.id === course?.classId) : undefined;
+  const program = isAdmin ? programs?.find((p) => p.id === cls?.programId) : undefined;
   const publishCourse = usePublishCourse(courseId);
+
+  const isLoading = isAdmin
+    ? adminCoursesLoading || classesLoading || programsLoading
+    : myCoursesLoading;
 
   const onTogglePublish = async (checked: boolean) => {
     await publishCourse.mutateAsync(checked);
@@ -33,37 +49,47 @@ export const CourseContentPage = () => {
 
   return (
     <AppShell>
-      <div className="mb-1 flex items-center gap-1.5 text-sm text-muted">
-        <Link to="/admin/structure" className="hover:text-fg hover:underline">
-          Structure
+      {isAdmin ? (
+        <div className="mb-1 flex items-center gap-1.5 text-sm text-muted">
+          <Link to="/admin/structure" className="hover:text-fg hover:underline">
+            Structure
+          </Link>
+          <ChevronRight className="size-3.5" aria-hidden />
+          {program ? (
+            <Link
+              to={`/admin/structure/${program.id}`}
+              className="hover:text-fg hover:underline"
+            >
+              {program.name}
+            </Link>
+          ) : (
+            <span>…</span>
+          )}
+          <ChevronRight className="size-3.5" aria-hidden />
+          {program && cls ? (
+            <Link
+              to={`/admin/structure/${program.id}/${cls.id}`}
+              className="hover:text-fg hover:underline"
+            >
+              {cls.name}
+            </Link>
+          ) : (
+            <span>…</span>
+          )}
+          <ChevronRight className="size-3.5" aria-hidden />
+          <span className="text-fg">{course?.title ?? '…'}</span>
+        </div>
+      ) : (
+        <Link
+          to="/teacher/courses"
+          className="mb-1 flex items-center gap-1 text-sm text-muted hover:text-fg"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden />
+          My Courses
         </Link>
-        <ChevronRight className="size-3.5" aria-hidden />
-        {program ? (
-          <Link
-            to={`/admin/structure/${program.id}`}
-            className="hover:text-fg hover:underline"
-          >
-            {program.name}
-          </Link>
-        ) : (
-          <span>…</span>
-        )}
-        <ChevronRight className="size-3.5" aria-hidden />
-        {program && cls ? (
-          <Link
-            to={`/admin/structure/${program.id}/${cls.id}`}
-            className="hover:text-fg hover:underline"
-          >
-            {cls.name}
-          </Link>
-        ) : (
-          <span>…</span>
-        )}
-        <ChevronRight className="size-3.5" aria-hidden />
-        <span className="text-fg">{course?.title ?? '…'}</span>
-      </div>
+      )}
 
-      {isLoading || classesLoading || programsLoading ? (
+      {isLoading ? (
         <Skeleton className="h-10 w-64" />
       ) : (
         <PageHeader
