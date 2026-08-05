@@ -138,4 +138,24 @@ describe('POST /admin/students/admit', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects admission when the batch belongs to a different program', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const otherProgramBatch = await createBatch();
+
+    const res = await request(app)
+      .post(ADMIT)
+      .set('Cookie', cookies)
+      .send({
+        name: 'X',
+        email: 'cross-program-batch@example.com',
+        sectionId: section.id,
+        batchId: otherProgramBatch.id,
+      });
+
+    expect(res.status).toBe(400);
+  });
 });
