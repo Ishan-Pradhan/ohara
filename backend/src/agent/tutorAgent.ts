@@ -69,6 +69,14 @@ const toAgentHistory = (systemPrompt: string, messages: TutorMessage[]): AgentMe
     } else if (m.type === TUTOR_MESSAGE_TYPES.TOOL_RESULT) {
       const result = m.toolResult as { toolCallId: string; content: string };
       history.push({ role: 'tool', toolCallId: result.toolCallId, content: result.content });
+    } else if (m.type === TUTOR_MESSAGE_TYPES.CHART) {
+      // Chart rows exist only so the frontend can render the chart bubble —
+      // the model already "saw" this exchange via the paired tool_call/
+      // tool_result rows from the same turn, replayed above. Replaying this
+      // row too would push { role: 'assistant', content: null } with no
+      // toolCalls, which is not a valid OpenAI-compatible message shape
+      // (content: null is only valid alongside a non-empty tool_calls
+      // array) — so it's skipped, not pushed, on purpose.
     } else {
       // Plain assistant text (final answers, including past fallbacks).
       history.push({ role: 'assistant', content: m.content });

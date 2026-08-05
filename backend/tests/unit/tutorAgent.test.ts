@@ -139,6 +139,86 @@ describe('runTutorAgentTurn', () => {
     );
   });
 
+  it('replays history that includes a prior chart message without emitting an invalid assistant shape', async () => {
+    // Regression test: a persisted chart-type row (role assistant, type
+    // chart, content: null) must be skipped by toAgentHistory, not replayed
+    // as a bare { role: 'assistant', content: null } with no toolCalls —
+    // that shape is invalid for an OpenAI-compatible chat completion (a
+    // null-content assistant message is only valid alongside a non-empty
+    // tool_calls array).
+    const course = await createCourse();
+    const student = await createStudentUser();
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: student.id,
+      title: 'Chart history regression',
+    });
+
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: 'Can you show me an example curve?',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 1,
+      role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TOOL_CALL,
+      content: null,
+      toolCalls: [{ id: 'call_1', name: 'generate_chart', arguments: '{"type":"line"}' }],
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 2,
+      role: TUTOR_MESSAGE_ROLES.TOOL,
+      type: TUTOR_MESSAGE_TYPES.TOOL_RESULT,
+      content: null,
+      toolResult: { toolCallId: 'call_1', content: 'Chart "Example" generated and shown to the student.' },
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 3,
+      role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.CHART,
+      content: null,
+      chart: { type: 'line', title: 'Example', xLabel: 'x', yLabel: 'y', series: [] },
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 4,
+      role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: "Here's an example curve.",
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 5,
+      role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: 'Thanks — what about a steeper one?',
+    });
+
+    let capturedHistory: unknown[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce((history) => {
+      capturedHistory = history;
+      return Promise.resolve({ type: 'text', content: 'New answer' });
+    });
+
+    const result = await runTutorAgentTurn(conversation.id, course.id);
+
+    expect(result.content).toBe('New answer');
+    // No replayed message may be a bare null-content assistant entry with
+    // no tool calls — that's exactly the invalid shape the chart row used
+    // to produce before the fix.
+    for (const entry of capturedHistory as { role: string; content: unknown; toolCalls?: unknown[] }[]) {
+      if (entry.role === 'assistant' && entry.content === null) {
+        expect(entry.toolCalls && entry.toolCalls.length > 0).toBe(true);
+      }
+    }
+  });
+
   it('falls back to the stage-1 grounded answer when the loop hits AGENT_MAX_ITERATIONS', async () => {
     const course = await createCourse();
     await seedCourseWithMaterial(course.id);
