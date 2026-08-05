@@ -225,12 +225,20 @@ describe('Tutor endpoints', () => {
 
     // With the agent loop, the "no material" hard branch now lives in the
     // search_course_material tool handler and the stage-1 fallback, not in
-    // sendMessage itself — mock the agent's single text turn the same way
-    // it would answer after seeing the tool's "no relevant material" result.
-    vi.mocked(runAgentTurn).mockResolvedValueOnce({
-      type: 'text',
-      content: "There's no course material available yet to answer this question.",
-    });
+    // sendMessage itself. Mirror the "grounded" test's pattern: mock a
+    // tool_calls turn requesting search_course_material so the *real*
+    // handler runs against emptyCourse (zero ready documents/chunks), then
+    // mock the final text turn — this exercises the actual zero-chunk
+    // branch end-to-end instead of only proving mocked text propagates.
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({
+        type: 'tool_calls',
+        calls: [{ id: 'call_1', name: 'search_course_material', arguments: '{"query":"anything"}' }],
+      })
+      .mockResolvedValueOnce({
+        type: 'text',
+        content: "There's no course material available yet to answer this question.",
+      });
 
     const sendRes = await request(app)
       .post(`/api/v1/courses/${emptyCourse.id}/tutor/conversations/${conversationId}/messages`)
@@ -245,6 +253,22 @@ describe('Tutor endpoints', () => {
     expect(sendRes.body.data.assistantMessage.content).toBe(
       "There's no course material available yet to answer this question.",
     );
+
+    // Prove the real executeSearchCourseMaterial handler actually ran
+    // against the empty course and hit its zero-chunk branch — not just
+    // that the mocked final-turn text made it through the response.
+    const messagesRes = await request(app)
+      .get(`/api/v1/courses/${emptyCourse.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie);
+    const toolResultMessage = messagesRes.body.data.find(
+      (m: { type: string }) => m.type === 'tool_result',
+    );
+    expect(toolResultMessage).toBeTruthy();
+    expect(toolResultMessage.toolResult).toMatchObject({
+      toolCallId: 'call_1',
+      content: 'No relevant material found for this query.',
+    });
+    expect(toolResultMessage.sources).toBeNull();
   });
 
   it('sendMessage runs the agent loop and returns the final assistant message', async () => {
