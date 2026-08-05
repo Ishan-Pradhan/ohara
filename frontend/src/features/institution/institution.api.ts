@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { api } from '../../lib/axios.js';
 import {
   academicYearSchema,
+  batchSchema,
   classSchema,
   courseSchema,
   courseTeacherSchema,
@@ -11,10 +12,12 @@ import {
   sectionSchema,
   type AcademicYear,
   type AssignCourseTeacherInput,
+  type Batch,
   type Class,
   type Course,
   type CourseTeacher,
   type CreateAcademicYearInput,
+  type CreateBatchInput,
   type CreateClassInput,
   type CreateCourseInput,
   type CreateProgramInput,
@@ -64,6 +67,25 @@ export const updateClass = async (id: string, input: CreateClassInput): Promise<
 
 export const deleteClass = async (id: string): Promise<void> => {
   await api.delete(`/admin/classes/${id}`);
+};
+
+export const fetchBatches = async (programId?: string): Promise<Batch[]> => {
+  const res = await api.get('/admin/batches', { params: programId ? { programId } : undefined });
+  return z.array(batchSchema).parse(res.data.data);
+};
+
+export const createBatch = async (input: CreateBatchInput): Promise<Batch> => {
+  const res = await api.post('/admin/batches', input);
+  return batchSchema.parse(res.data.data);
+};
+
+export const updateBatch = async (id: string, input: { name: string }): Promise<Batch> => {
+  const res = await api.patch(`/admin/batches/${id}`, input);
+  return batchSchema.parse(res.data.data);
+};
+
+export const deleteBatch = async (id: string): Promise<void> => {
+  await api.delete(`/admin/batches/${id}`);
 };
 
 export const fetchAcademicYears = async (): Promise<AcademicYear[]> => {

@@ -3,16 +3,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   assignCourseTeacher,
   createAcademicYear,
+  createBatch,
   createClass,
   createCourse,
   createProgram,
   createSection,
   deleteAcademicYear,
+  deleteBatch,
   deleteClass,
   deleteCourse,
   deleteProgram,
   deleteSection,
   fetchAcademicYears,
+  fetchBatches,
   fetchClasses,
   fetchCourseTeachers,
   fetchCourses,
@@ -20,6 +23,7 @@ import {
   fetchPrograms,
   fetchSections,
   updateAcademicYear,
+  updateBatch,
   updateClass,
   updateCourse,
   updateInstitutionProfile,
@@ -29,6 +33,7 @@ import {
 import type {
   AssignCourseTeacherInput,
   CreateAcademicYearInput,
+  CreateBatchInput,
   CreateClassInput,
   CreateCourseInput,
   CreateProgramInput,
@@ -95,6 +100,38 @@ export const useDeleteClass = () => {
   return useMutation({
     mutationFn: deleteClass,
     onSuccess: () => qc.invalidateQueries({ queryKey: CLASSES_KEY }),
+  });
+};
+
+export const batchesKey = (programId?: string) => ['institution', 'batches', programId] as const;
+
+export const useBatches = (programId?: string) =>
+  useQuery({
+    queryKey: batchesKey(programId),
+    queryFn: () => fetchBatches(programId),
+  });
+
+export const useCreateBatch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateBatchInput) => createBatch(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['institution', 'batches'] }),
+  });
+};
+
+export const useUpdateBatch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: { name: string } }) => updateBatch(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['institution', 'batches'] }),
+  });
+};
+
+export const useDeleteBatch = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteBatch(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['institution', 'batches'] }),
   });
 };
 

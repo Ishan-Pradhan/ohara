@@ -35,6 +35,20 @@ export const classSchema = z.object({
   createdAt: z.string(),
 });
 
+export const createBatchSchema = z.object({
+  programId: z.string().min(1, 'Choose a program'),
+  name: z.string().min(1, 'Name is required'),
+  startAcademicYearId: z.string().min(1, 'Choose an academic year'),
+});
+
+export const batchSchema = z.object({
+  id: z.string(),
+  programId: z.string(),
+  name: z.string(),
+  startAcademicYearId: z.string(),
+  createdAt: z.string(),
+});
+
 export const createAcademicYearSchema = z
   .object({
     name: z.string().min(1, 'Name is required'),
@@ -81,6 +95,7 @@ export const createCourseSchema = z.object({
   code: z.string().min(1, 'Code is required'),
   description: z.string().optional(),
   courseType: z.enum(['compulsory', 'elective']).default('compulsory'),
+  capacity: z.number().int().positive().optional(),
 });
 
 export const courseSchema = z.object({
@@ -91,6 +106,8 @@ export const courseSchema = z.object({
   description: z.string().nullable(),
   isPublished: z.boolean(),
   courseType: z.enum(['compulsory', 'elective']),
+  capacity: z.number().nullable(),
+  enrolledCount: z.number(),
   createdAt: z.string(),
 });
 
@@ -137,6 +154,8 @@ export type CreateProgramInput = z.infer<typeof createProgramSchema>;
 export type Program = z.infer<typeof programSchema>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 export type Class = z.infer<typeof classSchema>;
+export type CreateBatchInput = z.infer<typeof createBatchSchema>;
+export type Batch = z.infer<typeof batchSchema>;
 export type CreateAcademicYearInput = z.infer<typeof createAcademicYearSchema>;
 export type AcademicYear = z.infer<typeof academicYearSchema>;
 export type CreateSectionInput = z.infer<typeof createSectionSchema>;
