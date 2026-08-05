@@ -63,6 +63,10 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: 'Learning',
+    items: [{ to: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['student'] }],
+  },
+  {
     items: [
       { to: '/admin/settings', label: 'Institution settings', icon: Settings, roles: ['admin'] },
     ],

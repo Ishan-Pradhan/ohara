@@ -24,6 +24,8 @@ import { SettingsPage } from './pages/admin/SettingsPage.js';
 import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
 import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
 import { MySectionPage } from './pages/teacher/MySectionPage.js';
+import { StudentCoursesPage } from './pages/student/StudentCoursesPage.js';
+import { StudentCoursePage } from './pages/student/StudentCoursePage.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { GuestOnlyRoute } from './components/GuestOnlyRoute.js';
 
@@ -36,6 +38,12 @@ const adminRoute = (path: string, element: ReactElement) => ({
 const teacherRoute = (path: string, element: ReactElement) => ({
   path,
   element: <ProtectedRoute roles={['teacher']}>{element}</ProtectedRoute>,
+  errorElement: <ErrorPage />,
+});
+
+const studentRoute = (path: string, element: ReactElement) => ({
+  path,
+  element: <ProtectedRoute roles={['student']}>{element}</ProtectedRoute>,
   errorElement: <ErrorPage />,
 });
 
@@ -79,5 +87,7 @@ export const router = createBrowserRouter([
   teacherRoute('/teacher/courses', <MyCoursesPage />),
   teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
   teacherRoute('/teacher/section', <MySectionPage />),
+  studentRoute('/student/courses', <StudentCoursesPage />),
+  studentRoute('/student/courses/:courseId', <StudentCoursePage />),
   { path: '*', element: <NotFoundPage /> },
 ]);
