@@ -31,6 +31,37 @@ const placementResponseSchema = registry.register(
   }),
 );
 
+export const getStudentElectivesSchema = {
+  params: z.object({ studentId: z.uuid() }),
+};
+
+const electiveCourseSchema = z.object({
+  id: z.uuid(),
+  classId: z.uuid(),
+  title: z.string(),
+  code: z.string(),
+  description: z.string().nullable(),
+  capacity: z.number().nullable(),
+  enrolledCount: z.number(),
+  isEnrolled: z.boolean(),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/students/{studentId}/electives',
+  tags: ['Placement'],
+  request: { params: getStudentElectivesSchema.params },
+  responses: {
+    200: {
+      description: "The student's current semester's elective courses, with fill/capacity and their own enrollment status",
+      content: { 'application/json': { schema: envelope(z.array(electiveCourseSchema)) } },
+    },
+    401: { description: 'Not authenticated' },
+    403: { description: "Not authorized to view another student's electives" },
+    404: { description: 'Student is not currently placed' },
+  },
+});
+
 registry.registerPath({
   method: 'get',
   path: '/students/{studentId}/placement',

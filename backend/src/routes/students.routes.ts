@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { verifyJWT } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
-import { getStudentPlacementSchema } from '../validations/students.validation.js';
-import { getStudentPlacement } from '../controllers/students.controller.js';
+import {
+  getStudentPlacementSchema,
+  getStudentElectivesSchema,
+} from '../validations/students.validation.js';
+import { getStudentPlacement, getStudentElectives } from '../controllers/students.controller.js';
 
 const router = Router();
 
@@ -10,5 +13,6 @@ const router = Router();
 router.use(verifyJWT);
 
 router.get('/:studentId/placement', validate(getStudentPlacementSchema), getStudentPlacement);
+router.get('/:studentId/electives', validate(getStudentElectivesSchema), getStudentElectives);
 
 export default router;

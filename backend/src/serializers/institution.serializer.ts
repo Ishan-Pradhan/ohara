@@ -65,6 +65,21 @@ export const serializeCourse = (c: Course, enrolledCount = 0) => ({
   createdAt: c.createdAt,
 });
 
+export const serializeElectiveCourse = (
+  c: Course,
+  enrolledCount: number,
+  isEnrolled: boolean,
+) => ({
+  id: c.id,
+  classId: c.classId,
+  title: c.title,
+  code: c.code,
+  description: c.description,
+  capacity: c.capacity,
+  enrolledCount,
+  isEnrolled,
+});
+
 export const serializeCourseTeacher = (ct: CourseTeacher, teacher: User) => ({
   id: ct.id,
   courseId: ct.courseId,

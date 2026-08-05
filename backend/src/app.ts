@@ -25,6 +25,7 @@ import institutionProfileRoutes from './routes/institutionProfile.routes.js';
 import documentsRoutes from './routes/documents.routes.js';
 import courseContentRoutes from './routes/courseContent.routes.js';
 import tutorRoutes from './routes/tutor.routes.js';
+import electivesRoutes from './routes/electives.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
 import healthRoutes from './routes/health.routes.js';
 
@@ -58,6 +59,7 @@ app.use('/api/v1/students', studentsRoutes);
 app.use('/api/v1/courses', documentsRoutes);
 app.use('/api/v1/courses', courseContentRoutes);
 app.use('/api/v1/courses', tutorRoutes);
+app.use('/api/v1/courses', electivesRoutes);
 app.use('/api/v1/teacher', teacherRoutes);
 app.use('/api/v1', institutionProfileRoutes);
 app.use('/api/v1', healthRoutes);
