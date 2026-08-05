@@ -86,3 +86,10 @@ export const TUTOR_MESSAGE_TYPES = {
 // How many chunks to retrieve per tutor question — a retrieval-quality
 // tuning knob, not a deployment concern, same reasoning as CHUNK_SIZE_CHARS.
 export const TUTOR_RETRIEVAL_K = 5;
+
+// Bounded-agent-loop guardrails (ARCHITECTURE.md §7) — hard caps, not tuning
+// knobs to raise casually. If the agent legitimately needs more steps than
+// this, the fallback (stage-1 grounded answer) is the correct behavior, not
+// a higher cap.
+export const AGENT_MAX_ITERATIONS = 5;
+export const AGENT_TURN_TIMEOUT_MS = 30_000;

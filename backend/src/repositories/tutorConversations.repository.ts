@@ -1,5 +1,8 @@
 import { TutorConversation } from '../models/tutorConversations.model.js';
-import type { TutorConversationCreationAttributes } from '../types/tutor.types.js';
+import type {
+  TutorConversationCreationAttributes,
+  TutorConversationStatus,
+} from '../types/tutor.types.js';
 
 export const tutorConversationRepository = {
   create: async (data: TutorConversationCreationAttributes): Promise<TutorConversation> => {
@@ -18,5 +21,14 @@ export const tutorConversationRepository = {
 
   findById: async (id: string): Promise<TutorConversation | null> => {
     return await TutorConversation.findByPk(id);
+  },
+
+  updateStatus: async (
+    id: string,
+    status: TutorConversationStatus,
+  ): Promise<TutorConversation | null> => {
+    const conversation = await TutorConversation.findByPk(id);
+    if (!conversation) return null;
+    return await conversation.update({ status });
   },
 };
