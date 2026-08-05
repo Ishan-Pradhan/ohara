@@ -356,6 +356,33 @@ export const createCourse = asyncHandler(
       capacity: capacity ?? null,
     });
 
+    // When a compulsory course is added after students are already placed,
+    // auto-enroll every currently-active student in the class so they're not
+    // missed. `ignoreDuplicates` is safe here — the enrollment table has a
+    // UNIQUE(studentId, courseId, academicYearId) constraint, so any student
+    // who somehow already has a row for this course is silently skipped.
+    if (courseType === 'compulsory') {
+      const sections = await sectionRepository.findAll({ classId });
+
+      const enrollmentsToCreate = (
+        await Promise.all(
+          sections.map((section) =>
+            classMembershipRepository.findBySectionWithStudents(section.id).then((memberships) =>
+              memberships.map((m) => ({
+                studentId: m.studentId,
+                courseId: course.id,
+                academicYearId: section.academicYearId,
+              })),
+            ),
+          ),
+        )
+      ).flat();
+
+      if (enrollmentsToCreate.length > 0) {
+        await enrollmentRepository.bulkCreate(enrollmentsToCreate, undefined, true);
+      }
+    }
+
     return ok(res, serializeCourse(course), 'Course created', 201);
   },
 );

@@ -592,6 +592,41 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(res.body.data.sectionId).toBe(staleSection.id);
   });
 
+  it('rejects promoting into a target section in the same academic year as the current placement, with 400', async () => {
+    // Real-world trigger: an admin creates the next class's section under the
+    // SAME academic_years row as the current one (hasn't created a new term
+    // yet). class_memberships has UNIQUE(studentId, academicYearId), and
+    // promote() inserts the new row before closing the old one, so without
+    // this guard the request fails with a raw, confusing Postgres unique-
+    // constraint error instead of an actionable ApiError.
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const sharedYear = await createAcademicYear();
+    const oldSection = await createSection({ classId: classA.id, academicYearId: sharedYear.id });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
+
+    const sameYearSection = await createSection({
+      classId: classB.id,
+      academicYearId: sharedYear.id,
+      name: 'B',
+    });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: sameYearSection.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).not.toMatch(/must be unique/i);
+  });
+
   it('rejects promoting into a target section from a different program with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();

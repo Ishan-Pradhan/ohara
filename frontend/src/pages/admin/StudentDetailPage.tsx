@@ -103,6 +103,21 @@ export const StudentDetailPage = () => {
     return section?.classId === currentClassForOutcome?.id;
   });
 
+  // Transfer: same class AND same academic year as the student's current placement,
+  // excluding their current section. These are the only valid same-term, same-class
+  // targets the backend will accept.
+  const transferSectionOptions = (sections ?? [])
+    .filter(
+      (s) =>
+        s.id !== placement?.section?.id &&
+        s.classId === placement?.class?.id &&
+        s.academicYearId === placement?.academicYear?.id,
+    )
+    .map((s) => {
+      const fill = s.capacity !== null ? `${s.enrolledCount}/${s.capacity}` : `${s.enrolledCount}`;
+      return { value: s.id, label: `${s.name} · ${fill}` };
+    });
+
   const notPlaced = isError;
 
   return (
@@ -155,14 +170,16 @@ export const StudentDetailPage = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!currentMembership}
-                  onClick={() => setTransferOpen(true)}
-                >
-                  Transfer
-                </Button>
+                {transferSectionOptions.length > 0 ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!currentMembership}
+                    onClick={() => setTransferOpen(true)}
+                  >
+                    Transfer section
+                  </Button>
+                ) : null}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -276,12 +293,13 @@ export const StudentDetailPage = () => {
         error={createEnrollment.error}
       />
 
-      {/* Transfer to another section (same class) */}
-      {currentMembership && placement?.section ? (
+      {/* Transfer to another section (same class + same academic year only) */}
+      {currentMembership && placement?.section && transferSectionOptions.length > 0 ? (
         <TransferDialog
           open={transferOpen}
           onOpenChange={setTransferOpen}
-          sectionOptions={sectionOptions.filter((o) => o.value !== placement.section?.id)}
+          currentSectionName={placement.section.name}
+          sectionOptions={transferSectionOptions}
           onSubmit={async (input) => {
             await transfer.mutateAsync({ membershipId: currentMembership.id, input });
             toast.success('Student transferred');
@@ -297,6 +315,7 @@ export const StudentDetailPage = () => {
         <OutcomeDialog
           open={outcomeOpen}
           onOpenChange={setOutcomeOpen}
+          institutionType={placement?.program?.institutionType ?? 'school'}
           promotedSectionOptions={promotedSectionOptions}
           retainedSectionOptions={retainedSectionOptions}
           onSubmit={async (input) => {
@@ -435,13 +454,14 @@ const EnrollDialog = ({ open, onOpenChange, courseOptions, onSubmit, loading, er
 interface TransferDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  currentSectionName: string;
   sectionOptions: { value: string; label: string }[];
   onSubmit: (input: TransferInput) => Promise<void>;
   loading: boolean;
   error: unknown;
 }
 
-const TransferDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, error }: TransferDialogProps) => {
+const TransferDialog = ({ open, onOpenChange, currentSectionName, sectionOptions, onSubmit, loading, error }: TransferDialogProps) => {
   const {
     control,
     handleSubmit,
@@ -449,7 +469,12 @@ const TransferDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading,
   } = useForm<TransferInput>({ resolver: zodResolver(transferSchema) });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Transfer to another section" description="Same-class transfers only, for now.">
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Transfer to another section"
+      description={`Moving from Section ${currentSectionName}. Only sections in the same class and academic year are shown.`}
+    >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
         <Field label="Target section" htmlFor="targetSectionId" error={errors.targetSectionId?.message}>
@@ -483,6 +508,7 @@ const TransferDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading,
 interface OutcomeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  institutionType: string;
   promotedSectionOptions: { value: string; label: string }[];
   retainedSectionOptions: { value: string; label: string }[];
   onSubmit: (input: OutcomeInput) => Promise<void>;
@@ -499,6 +525,7 @@ const outcomeOptions = [
 const OutcomeDialog = ({
   open,
   onOpenChange,
+  institutionType,
   promotedSectionOptions,
   retainedSectionOptions,
   onSubmit,
@@ -514,6 +541,9 @@ const OutcomeDialog = ({
 
   const outcome = watch('outcome');
   const sectionOptions = outcome === 'promoted' ? promotedSectionOptions : retainedSectionOptions;
+
+  // Universities use semester-based naming; schools and colleges use class-based naming.
+  const targetLabel = institutionType === 'university' ? 'Target semester' : 'Target class';
 
   return (
     <Dialog
@@ -540,7 +570,7 @@ const OutcomeDialog = ({
           />
         </Field>
         {outcome && outcome !== 'graduated' ? (
-          <Field label="Target section" htmlFor="targetSectionId" error={errors.targetSectionId?.message}>
+          <Field label={targetLabel} htmlFor="targetSectionId" error={errors.targetSectionId?.message}>
             <Controller
               control={control}
               name="targetSectionId"
@@ -550,7 +580,7 @@ const OutcomeDialog = ({
                   options={sectionOptions}
                   value={field.value}
                   onValueChange={field.onChange}
-                  placeholder="Select a section"
+                  placeholder={sectionOptions.length ? `Select a ${institutionType === 'university' ? 'semester section' : 'class section'}` : 'No valid target sections'}
                 />
               )}
             />

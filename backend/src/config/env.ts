@@ -56,8 +56,8 @@ const envSchema = z.object({
 
   // Stricter limiter for /auth/* (NFR-3): brute-force protection on credential
   // and token endpoints. Skipped entirely under NODE_ENV=test.
-  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
-  AUTH_RATE_LIMIT_MAX: z.coerce.number().default(20),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(20 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().default(30),
 
   // Stricter limiter for tutor messages (NFR-3): each one costs a real LLM
   // call. Skipped entirely under NODE_ENV=test, same as AUTH_RATE_LIMIT_*.

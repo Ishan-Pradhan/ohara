@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, Plus, Send } from 'lucide-react';
 
 import {
@@ -47,6 +47,11 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   const { data: messages, isLoading: messagesLoading } = useMessages(courseId, selectedId ?? '');
   const sendMessage = useSendMessage(courseId, selectedId ?? '');
 
+  const bottomRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, sendMessage.isPending]);
+
   const startConversation = async () => {
     if (!newTitle.trim()) return;
     try {
@@ -73,8 +78,8 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-      <Card padding="sm" className="flex flex-col gap-2">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
+      <Card padding="sm" className="flex min-h-0 flex-col gap-2 overflow-y-auto">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-subtle">Conversations</span>
           <Button size="sm" variant="ghost" aria-label="New conversation" onClick={() => setCreating((prev) => !prev)}>
@@ -142,7 +147,7 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
         )}
       </Card>
 
-      <Card padding="sm" className="flex min-h-[420px] flex-col gap-3">
+      <Card padding="sm" className="flex h-full min-h-[420px] flex-col gap-3 overflow-hidden">
         {!selectedId ? (
           <EmptyState
             icon={MessageCircle}
@@ -151,7 +156,7 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
           />
         ) : (
           <>
-            <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-1">
+            <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto px-1">
               {messagesLoading ? (
                 <div className="flex flex-col gap-2">
                   <Skeleton className="h-12 w-2/3" />
@@ -198,6 +203,8 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                   Thinking…
                 </div>
               ) : null}
+
+              <div ref={bottomRef} />
             </div>
 
             {sendMessage.isError ? (

@@ -100,7 +100,9 @@ export const classMembershipRepository = {
     return membership;
   },
 
-  /** Atomically creates the new membership (+ auto-enroll) and closes out the old one. */
+  /** Atomically creates the new membership (+ auto-enroll) and closes out the old one.
+   * Also marks all of the student's active enrollments for the old academic year as
+   * `completed` so teachers in those courses no longer see the student on their roster. */
   promote: async (
     oldMembershipId: string,
     newData: ClassMembershipCreationAttributes,
@@ -125,6 +127,15 @@ export const classMembershipRepository = {
       if (!oldMembership) {
         throw new Error('Class membership disappeared mid-transaction');
       }
+
+      // Complete all active enrollments from the old semester so the student
+      // no longer appears on any teacher's course roster for that term.
+      await enrollmentRepository.bulkComplete(
+        oldMembership.studentId,
+        oldMembership.academicYearId,
+        transaction,
+      );
+
       oldMembership.outcome = outcome;
       oldMembership.promotedToId = newMembership.id;
       await oldMembership.save({ transaction });

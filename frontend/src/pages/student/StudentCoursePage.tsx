@@ -28,8 +28,8 @@ export const StudentCoursePage = () => {
         description={course?.code}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-        <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 gap-6 lg:h-[calc(100dvh-14rem)] lg:grid-cols-[280px_1fr]">
+        <div className="flex flex-col gap-2 lg:overflow-y-auto lg:pr-1">
           {isLoading ? (
             <div className="flex flex-col gap-2">
               <Skeleton className="h-14 w-full" />

@@ -11,8 +11,9 @@ export const enrollmentRepository = {
   bulkCreate: async (
     data: EnrollmentCreationAttributes[],
     transaction?: Transaction,
+    ignoreDuplicates = false,
   ): Promise<Enrollment[]> => {
-    return await Enrollment.bulkCreate(data, { transaction });
+    return await Enrollment.bulkCreate(data, { transaction, ignoreDuplicates });
   },
 
   findAll: async (options?: {
@@ -39,10 +40,12 @@ export const enrollmentRepository = {
     });
   },
 
-  /** Powers a course's roster view (teacher/admin) — each row's `student` is included. */
+  /** Powers a course's roster view (teacher/admin) — active (`active`)
+   * enrollments only. Promoted/dropped students are excluded so teachers
+   * only see currently-enrolled students, not historical ones. */
   findByCourseWithStudents: async (courseId: string): Promise<Enrollment[]> => {
     return await Enrollment.findAll({
-      where: { courseId },
+      where: { courseId, status: 'active' },
       include: ['student'],
       order: [['createdAt', 'ASC']],
     });
@@ -89,5 +92,20 @@ export const enrollmentRepository = {
     const enrollment = await Enrollment.findByPk(id);
     if (!enrollment) return null;
     return await enrollment.update({ status });
+  },
+
+  /** Marks every active enrollment for a student in a given academic year
+   * as `completed`. Called inside promote() so that when a student moves
+   * to the next semester, teachers in the old semester's courses no longer
+   * see them on the roster. */
+  bulkComplete: async (
+    studentId: string,
+    academicYearId: string,
+    transaction: Transaction,
+  ): Promise<void> => {
+    await Enrollment.update(
+      { status: 'completed' },
+      { where: { studentId, academicYearId, status: 'active' }, transaction },
+    );
   },
 };

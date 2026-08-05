@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -58,6 +58,7 @@ interface CoursesTabProps {
 }
 
 export const CoursesTab = ({ classId }: CoursesTabProps) => {
+  const navigate = useNavigate();
   const { data: allCourses, isLoading } = useCourses();
   const createCourse = useCreateCourse();
   const updateCourse = useUpdateCourse();
@@ -196,8 +197,9 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
                 <TableCell>
                   <Link
                     to={`/admin/courses/${course.id}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-control px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover"
+                    className="inline-flex items-center justify-center gap-2 rounded-control border border-border bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover hover:border-border-strong active:scale-[0.98]"
                   >
+                    <BookOpen className="size-4 text-subtle" aria-hidden />
                     Content
                   </Link>
                 </TableCell>
@@ -217,6 +219,10 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
                       <MoreVertical className="size-4" aria-hidden />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
+                      <DropdownMenuItem onSelect={() => navigate(`/admin/courses/${course.id}`)}>
+                        <BookOpen className="size-4" aria-hidden />
+                        Content
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => openEdit(course)}>
                         <Pencil className="size-4" aria-hidden />
                         Edit

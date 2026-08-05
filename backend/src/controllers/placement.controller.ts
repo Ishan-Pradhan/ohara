@@ -262,6 +262,14 @@ export const applyOutcome = async (
   if (outcome === 'retained' && targetClass.id !== currentClass.id) {
     throw new ApiError(400, 'Retention must stay in the same class');
   }
+  if (targetSection.academicYearId === membership.academicYearId) {
+    throw new ApiError(
+      400,
+      'Target section is in the same academic year/term as the current placement — promotion ' +
+        'must move into a different term. Create (or pick) a section under a different academic ' +
+        'year before promoting.',
+    );
+  }
 
   const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
   const autoEnrollCourseIds = classCourses
