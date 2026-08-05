@@ -18,6 +18,9 @@ export const serializeTutorMessage = (m: TutorMessage) => ({
   role: m.role,
   type: m.type,
   content: m.content,
+  toolCalls: m.toolCalls,
+  toolResult: m.toolResult,
+  chart: m.chart,
   sources: m.sources,
   createdAt: m.createdAt,
 });

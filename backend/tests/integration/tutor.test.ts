@@ -8,6 +8,7 @@ vi.mock('../../src/services/email.service.js', async () => {
 
 vi.mock('../../src/services/llm.service.js', () => ({
   generateText: vi.fn(),
+  runAgentTurn: vi.fn(),
 }));
 
 const { app } = await import('../../src/app.js');
@@ -25,8 +26,13 @@ const { enrollmentRepository } = await import('../../src/repositories/enrollment
 const { courseRepository } = await import('../../src/repositories/courses.repository.js');
 const { moduleRepository } = await import('../../src/repositories/modules.repository.js');
 const { lessonRepository } = await import('../../src/repositories/lessons.repository.js');
-const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
-const { generateText } = await import('../../src/services/llm.service.js');
+const { tutorConversationRepository } = await import(
+  '../../src/repositories/tutorConversations.repository.js'
+);
+const { EMBEDDING_DIMENSIONS, TUTOR_CONVERSATION_STATUSES } = await import(
+  '../../src/constants/index.js'
+);
+const { generateText, runAgentTurn } = await import('../../src/services/llm.service.js');
 
 const PASSWORD = 'hunter2secret';
 
@@ -60,6 +66,11 @@ beforeEach(async () => {
   await truncateAll();
   vi.mocked(generateText).mockReset();
   vi.mocked(generateText).mockResolvedValue('This is a tutor response grounded in the material.');
+  vi.mocked(runAgentTurn).mockReset();
+  vi.mocked(runAgentTurn).mockResolvedValue({
+    type: 'text',
+    content: 'This is a tutor response grounded in the material.',
+  });
 });
 
 afterAll(async () => {
@@ -175,13 +186,23 @@ describe('Tutor endpoints', () => {
     expect(createRes.status).toBe(201);
     const conversationId = createRes.body.data.id;
 
+    // The agent loop (mocked at runAgentTurn) calls search_course_material
+    // first — its real handler does the actual embed + pgvector retrieval —
+    // then answers from what it found, same as the guaranteed stage-1 shape.
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({
+        type: 'tool_calls',
+        calls: [{ id: 'call_1', name: 'search_course_material', arguments: '{"query":"photosynthesis"}' }],
+      })
+      .mockResolvedValueOnce({ type: 'text', content: 'Grounded answer' });
+
     const sendRes = await request(app)
       .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
       .set('Cookie', enrolledStudentCookie)
       .send({ content: 'What does the material say about photosynthesis?' });
 
     expect(sendRes.status).toBe(201);
-    expect(sendRes.body.data.assistantMessage.content).toBeTruthy();
+    expect(sendRes.body.data.assistantMessage.content).toBe('Grounded answer');
     expect(sendRes.body.data.assistantMessage.sources).not.toBeNull();
     expect(sendRes.body.data.assistantMessage.sources[0]).toMatchObject({
       documentId: readyDocument.id,
@@ -202,6 +223,15 @@ describe('Tutor endpoints', () => {
       .send({ title: 'Test' });
     const conversationId = createRes.body.data.id;
 
+    // With the agent loop, the "no material" hard branch now lives in the
+    // search_course_material tool handler and the stage-1 fallback, not in
+    // sendMessage itself — mock the agent's single text turn the same way
+    // it would answer after seeing the tool's "no relevant material" result.
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({
+      type: 'text',
+      content: "There's no course material available yet to answer this question.",
+    });
+
     const sendRes = await request(app)
       .post(`/api/v1/courses/${emptyCourse.id}/tutor/conversations/${conversationId}/messages`)
       .set('Cookie', enrolledStudentCookie)
@@ -209,13 +239,65 @@ describe('Tutor endpoints', () => {
 
     expect(sendRes.status).toBe(201);
     expect(sendRes.body.data.assistantMessage.sources).toBeNull();
-    // Grounding is mandatory: zero retrieved chunks must be a hard code
-    // branch, not just a prompt-engineered refusal — the LLM must never be
-    // called at all in this case.
+    // The primary agent loop never falls back to stage-1's own generateText
+    // call in a successful run — that path is reserved for errors/cap-outs.
     expect(generateText).not.toHaveBeenCalled();
     expect(sendRes.body.data.assistantMessage.content).toBe(
       "There's no course material available yet to answer this question.",
     );
+  });
+
+  it('sendMessage runs the agent loop and returns the final assistant message', async () => {
+    const course = await createCourse();
+    const enrolledStudentCookie = await signInEnrolledStudent('agent-loop@example.com', course.id);
+
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Agent loop test' });
+    const conversationId = createRes.body.data.id;
+
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Answer' });
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'What is X?' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.assistantMessage.content).toBe('Answer');
+  });
+
+  it('resumes a conversation from awaiting_student and flips status back to active', async () => {
+    const course = await createCourse();
+    const enrolledStudentCookie = await signInEnrolledStudent('resume@example.com', course.id);
+
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Resume test' });
+    const conversationId = createRes.body.data.id;
+
+    await tutorConversationRepository.updateStatus(
+      conversationId,
+      TUTOR_CONVERSATION_STATUSES.AWAITING_STUDENT,
+    );
+
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Resumed answer' });
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'It was chapter 3' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.assistantMessage.content).toBe('Resumed answer');
+
+    const conversations = await request(app)
+      .get(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie);
+    const updated = conversations.body.data.find((c: { id: string }) => c.id === conversationId);
+    expect(updated.status).toBe(TUTOR_CONVERSATION_STATUSES.ACTIVE);
   });
 
   it("a student cannot view another student's conversation", async () => {
