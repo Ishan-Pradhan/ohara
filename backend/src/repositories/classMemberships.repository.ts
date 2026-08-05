@@ -52,13 +52,6 @@ export const classMembershipRepository = {
     return await ClassMembership.findAll({ where, order: [['createdAt', 'DESC']] });
   },
 
-  findByStudentAndYear: async (
-    studentId: string,
-    academicYearId: string,
-  ): Promise<ClassMembership | null> => {
-    return await ClassMembership.findOne({ where: { studentId, academicYearId } });
-  },
-
   /** A student's current placement is the head of their promotion chain — the
    * one membership not yet superseded by a later promote()/graduate() call.
    * This replaces matching against a global "current academic year" flag,

@@ -33,10 +33,6 @@ export const academicYearRepository = {
     return await AcademicYear.findByPk(id);
   },
 
-  findCurrent: async (): Promise<AcademicYear | null> => {
-    return await AcademicYear.findOne({ where: { isCurrent: true } });
-  },
-
   /** Same current-year invariant as `create`: flipping `isCurrent` to true
    * unsets whichever row previously held it, in one transaction. */
   update: async (
