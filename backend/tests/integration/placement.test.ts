@@ -19,6 +19,7 @@ const {
   createClass,
   createCourse,
   createEnrollment,
+  createBatch,
 } = await import('../helpers/institution.js');
 
 const CLASS_MEMBERSHIPS = '/api/v1/admin/class-memberships';
@@ -53,7 +54,7 @@ describe('POST /admin/class-memberships', () => {
   it('rejects an unauthenticated caller with 401', async () => {
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
-      .send({ studentId: 'x', sectionId: 'y' });
+      .send({ studentId: 'x', sectionId: 'y', batchId: 'z' });
     expect(res.status).toBe(401);
   });
 
@@ -61,20 +62,26 @@ describe('POST /admin/class-memberships', () => {
     const cookies = await signInAs('teacher@example.com', 'teacher');
     const section = await createSection();
     const student = await createStudentUser();
+    const batch = await createBatch();
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
     expect(res.status).toBe(403);
   });
 
   it('rejects a non-existent studentId with 404', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const section = await createSection();
+    const batch = await createBatch();
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: '00000000-0000-0000-0000-000000000000', sectionId: section.id });
+      .send({
+        studentId: '00000000-0000-0000-0000-000000000000',
+        sectionId: section.id,
+        batchId: batch.id,
+      });
     expect(res.status).toBe(404);
   });
 
@@ -82,35 +89,45 @@ describe('POST /admin/class-memberships', () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const section = await createSection();
     const teacher = await createTeacherUser();
+    const batch = await createBatch();
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: teacher.id, sectionId: section.id });
+      .send({ studentId: teacher.id, sectionId: section.id, batchId: batch.id });
     expect(res.status).toBe(400);
   });
 
   it('rejects a non-existent sectionId with 404', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const student = await createStudentUser();
+    const batch = await createBatch();
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: '00000000-0000-0000-0000-000000000000' });
+      .send({
+        studentId: student.id,
+        sectionId: '00000000-0000-0000-0000-000000000000',
+        batchId: batch.id,
+      });
     expect(res.status).toBe(404);
   });
 
   it('places a student into a section as admin', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const section = await createSection();
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
 
     expect(res.status).toBe(201);
     expect(res.body.data).toMatchObject({
       studentId: student.id,
+      batchId: batch.id,
       sectionId: section.id,
       academicYearId: section.academicYearId,
       outcome: 'enrolled',
@@ -120,19 +137,48 @@ describe('POST /admin/class-memberships', () => {
   it('rejects placing the same student twice in the same academic year with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const year = await createAcademicYear();
-    const sectionA = await createSection({ academicYearId: year.id });
-    const sectionB = await createSection({ academicYearId: year.id, name: 'B' });
+
+    const programA = await createProgram();
+    const clsA = await createClass({ programId: programA.id });
+    const sectionA = await createSection({ classId: clsA.id, academicYearId: year.id });
+    const batchA = await createBatch({ programId: programA.id });
+
+    const programB = await createProgram();
+    const clsB = await createClass({ programId: programB.id });
+    const sectionB = await createSection({
+      classId: clsB.id,
+      academicYearId: year.id,
+      name: 'B',
+    });
+    const batchB = await createBatch({ programId: programB.id });
+
     const student = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: sectionA.id });
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batchA.id });
 
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: sectionB.id });
+      .send({ studentId: student.id, sectionId: sectionB.id, batchId: batchB.id });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects placement when the batch belongs to a different program', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const student = await createStudentUser();
+    const otherProgramBatch = await createBatch();
+
+    const res = await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id, batchId: otherProgramBatch.id });
 
     expect(res.status).toBe(400);
   });
@@ -141,18 +187,21 @@ describe('POST /admin/class-memberships', () => {
 describe('GET /admin/class-memberships', () => {
   it('filters by studentId', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const section = await createSection();
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const batch = await createBatch({ programId: program.id });
     const studentA = await createStudentUser();
     const studentB = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: studentA.id, sectionId: section.id });
+      .send({ studentId: studentA.id, sectionId: section.id, batchId: batch.id });
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: studentB.id, sectionId: section.id });
+      .send({ studentId: studentB.id, sectionId: section.id, batchId: batch.id });
 
     const res = await request(app)
       .get(CLASS_MEMBERSHIPS)
@@ -209,12 +258,13 @@ describe('POST /admin/enrollments', () => {
     // Elective so placement doesn't auto-enroll it — this test is about the
     // explicit enrollment endpoint, not auto-enroll.
     const course = await createCourse({ classId: cls.id, courseType: 'elective' });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
 
     const res = await request(app)
       .post(ENROLLMENTS)
@@ -237,12 +287,13 @@ describe('POST /admin/enrollments', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id, courseType: 'elective' });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
     await request(app)
       .post(ENROLLMENTS)
       .set('Cookie', cookies)
@@ -285,12 +336,13 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     await createCourse({ classId: cls.id, title: 'Physics', code: `PHYS-${Date.now()}` });
     await createCourse({ classId: cls.id, title: 'Chemistry', code: `CHEM-${Date.now()}` });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
 
     const res = await request(app)
       .get(ENROLLMENTS)
@@ -318,12 +370,13 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
       code: `ART-${Date.now()}`,
       courseType: 'elective',
     });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     const res = await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: section.id });
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
 
     expect(res.status).toBe(201);
 

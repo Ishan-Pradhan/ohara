@@ -18,6 +18,7 @@ const {
   createCourse,
   createStudentUser,
   createTeacherUser,
+  createBatch,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -41,17 +42,19 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
   return cookiesFrom(login);
 };
 
-/** Places `studentId` into `sectionId` for the current year and enrolls in `courseId`. */
+/** Places `studentId` into `sectionId` (under `batchId`) for the current year and enrolls in
+ * `courseId`. */
 const placeAndEnroll = async (
   adminCookies: string[],
   studentId: string,
   sectionId: string,
   courseId: string,
+  batchId: string,
 ) => {
   await request(app)
     .post('/api/v1/admin/class-memberships')
     .set('Cookie', adminCookies)
-    .send({ studentId, sectionId });
+    .send({ studentId, sectionId, batchId });
   await request(app)
     .post('/api/v1/admin/enrollments')
     .set('Cookie', adminCookies)
@@ -80,9 +83,10 @@ describe('GET /students/:studentId/placement', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id, title: 'Physics' });
+    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
-    await placeAndEnroll(adminCookies, student.id, section.id, course.id);
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
     const res = await request(app)
       .get(`/api/v1/students/${student.id}/placement`)
@@ -101,9 +105,10 @@ describe('GET /students/:studentId/placement', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id });
+    const batch = await createBatch({ programId: cls.programId });
     const student = await createStudentUser({ email: 'self@example.com' });
 
-    await placeAndEnroll(adminCookies, student.id, section.id, course.id);
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
     const login = await request(app)
       .post('/api/v1/auth/login')
@@ -124,8 +129,9 @@ describe('GET /students/:studentId/placement', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id });
+    const batch = await createBatch({ programId: cls.programId });
     const student = await createStudentUser();
-    await placeAndEnroll(adminCookies, student.id, section.id, course.id);
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
     const unrelatedCookies = await signInAs('other-student@example.com', 'student');
 
@@ -142,8 +148,9 @@ describe('GET /students/:studentId/placement', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id });
+    const batch = await createBatch({ programId: cls.programId });
     const student = await createStudentUser();
-    await placeAndEnroll(adminCookies, student.id, section.id, course.id);
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
     const teacher = await createTeacherUser({ email: 'teaches-them@example.com' });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -167,8 +174,9 @@ describe('GET /students/:studentId/placement', () => {
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id });
+    const batch = await createBatch({ programId: cls.programId });
     const student = await createStudentUser();
-    await placeAndEnroll(adminCookies, student.id, section.id, course.id);
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
     await createTeacherUser({ email: 'unrelated-teacher@example.com' });
     const login = await request(app)

@@ -25,6 +25,7 @@ export const serializeStudentPlacement = (
   academicYear: membership.academicYear
     ? { id: membership.academicYear.id, name: membership.academicYear.name }
     : null,
+  batch: membership.batch ? { id: membership.batch.id, name: membership.batch.name } : null,
   courses: enrollments.map((enrollment) => ({
     id: enrollment.course?.id,
     title: enrollment.course?.title,

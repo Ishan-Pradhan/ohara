@@ -592,7 +592,7 @@ describe('DELETE /admin/academic-years/:id', () => {
   });
 });
 
-const { createTeacherUser, createClass, createAcademicYear, createStudentUser } =
+const { createTeacherUser, createClass, createAcademicYear, createStudentUser, createBatch } =
   await import('../helpers/institution.js');
 
 const SECTIONS = '/api/v1/admin/sections';
@@ -738,17 +738,18 @@ describe('GET /admin/sections', () => {
       .send({ classId: cls.id, academicYearId: year.id, name: 'A', capacity: 2 });
     const sectionId: string = createRes.body.data.id;
 
+    const batch = await createBatch({ programId: cls.programId });
     const studentA = await createStudentUser();
     const studentB = await createStudentUser();
 
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: studentA.id, sectionId });
+      .send({ studentId: studentA.id, sectionId, batchId: batch.id });
     await request(app)
       .post(CLASS_MEMBERSHIPS)
       .set('Cookie', cookies)
-      .send({ studentId: studentB.id, sectionId });
+      .send({ studentId: studentB.id, sectionId, batchId: batch.id });
 
     const res = await request(app)
       .get(SECTIONS)
@@ -823,7 +824,9 @@ describe('DELETE /admin/sections/:id', () => {
 
   it('rejects deleting a section that still has students placed in it with 409', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const section = await createSection();
+    const cls = await createClass();
+    const section = await createSection({ classId: cls.id });
+    const batch = await createBatch({ programId: cls.programId });
     const { classMembershipRepository } = await import(
       '../../src/repositories/classMemberships.repository.js'
     );
@@ -831,6 +834,7 @@ describe('DELETE /admin/sections/:id', () => {
     const student = await createStudentUser();
     await classMembershipRepository.create({
       studentId: student.id,
+      batchId: batch.id,
       sectionId: section.id,
       academicYearId: section.academicYearId,
     });

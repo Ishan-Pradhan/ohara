@@ -7,6 +7,7 @@ export type ClassMembershipOutcome =
 export interface ClassMembershipAttributes {
   id: string;
   studentId: string;
+  batchId: string;
   sectionId: string;
   academicYearId: string;
   outcome: ClassMembershipOutcome;

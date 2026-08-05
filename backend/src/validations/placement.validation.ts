@@ -10,6 +10,7 @@ export const createClassMembershipSchema = {
   body: z.object({
     studentId: z.uuid(),
     sectionId: z.uuid(),
+    batchId: z.uuid(),
   }),
 };
 
@@ -26,6 +27,7 @@ export const classMembershipSchema = registry.register(
   z.object({
     id: z.uuid(),
     studentId: z.uuid(),
+    batchId: z.uuid(),
     sectionId: z.uuid(),
     academicYearId: z.uuid(),
     outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated']),

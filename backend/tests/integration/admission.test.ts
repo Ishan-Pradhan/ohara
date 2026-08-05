@@ -17,6 +17,7 @@ const {
   createProgram,
   createClass,
   createCourse,
+  createBatch,
 } = await import('../helpers/institution.js');
 
 const ADMIT = '/api/v1/admin/students/admit';
@@ -68,6 +69,7 @@ describe('POST /admin/students/admit', () => {
       code: `ART-${Date.now()}`,
       courseType: 'elective',
     });
+    const batch = await createBatch({ programId: program.id });
 
     const res = await request(app)
       .post(ADMIT)
@@ -76,6 +78,7 @@ describe('POST /admin/students/admit', () => {
         name: 'Test Student',
         email: 'admit-test@example.com',
         sectionId: section.id,
+        batchId: batch.id,
         parentName: 'Test Parent',
         parentPhone: '9800000000',
       });
@@ -84,6 +87,7 @@ describe('POST /admin/students/admit', () => {
     expect(res.body.data.student.email).toBe('admit-test@example.com');
     expect(res.body.data.membership).toMatchObject({
       studentId: res.body.data.student.id,
+      batchId: batch.id,
       sectionId: section.id,
       academicYearId: year.id,
     });
@@ -99,6 +103,7 @@ describe('POST /admin/students/admit', () => {
 
   it('rejects admission into a nonexistent section', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
+    const batch = await createBatch();
 
     const res = await request(app)
       .post(ADMIT)
@@ -107,6 +112,7 @@ describe('POST /admin/students/admit', () => {
         name: 'X',
         email: 'x@example.com',
         sectionId: '00000000-0000-0000-0000-000000000000',
+        batchId: batch.id,
       });
 
     expect(res.status).toBe(404);
@@ -114,13 +120,21 @@ describe('POST /admin/students/admit', () => {
 
   it('rejects admission with a duplicate email', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const section = await createSection();
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const batch = await createBatch({ programId: program.id });
     const existingStudent = await createStudentUser();
 
     const res = await request(app)
       .post(ADMIT)
       .set('Cookie', cookies)
-      .send({ name: 'Dup', email: existingStudent.email, sectionId: section.id });
+      .send({
+        name: 'Dup',
+        email: existingStudent.email,
+        sectionId: section.id,
+        batchId: batch.id,
+      });
 
     expect(res.status).toBe(400);
   });

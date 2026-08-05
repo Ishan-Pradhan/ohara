@@ -4,6 +4,7 @@ import type { Enrollment } from '../models/enrollments.model.js';
 export const serializeClassMembership = (m: ClassMembership) => ({
   id: m.id,
   studentId: m.studentId,
+  batchId: m.batchId,
   sectionId: m.sectionId,
   academicYearId: m.academicYearId,
   outcome: m.outcome,

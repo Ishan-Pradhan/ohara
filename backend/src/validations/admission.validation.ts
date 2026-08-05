@@ -7,6 +7,7 @@ export const admitStudentSchema = {
     name: z.string().min(1, 'Name is required'),
     email: z.email('Invalid email'),
     sectionId: z.uuid(),
+    batchId: z.uuid(),
     parentName: z.string().optional(),
     parentPhone: z.string().optional(),
     address: z.string().optional(),

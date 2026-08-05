@@ -4,6 +4,8 @@ import { inviteUser } from './admin.controller.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
+import { classRepository } from '../repositories/classes.repository.js';
+import { batchRepository } from '../repositories/batches.repository.js';
 import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
 import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
 import { serializeUser } from '../serializers/user.serializer.js';
@@ -16,6 +18,7 @@ interface AdmitStudentBody {
   name: string;
   email: string;
   sectionId: string;
+  batchId: string;
   parentName?: string;
   parentPhone?: string;
   address?: string;
@@ -35,6 +38,7 @@ export const admitStudent = asyncHandler(async (req: AuthRequest, res: Response)
     name,
     email,
     sectionId,
+    batchId,
     parentName,
     parentPhone,
     address,
@@ -46,6 +50,19 @@ export const admitStudent = asyncHandler(async (req: AuthRequest, res: Response)
   const section = await sectionRepository.findById(sectionId);
   if (!section) {
     throw new ApiError(404, 'Section not found');
+  }
+
+  const cls = await classRepository.findById(section.classId);
+  if (!cls) {
+    throw new ApiError(500, 'Section references a missing class');
+  }
+
+  const batch = await batchRepository.findById(batchId);
+  if (!batch) {
+    throw new ApiError(404, 'Batch not found');
+  }
+  if (batch.programId !== cls.programId) {
+    throw new ApiError(400, 'Batch must belong to the same program as the target section');
   }
 
   const profile = await institutionProfileRepository.get();
@@ -61,6 +78,7 @@ export const admitStudent = asyncHandler(async (req: AuthRequest, res: Response)
   const membership = await classMembershipRepository.create(
     {
       studentId: student.id,
+      batchId,
       sectionId,
       academicYearId: section.academicYearId,
     },

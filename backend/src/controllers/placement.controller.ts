@@ -10,6 +10,8 @@ import { userRepository } from '../repositories/users.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
+import { classRepository } from '../repositories/classes.repository.js';
+import { batchRepository } from '../repositories/batches.repository.js';
 import {
   serializeClassMembership,
   serializeEnrollment,
@@ -22,7 +24,7 @@ import { ApiError } from '../utils/ApiError.js';
 
 export const createClassMembership = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { studentId, sectionId } =
+    const { studentId, sectionId, batchId } =
       req.validated?.body as ClassMembershipCreationAttributes;
 
     const student = await userRepository.findById(studentId);
@@ -38,6 +40,19 @@ export const createClassMembership = asyncHandler(
       throw new ApiError(404, 'Section not found');
     }
 
+    const cls = await classRepository.findById(section.classId);
+    if (!cls) {
+      throw new ApiError(500, 'Section references a missing class');
+    }
+
+    const batch = await batchRepository.findById(batchId);
+    if (!batch) {
+      throw new ApiError(404, 'Batch not found');
+    }
+    if (batch.programId !== cls.programId) {
+      throw new ApiError(400, 'Batch must belong to the same program as the target section');
+    }
+
     const classCourses = await courseRepository.findAll({ classId: section.classId });
     const autoEnrollCourseIds = classCourses
       .filter((course) => course.courseType === 'compulsory')
@@ -46,6 +61,7 @@ export const createClassMembership = asyncHandler(
     const membership = await classMembershipRepository.create(
       {
         studentId,
+        batchId,
         sectionId,
         academicYearId: section.academicYearId,
       },
@@ -253,6 +269,12 @@ export const setClassMembershipOutcome = asyncHandler(
       id,
       {
         studentId: membership.studentId,
+        // Carried forward, never re-picked — a batch/cohort stays fixed across promotion
+        // (see docs/superpowers/specs/2026-08-05-semester-batch-model-design.md). The rest of
+        // this function's guards (program/order_index scoping, chain-derived "current") are
+        // rewritten in full by Task 4; this line only keeps batchId's new NOT NULL constraint
+        // satisfied here in the meantime.
+        batchId: membership.batchId,
         sectionId: targetSectionId,
         academicYearId: targetSection.academicYearId,
       },

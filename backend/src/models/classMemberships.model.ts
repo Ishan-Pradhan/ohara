@@ -16,6 +16,7 @@ import type { ClassMembershipOutcome } from '../types/placement.types.js';
 import { User } from './users.model.js';
 import { Section } from './sections.model.js';
 import { AcademicYear } from './academicYears.model.js';
+import { Batch } from './batches.model.js';
 
 @Table({ tableName: 'ClassMemberships', timestamps: true })
 export class ClassMembership extends Model {
@@ -31,6 +32,14 @@ export class ClassMembership extends Model {
 
   @BelongsTo(() => User)
   declare student?: User;
+
+  @ForeignKey(() => Batch)
+  @AllowNull(false)
+  @Column(DataType.UUID)
+  declare batchId: string;
+
+  @BelongsTo(() => Batch)
+  declare batch?: Batch;
 
   @ForeignKey(() => Section)
   @AllowNull(false)
