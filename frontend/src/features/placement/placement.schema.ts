@@ -5,11 +5,13 @@ import { z } from 'zod';
 export const createClassMembershipSchema = z.object({
   studentId: z.string().min(1),
   sectionId: z.string().min(1, 'Choose a section'),
+  batchId: z.string().min(1, 'Choose a batch'),
 });
 
 export const classMembershipSchema = z.object({
   id: z.string(),
   studentId: z.string(),
+  batchId: z.string(),
   sectionId: z.string(),
   academicYearId: z.string(),
   outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated']),
@@ -58,6 +60,7 @@ export const studentPlacementSchema = z.object({
   class: z.object({ id: z.string(), name: z.string() }).nullable(),
   section: z.object({ id: z.string(), name: z.string() }).nullable(),
   academicYear: z.object({ id: z.string(), name: z.string() }).nullable(),
+  batch: z.object({ id: z.string(), name: z.string() }).nullable(),
   courses: z.array(
     z.object({
       id: z.string(),

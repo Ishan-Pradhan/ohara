@@ -20,7 +20,14 @@ import {
   type OutcomeInput,
   type TransferInput,
 } from '../../features/placement/placement.schema.js';
-import { useAcademicYears, useClasses, useCourses, useSections } from '../../features/institution/useInstitution.js';
+import {
+  useAcademicYears,
+  useBatches,
+  useClasses,
+  useCourses,
+  useSections,
+} from '../../features/institution/useInstitution.js';
+import type { Batch, Class, Section } from '../../features/institution/institution.schema.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -62,6 +69,7 @@ export const StudentDetailPage = () => {
 
   const { data: classes } = useClasses();
   const { data: years } = useAcademicYears();
+  const { data: batches } = useBatches();
 
   const sectionOptions = (sections ?? []).map((s) => {
     const className = classes?.find((c) => c.id === s.classId)?.name ?? '—';
@@ -78,6 +86,22 @@ export const StudentDetailPage = () => {
         c.courseType === 'elective',
     )
     .map((c) => ({ value: c.id, label: c.title }));
+
+  const currentClassForOutcome = classes?.find((c) => c.id === placement?.class?.id);
+  const promotedSectionOptions = sectionOptions.filter((o) => {
+    const section = sections?.find((s) => s.id === o.value);
+    const cls = classes?.find((c) => c.id === section?.classId);
+    return (
+      cls &&
+      currentClassForOutcome &&
+      cls.programId === currentClassForOutcome.programId &&
+      cls.orderIndex === currentClassForOutcome.orderIndex + 1
+    );
+  });
+  const retainedSectionOptions = sectionOptions.filter((o) => {
+    const section = sections?.find((s) => s.id === o.value);
+    return section?.classId === currentClassForOutcome?.id;
+  });
 
   const notPlaced = isError;
 
@@ -226,8 +250,11 @@ export const StudentDetailPage = () => {
         open={placeOpen}
         onOpenChange={setPlaceOpen}
         sectionOptions={sectionOptions}
-        onSubmit={async (sectionId) => {
-          await createMembership.mutateAsync(sectionId);
+        sections={sections ?? []}
+        classes={classes ?? []}
+        batches={batches ?? []}
+        onSubmit={async ({ sectionId, batchId }) => {
+          await createMembership.mutateAsync({ sectionId, batchId });
           toast.success('Student placed');
           setPlaceOpen(false);
         }}
@@ -270,7 +297,8 @@ export const StudentDetailPage = () => {
         <OutcomeDialog
           open={outcomeOpen}
           onOpenChange={setOutcomeOpen}
-          sectionOptions={sectionOptions}
+          promotedSectionOptions={promotedSectionOptions}
+          retainedSectionOptions={retainedSectionOptions}
           onSubmit={async (input) => {
             await setOutcome.mutateAsync({ membershipId: currentMembership.id, input });
             toast.success('Outcome recorded');
@@ -288,13 +316,34 @@ interface PlaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sectionOptions: { value: string; label: string }[];
-  onSubmit: (sectionId: string) => Promise<void>;
+  sections: Section[];
+  classes: Class[];
+  batches: Batch[];
+  onSubmit: (input: { sectionId: string; batchId: string }) => Promise<void>;
   loading: boolean;
   error: unknown;
 }
 
-const PlaceDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, error }: PlaceDialogProps) => {
+const PlaceDialog = ({
+  open,
+  onOpenChange,
+  sectionOptions,
+  sections,
+  classes,
+  batches,
+  onSubmit,
+  loading,
+  error,
+}: PlaceDialogProps) => {
   const [sectionId, setSectionId] = useState('');
+  const [batchId, setBatchId] = useState('');
+
+  const selectedProgramId = classes.find(
+    (c) => c.id === sections.find((s) => s.id === sectionId)?.classId,
+  )?.programId;
+  const batchOptions = batches
+    .filter((b) => b.programId === selectedProgramId)
+    .map((b) => ({ value: b.id, label: b.name }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title="Place into section">
@@ -305,15 +354,38 @@ const PlaceDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, er
             id="place-section"
             options={sectionOptions}
             value={sectionId}
-            onValueChange={setSectionId}
+            onValueChange={(value) => {
+              setSectionId(value);
+              setBatchId('');
+            }}
             placeholder="Select a section"
+          />
+        </Field>
+        <Field label="Batch" htmlFor="place-batch">
+          <Select
+            id="place-batch"
+            options={batchOptions}
+            value={batchId}
+            onValueChange={setBatchId}
+            placeholder={
+              !sectionId
+                ? 'Choose a section first'
+                : batchOptions.length
+                  ? 'Select a batch'
+                  : 'No batches for this program'
+            }
           />
         </Field>
         <div className="mt-2 flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" loading={loading} disabled={!sectionId} onClick={() => onSubmit(sectionId)}>
+          <Button
+            type="button"
+            loading={loading}
+            disabled={!sectionId || !batchId}
+            onClick={() => onSubmit({ sectionId, batchId })}
+          >
             Place
           </Button>
         </div>
@@ -411,7 +483,8 @@ const TransferDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading,
 interface OutcomeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  sectionOptions: { value: string; label: string }[];
+  promotedSectionOptions: { value: string; label: string }[];
+  retainedSectionOptions: { value: string; label: string }[];
   onSubmit: (input: OutcomeInput) => Promise<void>;
   loading: boolean;
   error: unknown;
@@ -423,7 +496,15 @@ const outcomeOptions = [
   { value: 'graduated', label: 'Graduated' },
 ];
 
-const OutcomeDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, error }: OutcomeDialogProps) => {
+const OutcomeDialog = ({
+  open,
+  onOpenChange,
+  promotedSectionOptions,
+  retainedSectionOptions,
+  onSubmit,
+  loading,
+  error,
+}: OutcomeDialogProps) => {
   const {
     control,
     handleSubmit,
@@ -432,6 +513,7 @@ const OutcomeDialog = ({ open, onOpenChange, sectionOptions, onSubmit, loading, 
   } = useForm<OutcomeInput>({ resolver: zodResolver(outcomeSchema) });
 
   const outcome = watch('outcome');
+  const sectionOptions = outcome === 'promoted' ? promotedSectionOptions : retainedSectionOptions;
 
   return (
     <Dialog

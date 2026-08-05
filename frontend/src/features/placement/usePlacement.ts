@@ -41,7 +41,8 @@ const invalidateStudent = (qc: ReturnType<typeof useQueryClient>, studentId: str
 export const useCreateClassMembership = (studentId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (sectionId: string) => createClassMembership({ studentId, sectionId }),
+    mutationFn: (input: { sectionId: string; batchId: string }) =>
+      createClassMembership({ studentId, ...input }),
     onSuccess: () => invalidateStudent(qc, studentId),
   });
 };
