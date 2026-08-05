@@ -7,6 +7,7 @@ import { AGENT_TOOLS, TOOL_HANDLERS, type ToolExecutionResult } from './tools/in
 import { askStudentArgsSchema } from './tools/askStudent.tool.js';
 import { tutorAgentSystemPrompt } from '../prompts/tutorAgent.prompt.js';
 import { tutorStage1SystemPrompt, tutorStage1UserPrompt } from '../prompts/tutorStage1.prompt.js';
+import { logger } from '../utils/logger.js';
 import {
   AGENT_MAX_ITERATIONS,
   AGENT_TURN_TIMEOUT_MS,
@@ -23,6 +24,14 @@ export interface TutorAgentResult {
   content: string;
   sources: TutorSource[] | null;
 }
+
+// Used only when the stage-1 fallback itself fails (e.g. the same LLM
+// provider outage that broke the primary loop also breaks the fallback's
+// own `generateText` call). Deliberately static — no LLM/embedding/DB call
+// on this path — so it can never itself throw and leave the student with an
+// uncaught rejection instead of a response.
+const FALLBACK_UNAVAILABLE_MESSAGE =
+  "I'm having trouble answering right now — please try again in a moment.";
 
 /** The stage-1 grounded answer, reused verbatim as this orchestrator's
  * fallback — identical retrieve-then-answer logic to tutor.controller.ts's
@@ -116,6 +125,13 @@ export const runTutorAgentTurn = async (
   const priorMessages = await tutorMessageRepository.findAllByConversation(conversationId);
   const history = toAgentHistory(tutorAgentSystemPrompt, priorMessages);
 
+  // Known, deliberate limitation: this deadline only bounds time *between*
+  // loop iterations (checked below, before each runAgentTurn call) — it has
+  // no cancellation path for a single in-flight runAgentTurn call itself
+  // (that would mean an AbortSignal threaded through the Groq SDK call in
+  // llm.service.ts, out of scope here). A single hung/slow Groq call can
+  // therefore still run past AGENT_TURN_TIMEOUT_MS before this loop gets a
+  // chance to notice and break. Accepted trade-off, not an oversight.
   const deadline = Date.now() + AGENT_TURN_TIMEOUT_MS;
   // Sources for the eventual final text answer are whatever
   // search_course_material returned across this turn's tool calls,
@@ -166,6 +182,10 @@ export const runTutorAgentTurn = async (
           if (!handler) throw new Error(`Unknown tool: ${call.name}`);
           result = await handler(call.arguments, { courseId });
         } catch (err) {
+          logger.error(
+            { err, conversationId, courseId, tool: call.name },
+            'Tutor agent tool execution failed',
+          );
           result = { content: `Tool error: ${err instanceof Error ? err.message : 'invalid input'}`, sources: null };
         }
 
@@ -198,13 +218,34 @@ export const runTutorAgentTurn = async (
         }
       }
     }
-  } catch {
+  } catch (err) {
     // Any agent-loop error: fall through to the stage-1 fallback below.
+    logger.error({ err, conversationId, courseId }, 'Tutor agent loop failed; falling back to stage-1 answer');
   }
 
-  // Hit the cap, timed out, or errored — the guaranteed answer.
+  // Hit the cap, timed out, or errored — the guaranteed answer. The fallback
+  // itself is guarded too: if the same outage that broke the primary loop
+  // (e.g. the LLM provider being down) also breaks stage1Fallback's own
+  // generateText call, we must still resolve with something rather than
+  // reject — that would otherwise surface as a raw 500 to the student in
+  // exactly the scenario this whole function exists to prevent.
   const question = [...priorMessages].reverse().find((m) => m.role === TUTOR_MESSAGE_ROLES.USER)?.content ?? '';
-  const fallback = await stage1Fallback(courseId, question);
-  await persistText(conversationId, TUTOR_MESSAGE_ROLES.ASSISTANT, fallback.content, fallback.sources);
+  let fallback: TutorAgentResult;
+  try {
+    fallback = await stage1Fallback(courseId, question);
+  } catch (err) {
+    logger.error({ err, conversationId, courseId }, 'Stage-1 fallback failed; returning static response');
+    fallback = { content: FALLBACK_UNAVAILABLE_MESSAGE, sources: null };
+  }
+
+  try {
+    await persistText(conversationId, TUTOR_MESSAGE_ROLES.ASSISTANT, fallback.content, fallback.sources);
+  } catch (err) {
+    // Even persisting the fallback failed (e.g. the DB itself is down) —
+    // still return it rather than reject; there's nothing further this
+    // function can do to guarantee persistence.
+    logger.error({ err, conversationId, courseId }, 'Failed to persist stage-1 fallback answer');
+  }
+
   return fallback;
 };

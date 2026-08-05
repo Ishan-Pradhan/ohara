@@ -250,4 +250,35 @@ describe('runTutorAgentTurn', () => {
     expect(result.content).toBeTruthy();
     expect(result.content).toBe('Fallback answer grounded in the material.');
   });
+
+  it('resolves with a static message, and never rejects, when both the primary loop and the stage-1 fallback fail', async () => {
+    const course = await createCourse();
+    // Real material so stage1Fallback gets past its own "no material" hard
+    // branch and actually reaches (and fails at) generateText — the same
+    // provider outage that broke the primary loop is the realistic trigger
+    // for this, per the review finding.
+    await seedCourseWithMaterial(course.id);
+    const conversationId = await seedConversationWithQuestion(course.id);
+
+    vi.mocked(runAgentTurn).mockRejectedValueOnce(new Error('provider unavailable'));
+    vi.mocked(generateText).mockRejectedValueOnce(new Error('provider unavailable'));
+
+    const result = await runTutorAgentTurn(conversationId, course.id);
+
+    expect(result.content).toBe(
+      "I'm having trouble answering right now — please try again in a moment.",
+    );
+    expect(result.sources).toBeNull();
+
+    // The static message must still be persisted, exactly like any other
+    // fallback answer, so the conversation history isn't silently missing
+    // a turn.
+    const messages = await tutorMessageRepository.findAllByConversation(conversationId);
+    const persisted = messages.find(
+      (m) =>
+        m.role === TUTOR_MESSAGE_ROLES.ASSISTANT &&
+        m.content === "I'm having trouble answering right now — please try again in a moment.",
+    );
+    expect(persisted).toBeTruthy();
+  });
 });
