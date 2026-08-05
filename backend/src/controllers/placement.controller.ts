@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
+import type { ClassMembership } from '../models/classMemberships.model.js';
 import type {
   ClassMembershipCreationAttributes,
   EnrollmentCreationAttributes,
@@ -8,7 +9,6 @@ import { classMembershipRepository } from '../repositories/classMemberships.repo
 import { sectionRepository } from '../repositories/sections.repository.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
-import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { batchRepository } from '../repositories/batches.repository.js';
@@ -108,23 +108,15 @@ export const createEnrollment = asyncHandler(
       throw new ApiError(404, 'Course not found');
     }
 
-    const currentYear = await academicYearRepository.findCurrent();
-    if (!currentYear) {
-      throw new ApiError(404, 'No current academic year is set');
-    }
-
-    const membership = await classMembershipRepository.findByStudentAndYear(
-      studentId,
-      currentYear.id,
-    );
+    const membership = await classMembershipRepository.findCurrent(studentId);
     if (!membership) {
-      throw new ApiError(404, 'Student is not placed for the current academic year');
+      throw new ApiError(404, 'Student is not currently placed');
     }
 
     const enrollment = await enrollmentRepository.create({
       studentId,
       courseId,
-      academicYearId: currentYear.id,
+      academicYearId: membership.academicYearId,
     });
 
     return ok(res, serializeEnrollment(enrollment), 'Enrollment created', 201);
@@ -167,12 +159,8 @@ export const transferClassMembership = asyncHandler(
       );
     }
 
-    const currentYear = await academicYearRepository.findCurrent();
-    if (!currentYear || membership.academicYearId !== currentYear.id) {
-      throw new ApiError(
-        400,
-        'Only a membership for the current academic year can be transferred',
-      );
+    if (membership.promotedToId !== null) {
+      throw new ApiError(400, "Only a student's current placement can be transferred");
     }
 
     const targetSection = await sectionRepository.findById(targetSectionId);
@@ -180,10 +168,10 @@ export const transferClassMembership = asyncHandler(
       throw new ApiError(404, 'Target section not found');
     }
 
-    if (targetSection.academicYearId !== currentYear.id) {
+    if (targetSection.academicYearId !== membership.academicYearId) {
       throw new ApiError(
         400,
-        'Target section must belong to the current academic year',
+        'Transfer target must be in the same term as the membership being transferred',
       );
     }
 
@@ -207,6 +195,91 @@ export const transferClassMembership = asyncHandler(
 
 // ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
 
+/**
+ * Applies one outcome to one membership. Shared by the single-student route
+ * below and Task 5's bulk-promote route — the guards (same program, exactly
+ * the next class, not already advanced, graduate only from the program's
+ * last class) must hold identically in both places.
+ */
+export const applyOutcome = async (
+  membership: ClassMembership,
+  outcome: 'promoted' | 'retained' | 'graduated',
+  targetSectionId?: string,
+): Promise<ClassMembership> => {
+  const student = await userRepository.findById(membership.studentId);
+  if (!student || student.status !== 'active') {
+    throw new ApiError(400, 'This student is not active and cannot have an outcome recorded');
+  }
+
+  if (membership.promotedToId !== null) {
+    throw new ApiError(400, 'This membership has already been advanced');
+  }
+  if (membership.outcome === 'graduated') {
+    throw new ApiError(
+      400,
+      'This membership has already recorded a graduation and cannot be changed',
+    );
+  }
+
+  const currentSection = await sectionRepository.findById(membership.sectionId);
+  if (!currentSection) {
+    throw new ApiError(500, 'Membership references a missing section');
+  }
+  const currentClass = await classRepository.findById(currentSection.classId);
+  if (!currentClass) {
+    throw new ApiError(500, 'Section references a missing class');
+  }
+
+  if (outcome === 'graduated') {
+    const programClasses = await classRepository.findAll({ programId: currentClass.programId });
+    const maxOrderIndex = Math.max(...programClasses.map((c) => c.orderIndex));
+    if (currentClass.orderIndex !== maxOrderIndex) {
+      throw new ApiError(400, "Only a student in the program's final class can be graduated");
+    }
+    return await classMembershipRepository.graduate(membership.id, membership.studentId);
+  }
+
+  if (!targetSectionId) {
+    throw new ApiError(400, 'targetSectionId is required for promoted/retained');
+  }
+
+  const targetSection = await sectionRepository.findById(targetSectionId);
+  if (!targetSection) {
+    throw new ApiError(404, 'Target section not found');
+  }
+  const targetClass = await classRepository.findById(targetSection.classId);
+  if (!targetClass) {
+    throw new ApiError(500, 'Target section references a missing class');
+  }
+
+  if (targetClass.programId !== currentClass.programId) {
+    throw new ApiError(400, 'Promotion and retention must stay within the same program');
+  }
+  if (outcome === 'promoted' && targetClass.orderIndex !== currentClass.orderIndex + 1) {
+    throw new ApiError(400, 'Promotion must move to the next class in the program');
+  }
+  if (outcome === 'retained' && targetClass.id !== currentClass.id) {
+    throw new ApiError(400, 'Retention must stay in the same class');
+  }
+
+  const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
+  const autoEnrollCourseIds = classCourses
+    .filter((course) => course.courseType === 'compulsory')
+    .map((course) => course.id);
+
+  return await classMembershipRepository.promote(
+    membership.id,
+    {
+      studentId: membership.studentId,
+      batchId: membership.batchId,
+      sectionId: targetSectionId,
+      academicYearId: targetSection.academicYearId,
+    },
+    outcome,
+    autoEnrollCourseIds,
+  );
+};
+
 export const setClassMembershipOutcome = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
@@ -220,68 +293,8 @@ export const setClassMembershipOutcome = asyncHandler(
       throw new ApiError(404, 'Class membership not found');
     }
 
-    const student = await userRepository.findById(membership.studentId);
-    if (!student || student.status !== 'active') {
-      throw new ApiError(
-        400,
-        'This student is not active and cannot have an outcome recorded',
-      );
-    }
-
-    const currentYear = await academicYearRepository.findCurrent();
-    if (!currentYear) {
-      throw new ApiError(404, 'No current academic year is set');
-    }
-    if (membership.academicYearId === currentYear.id) {
-      throw new ApiError(400, 'This membership is already for the current academic year');
-    }
-    if (membership.outcome === 'graduated') {
-      throw new ApiError(
-        400,
-        'This membership has already recorded a graduation and cannot be changed',
-      );
-    }
-
-    if (outcome === 'graduated') {
-      const updated = await classMembershipRepository.graduate(id, membership.studentId);
-      return ok(res, serializeClassMembership(updated), 'Student graduated', 201);
-    }
-
-    if (!targetSectionId) {
-      throw new ApiError(400, 'targetSectionId is required for promoted/retained');
-    }
-
-    const targetSection = await sectionRepository.findById(targetSectionId);
-    if (!targetSection) {
-      throw new ApiError(404, 'Target section not found');
-    }
-
-    if (targetSection.academicYearId !== currentYear.id) {
-      throw new ApiError(400, 'Target section must belong to the current academic year');
-    }
-
-    const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
-    const autoEnrollCourseIds = classCourses
-      .filter((course) => course.courseType === 'compulsory')
-      .map((course) => course.id);
-
-    const newMembership = await classMembershipRepository.promote(
-      id,
-      {
-        studentId: membership.studentId,
-        // Carried forward, never re-picked — a batch/cohort stays fixed across promotion
-        // (see docs/superpowers/specs/2026-08-05-semester-batch-model-design.md). The rest of
-        // this function's guards (program/order_index scoping, chain-derived "current") are
-        // rewritten in full by Task 4; this line only keeps batchId's new NOT NULL constraint
-        // satisfied here in the meantime.
-        batchId: membership.batchId,
-        sectionId: targetSectionId,
-        academicYearId: targetSection.academicYearId,
-      },
-      outcome,
-      autoEnrollCourseIds,
-    );
-
-    return ok(res, serializeClassMembership(newMembership), 'Outcome recorded', 201);
+    const updated = await applyOutcome(membership, outcome, targetSectionId);
+    const message = outcome === 'graduated' ? 'Student graduated' : 'Outcome recorded';
+    return ok(res, serializeClassMembership(updated), message, 201);
   },
 );

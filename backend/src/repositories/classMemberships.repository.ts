@@ -59,19 +59,22 @@ export const classMembershipRepository = {
     return await ClassMembership.findOne({ where: { studentId, academicYearId } });
   },
 
-  /** Powers the FR-10 combined view (Task 4): one deep-included row per (student, year). */
-  findCurrentWithDetails: async (
-    studentId: string,
-    currentAcademicYearId: string,
-  ): Promise<ClassMembership | null> => {
+  /** A student's current placement is the head of their promotion chain — the
+   * one membership not yet superseded by a later promote()/graduate() call.
+   * This replaces matching against a global "current academic year" flag,
+   * which breaks once different programs run different term cadences (a
+   * school's annual year vs. a college's two semesters/year) — see
+   * docs/superpowers/specs/2026-08-05-semester-batch-model-design.md. */
+  findCurrent: async (studentId: string): Promise<ClassMembership | null> => {
     return await ClassMembership.findOne({
-      where: { studentId, academicYearId: currentAcademicYearId },
+      where: { studentId, promotedToId: null },
       include: [
         {
           association: 'section',
           include: [{ association: 'class', include: ['program'] }],
         },
         'academicYear',
+        'batch',
       ],
     });
   },

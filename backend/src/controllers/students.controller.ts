@@ -1,7 +1,6 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import { userRepository } from '../repositories/users.repository.js';
-import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { serializeStudentPlacement } from '../serializers/students.serializer.js';
@@ -30,22 +29,14 @@ export const getStudentPlacement = asyncHandler(
       throw new ApiError(404, 'Student not found');
     }
 
-    const currentYear = await academicYearRepository.findCurrent();
-    if (!currentYear) {
-      throw new ApiError(404, 'No current academic year is set');
-    }
-
-    const membership = await classMembershipRepository.findCurrentWithDetails(
-      studentId,
-      currentYear.id,
-    );
+    const membership = await classMembershipRepository.findCurrent(studentId);
     if (!membership) {
-      throw new ApiError(404, 'Student is not placed for the current academic year');
+      throw new ApiError(404, 'Student is not currently placed');
     }
 
     const enrollments = await enrollmentRepository.findActiveWithDetails(
       studentId,
-      currentYear.id,
+      membership.academicYearId,
     );
 
     const isTeachingTeacher =
