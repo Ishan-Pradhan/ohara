@@ -14,6 +14,7 @@ import {
   type InstitutionType,
 } from '../../features/institution/institution.schema.js';
 import {
+  useBatches,
   usePrograms,
   useClasses,
   useSections,
@@ -51,6 +52,8 @@ export const AdmitStudentPage = () => {
   const [programId, setProgramId] = useState('');
   const [classId, setClassId] = useState('');
 
+  const { data: batches } = useBatches(programId);
+
   const {
     register: field,
     handleSubmit,
@@ -66,6 +69,10 @@ export const AdmitStudentPage = () => {
   const classOptions = (classes ?? [])
     .filter((c) => c.programId === programId)
     .map((c) => ({ value: c.id, label: c.name }));
+
+  const batchOptions = (batches ?? [])
+    .filter((b) => b.programId === programId)
+    .map((b) => ({ value: b.id, label: b.name }));
 
   const sectionOptions = (sections ?? [])
     .filter((s) => s.classId === classId)
@@ -146,6 +153,7 @@ export const AdmitStudentPage = () => {
                   setProgramId('');
                   setClassId('');
                   setValue('sectionId', '');
+                  setValue('batchId', '');
                 }}
                 placeholder="Select institution type"
               />
@@ -159,6 +167,7 @@ export const AdmitStudentPage = () => {
                   setProgramId(value);
                   setClassId('');
                   setValue('sectionId', '');
+                  setValue('batchId', '');
                 }}
                 placeholder={institutionType ? 'Select a program' : 'Select an institution type first'}
               />
@@ -173,6 +182,22 @@ export const AdmitStudentPage = () => {
                   setValue('sectionId', '');
                 }}
                 placeholder={programId ? 'Select a class' : 'Select a program first'}
+              />
+            </Field>
+            <Field label="Batch" htmlFor="batchId" error={errors.batchId?.message}>
+              <Controller
+                control={control}
+                name="batchId"
+                render={({ field: selectField }) => (
+                  <Select
+                    id="batchId"
+                    options={batchOptions}
+                    value={selectField.value}
+                    onValueChange={selectField.onChange}
+                    invalid={Boolean(errors.batchId)}
+                    placeholder={programId ? 'Select a batch' : 'Select a program first'}
+                  />
+                )}
               />
             </Field>
             <Field label="Section" htmlFor="sectionId" error={errors.sectionId?.message}>

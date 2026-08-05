@@ -1,21 +1,36 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowRight, ChevronRight, Layers, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronRight,
+  Layers,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+} from 'lucide-react';
 
 import {
+  createBatchSchema,
   createClassSchema,
+  type Batch,
   type Class,
 } from '../../../features/institution/institution.schema.js';
 import {
   useAcademicYears,
+  useBatches,
   useClasses,
   useCourses,
+  useCreateBatch,
   useCreateClass,
+  useDeleteBatch,
   useDeleteClass,
   usePrograms,
   useSections,
+  useUpdateBatch,
   useUpdateClass,
 } from '../../../features/institution/useInstitution.js';
 import { ApiError } from '../../../lib/apiError.js';
@@ -26,6 +41,7 @@ import { Button } from '../../../components/ui/Button.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Field } from '../../../components/ui/Field.js';
 import { Input } from '../../../components/ui/Input.js';
+import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
@@ -38,12 +54,17 @@ import {
 } from '../../../components/ui/DropdownMenu.js';
 
 const classFormSchema = createClassSchema.omit({ programId: true });
+const batchFormSchema = createBatchSchema.omit({ programId: true });
 
 export const ClassesExplorerPage = () => {
   const { programId = '' } = useParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Class | null>(null);
   const [deleting, setDeleting] = useState<Class | null>(null);
+
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
+  const [deletingBatch, setDeletingBatch] = useState<Batch | null>(null);
 
   const { data: programs, isLoading: programsLoading } = usePrograms();
   const { data: classes, isLoading: classesLoading } = useClasses();
@@ -54,8 +75,14 @@ export const ClassesExplorerPage = () => {
   const updateClass = useUpdateClass();
   const deleteClass = useDeleteClass();
 
+  const { data: batches, isLoading: batchesLoading } = useBatches(programId);
+  const createBatch = useCreateBatch();
+  const updateBatch = useUpdateBatch();
+  const deleteBatch = useDeleteBatch();
+
   const program = programs?.find((p) => p.id === programId);
   const programClasses = (classes ?? []).filter((c) => c.programId === programId);
+  const programBatches = batches ?? [];
 
   const {
     register: field,
@@ -64,6 +91,16 @@ export const ClassesExplorerPage = () => {
     formState: { errors },
   } = useForm<{ name: string; orderIndex: number }>({
     resolver: zodResolver(classFormSchema),
+  });
+
+  const {
+    register: batchField,
+    handleSubmit: handleBatchSubmit,
+    control: batchControl,
+    reset: resetBatchForm,
+    formState: { errors: batchErrors },
+  } = useForm<{ name: string; startAcademicYearId: string }>({
+    resolver: zodResolver(batchFormSchema),
   });
 
   const currentYearId = years?.find((y) => y.isCurrent)?.id;
@@ -121,6 +158,58 @@ export const ClassesExplorerPage = () => {
   const error = editing ? updateClass.error : createClass.error;
   const isPending = editing ? updateClass.isPending : createClass.isPending;
   const isLoading = programsLoading || classesLoading;
+
+  const yearOptions = (years ?? []).map((y) => ({ value: y.id, label: y.name }));
+  const yearName = (yearId: string) => years?.find((y) => y.id === yearId)?.name ?? '…';
+
+  const openCreateBatch = () => {
+    setEditingBatch(null);
+    resetBatchForm({ name: '', startAcademicYearId: '' });
+    setBatchDialogOpen(true);
+  };
+
+  const openEditBatch = (batch: Batch) => {
+    setEditingBatch(batch);
+    resetBatchForm({ name: batch.name, startAcademicYearId: batch.startAcademicYearId });
+    setBatchDialogOpen(true);
+  };
+
+  const closeBatchDialog = () => {
+    setBatchDialogOpen(false);
+    resetBatchForm();
+    createBatch.reset();
+    updateBatch.reset();
+  };
+
+  const onSubmitBatch = handleBatchSubmit(async (values) => {
+    if (editingBatch) {
+      const updated = await updateBatch.mutateAsync({
+        id: editingBatch.id,
+        input: { name: values.name },
+      });
+      toast.success(`${updated.name} updated`);
+    } else {
+      const created = await createBatch.mutateAsync({ ...values, programId });
+      toast.success(`${created.name} created`);
+    }
+    closeBatchDialog();
+  });
+
+  const confirmDeleteBatch = async () => {
+    if (!deletingBatch) return;
+    try {
+      await deleteBatch.mutateAsync(deletingBatch.id);
+      toast.success(`${deletingBatch.name} deleted`);
+      setDeletingBatch(null);
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        toast.error(caught.message);
+      }
+    }
+  };
+
+  const batchError = editingBatch ? updateBatch.error : createBatch.error;
+  const isBatchPending = editingBatch ? updateBatch.isPending : createBatch.isPending;
 
   return (
     <AppShell>
@@ -211,6 +300,70 @@ export const ClassesExplorerPage = () => {
         </div>
       )}
 
+      {program ? (
+        <>
+          <div className="mt-10 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-fg">Batches</h2>
+              <p className="text-sm text-muted">
+                Admission cohorts within this program, e.g. Batch 2028, anchored to a starting
+                academic year.
+              </p>
+            </div>
+            <Button onClick={openCreateBatch}>
+              <Plus className="size-4" aria-hidden />
+              New batch
+            </Button>
+          </div>
+
+          {batchesLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : programBatches.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={`Add a batch to ${program.name}`}
+              description="e.g. Batch 2028. Batches group students admitted together, independent of class."
+              action={<Button onClick={openCreateBatch}>Create a batch</Button>}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {programBatches.map((batch) => (
+                <Card key={batch.id} padding="md" className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-base font-semibold text-fg">{batch.name}</p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="shrink-0 rounded-control p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-fg">
+                        <MoreVertical className="size-4" aria-hidden />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onSelect={() => openEditBatch(batch)}>
+                          <Pencil className="size-4" aria-hidden />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setDeletingBatch(batch)}
+                          destructive
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <p className="text-xs text-muted">
+                    Starts {yearName(batch.startAcademicYearId)}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
+
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => (open ? setDialogOpen(true) : closeDialog())}
@@ -257,6 +410,63 @@ export const ClassesExplorerPage = () => {
         destructive
         loading={deleteClass.isPending}
         onConfirm={confirmDelete}
+      />
+
+      <Dialog
+        open={batchDialogOpen}
+        onOpenChange={(open) => (open ? setBatchDialogOpen(true) : closeBatchDialog())}
+        title={editingBatch ? 'Edit batch' : 'New batch'}
+        description={program ? `A batch within ${program.name}.` : undefined}
+      >
+        <form onSubmit={onSubmitBatch} className="flex flex-col gap-4" noValidate>
+          {batchError instanceof ApiError ? <Alert>{batchError.message}</Alert> : null}
+
+          <Field label="Name" htmlFor="batchName" error={batchErrors.name?.message}>
+            <Input id="batchName" placeholder="e.g. Batch 2028" {...batchField('name')} />
+          </Field>
+
+          <Field
+            label="Starting academic year"
+            htmlFor="startAcademicYearId"
+            error={batchErrors.startAcademicYearId?.message}
+            hint={editingBatch ? "Can't be changed after the batch is created" : undefined}
+          >
+            <Controller
+              control={batchControl}
+              name="startAcademicYearId"
+              render={({ field: selectField }) => (
+                <Select
+                  id="startAcademicYearId"
+                  options={yearOptions}
+                  value={selectField.value}
+                  onValueChange={selectField.onChange}
+                  invalid={Boolean(batchErrors.startAcademicYearId)}
+                  placeholder="Select an academic year"
+                />
+              )}
+            />
+          </Field>
+
+          <div className="mt-2 flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={closeBatchDialog}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={isBatchPending}>
+              {editingBatch ? 'Save changes' : 'Create batch'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deletingBatch)}
+        onOpenChange={(open) => !open && setDeletingBatch(null)}
+        title="Delete this batch?"
+        description={`${deletingBatch?.name} will be permanently removed. This can't be undone, and fails if students are placed in it.`}
+        confirmLabel="Delete"
+        destructive
+        loading={deleteBatch.isPending}
+        onConfirm={confirmDeleteBatch}
       />
     </AppShell>
   );
