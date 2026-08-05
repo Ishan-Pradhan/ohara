@@ -100,6 +100,17 @@ export const bulkPromoteResultSchema = z.object({
   error: z.string().optional(),
 });
 
+export const electiveCourseSchema = z.object({
+  id: z.string(),
+  classId: z.string(),
+  title: z.string(),
+  code: z.string(),
+  description: z.string().nullable(),
+  capacity: z.number().nullable(),
+  enrolledCount: z.number(),
+  isEnrolled: z.boolean(),
+});
+
 export type CreateClassMembershipInput = z.infer<typeof createClassMembershipSchema>;
 export type ClassMembership = z.infer<typeof classMembershipSchema>;
 export type CreateEnrollmentInput = z.infer<typeof createEnrollmentSchema>;
@@ -110,3 +121,4 @@ export type StudentPlacement = z.infer<typeof studentPlacementSchema>;
 export type RosterEntry = z.infer<typeof rosterEntrySchema>;
 export type BulkPromoteInput = z.infer<typeof bulkPromoteInputSchema>;
 export type BulkPromoteResult = z.infer<typeof bulkPromoteResultSchema>;
+export type ElectiveCourse = z.infer<typeof electiveCourseSchema>;

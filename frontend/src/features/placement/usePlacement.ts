@@ -4,8 +4,11 @@ import {
   bulkPromoteSection,
   createClassMembership,
   createEnrollment,
+  dropElective,
+  enrollInElective,
   fetchClassMemberships,
   fetchSectionRoster,
+  fetchStudentElectives,
   fetchStudentPlacement,
   setClassMembershipOutcome,
   transferClassMembership,
@@ -89,5 +92,39 @@ export const useBulkPromoteSection = (sectionId: string) => {
   return useMutation({
     mutationFn: (input: BulkPromoteInput) => bulkPromoteSection(sectionId, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: sectionRosterKey(sectionId) }),
+  });
+};
+
+// ── ELECTIVES ────────────────────────────────────────────────────────────────
+
+export const studentElectivesKey = (studentId: string) =>
+  ['placement', 'electives', studentId] as const;
+
+export const useStudentElectives = (studentId: string) =>
+  useQuery({
+    queryKey: studentElectivesKey(studentId),
+    queryFn: () => fetchStudentElectives(studentId),
+    enabled: Boolean(studentId),
+  });
+
+export const useEnrollInElective = (studentId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (courseId: string) => enrollInElective(courseId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: studentElectivesKey(studentId) });
+      invalidateStudent(qc, studentId);
+    },
+  });
+};
+
+export const useDropElective = (studentId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (courseId: string) => dropElective(courseId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: studentElectivesKey(studentId) });
+      invalidateStudent(qc, studentId);
+    },
   });
 };

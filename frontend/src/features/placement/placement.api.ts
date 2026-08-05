@@ -4,6 +4,7 @@ import { api } from '../../lib/axios.js';
 import {
   bulkPromoteResultSchema,
   classMembershipSchema,
+  electiveCourseSchema,
   enrollmentSchema,
   rosterEntrySchema,
   studentPlacementSchema,
@@ -12,6 +13,7 @@ import {
   type ClassMembership,
   type CreateClassMembershipInput,
   type CreateEnrollmentInput,
+  type ElectiveCourse,
   type Enrollment,
   type OutcomeInput,
   type RosterEntry,
@@ -70,4 +72,19 @@ export const bulkPromoteSection = async (
 ): Promise<BulkPromoteResult[]> => {
   const res = await api.post(`/admin/sections/${sectionId}/promote`, input);
   return z.array(bulkPromoteResultSchema).parse(res.data.data);
+};
+
+// ── ELECTIVES ────────────────────────────────────────────────────────────────
+
+export const fetchStudentElectives = async (studentId: string): Promise<ElectiveCourse[]> => {
+  const res = await api.get(`/students/${studentId}/electives`);
+  return z.array(electiveCourseSchema).parse(res.data.data);
+};
+
+export const enrollInElective = async (courseId: string): Promise<void> => {
+  await api.post(`/courses/${courseId}/enroll`);
+};
+
+export const dropElective = async (courseId: string): Promise<void> => {
+  await api.delete(`/courses/${courseId}/enroll`);
 };
