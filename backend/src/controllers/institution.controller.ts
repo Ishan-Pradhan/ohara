@@ -10,6 +10,7 @@ import { sectionRepository } from '../repositories/sections.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
+import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { serializeProgram, serializeBatch, serializeClass, serializeAcademicYear, serializeSection, serializeCourse, serializeCourseTeacher } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -338,7 +339,7 @@ export const deleteSection = asyncHandler(
 
 export const createCourse = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, title, code, description, courseType } =
+    const { classId, title, code, description, courseType, capacity } =
       req.validated?.body as CourseCreationAttributes;
 
     const cls = await classRepository.findById(classId);
@@ -352,6 +353,7 @@ export const createCourse = asyncHandler(
       code,
       description: description ?? null,
       courseType,
+      capacity: capacity ?? null,
     });
 
     return ok(res, serializeCourse(course), 'Course created', 201);
@@ -362,7 +364,12 @@ export const listCourses = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { classId } = req.validated?.query as { classId?: string };
     const courses = await courseRepository.findAll({ classId });
-    return ok(res, courses.map(serializeCourse), 'Courses retrieved');
+    const counts = await enrollmentRepository.countByCourses(courses.map((c) => c.id));
+    return ok(
+      res,
+      courses.map((c) => serializeCourse(c, counts[c.id] ?? 0)),
+      'Courses retrieved',
+    );
   },
 );
 
@@ -370,7 +377,7 @@ export const updateCourse = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
     const body = req.validated?.body as Partial<
-      Pick<CourseCreationAttributes, 'title' | 'code' | 'description'>
+      Pick<CourseCreationAttributes, 'title' | 'code' | 'description' | 'capacity'>
     >;
 
     const course = await courseRepository.update(id, body);

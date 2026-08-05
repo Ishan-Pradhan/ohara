@@ -1,4 +1,5 @@
 import type { Transaction } from 'sequelize';
+import { sequelize } from '../config/db.js';
 import { Enrollment } from '../models/enrollments.model.js';
 import type { EnrollmentCreationAttributes } from '../types/placement.types.js';
 
@@ -54,5 +55,39 @@ export const enrollmentRepository = {
       where: { studentId, courseId, status: 'active' },
     });
     return found !== null;
+  },
+
+  /** Active-enrollment headcount per course — powers the fill-vs-capacity
+   * display for electives, same shape as classMembershipRepository.countBySections. */
+  countByCourses: async (courseIds: string[]): Promise<Record<string, number>> => {
+    if (courseIds.length === 0) return {};
+
+    const rows = (await Enrollment.findAll({
+      where: { courseId: courseIds, status: 'active' },
+      attributes: ['courseId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['courseId'],
+      raw: true,
+    })) as unknown as { courseId: string; count: string }[];
+
+    return Object.fromEntries(rows.map((r) => [r.courseId, Number(r.count)]));
+  },
+
+  /** One row per (student, course, year) by the unique constraint — powers
+   * self-enroll's re-enroll-after-drop reactivation path. */
+  findByStudentCourseYear: async (
+    studentId: string,
+    courseId: string,
+    academicYearId: string,
+  ): Promise<Enrollment | null> => {
+    return await Enrollment.findOne({ where: { studentId, courseId, academicYearId } });
+  },
+
+  setStatus: async (
+    id: string,
+    status: 'active' | 'completed' | 'dropped',
+  ): Promise<Enrollment | null> => {
+    const enrollment = await Enrollment.findByPk(id);
+    if (!enrollment) return null;
+    return await enrollment.update({ status });
   },
 };

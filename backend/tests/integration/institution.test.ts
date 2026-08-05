@@ -915,6 +915,47 @@ describe('GET /admin/courses', () => {
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].title).toBe('Physics');
   });
+
+  it('returns capacity and enrolledCount, counting only active enrollments', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYearHelper({ isCurrent: true });
+
+    const courseRes = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({
+        classId: cls.id,
+        title: 'Elective Art',
+        code: 'ART-101',
+        courseType: 'elective',
+        capacity: 1,
+      });
+    const courseId: string = courseRes.body.data.id;
+
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const batch = await createBatchHelper({ programId: cls.programId });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
+
+    await request(app)
+      .post('/api/v1/admin/enrollments')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, courseId });
+
+    const res = await request(app)
+      .get(COURSES)
+      .query({ classId: cls.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    const course = (res.body.data as { id: string }[]).find((c) => c.id === courseId);
+    expect(course).toMatchObject({ capacity: 1, enrolledCount: 1 });
+  });
 });
 
 describe('PATCH /admin/courses/:id', () => {

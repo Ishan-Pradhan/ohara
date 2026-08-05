@@ -52,7 +52,7 @@ export const serializeSection = (s: Section, enrolledCount = 0) => ({
   createdAt: s.createdAt,
 });
 
-export const serializeCourse = (c: Course) => ({
+export const serializeCourse = (c: Course, enrolledCount = 0) => ({
   id: c.id,
   classId: c.classId,
   title: c.title,
@@ -60,6 +60,8 @@ export const serializeCourse = (c: Course) => ({
   description: c.description,
   isPublished: c.isPublished,
   courseType: c.courseType,
+  capacity: c.capacity,
+  enrolledCount,
   createdAt: c.createdAt,
 });
 

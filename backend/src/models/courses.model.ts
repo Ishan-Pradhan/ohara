@@ -59,6 +59,13 @@ export class Course extends Model {
   @Column(DataType.ENUM('compulsory', 'elective'))
   declare courseType: 'compulsory' | 'elective';
 
+  /** Seat cap for self-enrolled electives. Null means uncapped — mirrors
+   * Section.capacity. Meaningless for compulsory courses (auto-enroll never
+   * checks it), but the column isn't restricted to electives at the DB level. */
+  @Default(null)
+  @Column(DataType.INTEGER)
+  declare capacity: number | null;
+
   @BelongsToMany(() => User, () => CourseTeacher)
   declare teachers?: User[];
 

@@ -577,6 +577,7 @@ export const createCourseSchema = {
     code: z.string().min(1, 'Code is required'),
     description: z.string().optional(),
     courseType: z.enum(['compulsory', 'elective']).default('compulsory'),
+    capacity: z.number().int().positive().optional(),
   }),
 };
 
@@ -596,6 +597,8 @@ export const courseSchema = registry.register(
     description: z.string().nullable(),
     isPublished: z.boolean(),
     courseType: z.enum(['compulsory', 'elective']),
+    capacity: z.number().nullable(),
+    enrolledCount: z.number(),
     createdAt: z.iso.datetime(),
   }),
 );
@@ -644,6 +647,7 @@ export const updateCourseSchema = {
     title: z.string().min(1, 'Title is required').optional(),
     code: z.string().min(1, 'Code is required').optional(),
     description: z.string().optional(),
+    capacity: z.number().int().positive().nullable().optional(),
   }),
 };
 

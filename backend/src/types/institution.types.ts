@@ -87,13 +87,14 @@ export interface CourseAttributes {
   code: string;
   description: string | null;
   courseType: CourseType;
+  capacity: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type CourseCreationAttributes = Optional<
   CourseAttributes,
-  'id' | 'description' | 'courseType' | 'createdAt' | 'updatedAt'
+  'id' | 'description' | 'courseType' | 'capacity' | 'createdAt' | 'updatedAt'
 >;
 
 export interface CourseTeacherAttributes {
