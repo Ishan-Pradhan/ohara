@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 
 import { env } from '../config/env.js';
+import type { AgentMessage, AgentTool, AgentTurnResult } from '../types/agent.types.js';
 
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
@@ -54,4 +55,66 @@ export const generateText = async (
   }
 
   return content;
+};
+
+/** One turn of the agentic tutor loop. Maps our provider-agnostic
+ * AgentMessage/AgentTool shapes onto Groq's OpenAI-compatible tool-calling
+ * API — the same `groq.chat.completions.create` transport `generateJson`/
+ * `generateText` already use, just with `tools` attached. This is the only
+ * place that decides text-vs-tool-calls; the orchestrator (agent/tutorAgent.ts)
+ * never touches the Groq SDK directly. */
+export const runAgentTurn = async (
+  history: AgentMessage[],
+  tools: AgentTool[],
+): Promise<AgentTurnResult> => {
+  const messages = history.map((m) => {
+    if (m.role === 'assistant') {
+      return {
+        role: 'assistant' as const,
+        content: m.content,
+        ...(m.toolCalls && m.toolCalls.length > 0
+          ? {
+              tool_calls: m.toolCalls.map((tc) => ({
+                id: tc.id,
+                type: 'function' as const,
+                function: { name: tc.name, arguments: tc.arguments },
+              })),
+            }
+          : {}),
+      };
+    }
+    if (m.role === 'tool') {
+      return { role: 'tool' as const, tool_call_id: m.toolCallId, content: m.content };
+    }
+    return { role: m.role, content: m.content };
+  });
+
+  const completion = await groq.chat.completions.create({
+    model: env.GROQ_MODEL,
+    messages,
+    tools: tools.map((t) => ({
+      type: 'function' as const,
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    })),
+    tool_choice: 'auto',
+    temperature: 0.3,
+  });
+
+  const message = completion.choices[0]?.message;
+  if (!message) {
+    throw new Error('Groq returned an empty response');
+  }
+
+  if (message.tool_calls && message.tool_calls.length > 0) {
+    return {
+      type: 'tool_calls',
+      calls: message.tool_calls.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      })),
+    };
+  }
+
+  return { type: 'text', content: message.content ?? '' };
 };
