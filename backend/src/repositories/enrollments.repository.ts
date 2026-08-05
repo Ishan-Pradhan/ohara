@@ -46,4 +46,13 @@ export const enrollmentRepository = {
       order: [['createdAt', 'ASC']],
     });
   },
+
+  /** Powers requireEnrolledStudent. Active enrollment only — a `dropped`
+   * enrollment shouldn't grant tutor access. */
+  isEnrolled: async (studentId: string, courseId: string): Promise<boolean> => {
+    const found = await Enrollment.findOne({
+      where: { studentId, courseId, status: 'active' },
+    });
+    return found !== null;
+  },
 };

@@ -6,6 +6,7 @@ import type { AuthRequest, JwtPayload } from '../types/auth.types.js';
 import type { UserRole } from '../types/users.types.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
+import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 
 export const verifyJWT = async (
   req: AuthRequest,
@@ -111,6 +112,36 @@ export const requireCourseTeacher = async (
   const isAssigned = await courseTeacherRepository.exists(user.id, courseId);
   if (!isAssigned) {
     throw new ApiError(403, 'Not authorized for this course');
+  }
+
+  next();
+};
+
+/**
+ * Student-enrollment ownership guard for the tutor routes. Admins/teachers
+ * do NOT pass here — the tutor is specifically the student-facing surface;
+ * they already have the authoring side via requireCourseTeacher.
+ */
+export const requireEnrolledStudent = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, 'Unauthorized request');
+  }
+  if (user.role !== 'student') {
+    throw new ApiError(403, 'Not authorized');
+  }
+
+  const courseId = req.params.courseId;
+  if (typeof courseId !== 'string' || !courseId) {
+    throw new ApiError(500, 'requireEnrolledStudent: route is missing the :courseId param');
+  }
+  const enrolled = await enrollmentRepository.isEnrolled(user.id, courseId);
+  if (!enrolled) {
+    throw new ApiError(403, 'Not enrolled in this course');
   }
 
   next();
