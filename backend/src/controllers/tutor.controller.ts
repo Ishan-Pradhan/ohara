@@ -108,11 +108,21 @@ export const sendMessage = asyncHandler(async (req: AuthRequest, res: Response) 
     }),
   );
 
-  const userPrompt = tutorStage1UserPrompt(
-    content,
-    sources.map((s) => ({ filename: s.filename, content: s.chunkContent })),
-  );
-  const answerText = await generateText(tutorStage1SystemPrompt, userPrompt);
+  // Grounding is mandatory: zero retrieved chunks must never reach the LLM.
+  // Relying on the prompt's own "no material" framing to make the model
+  // refuse is not a mechanical guarantee — nothing stops it from answering
+  // anyway (including via a crafted question acting as a prompt injection).
+  // So this is a hard branch, not a prompt-engineering nudge.
+  let answerText: string;
+  if (chunks.length === 0) {
+    answerText = "There's no course material available yet to answer this question.";
+  } else {
+    const userPrompt = tutorStage1UserPrompt(
+      content,
+      sources.map((s) => ({ filename: s.filename, content: s.chunkContent })),
+    );
+    answerText = await generateText(tutorStage1SystemPrompt, userPrompt);
+  }
 
   const assistantSeq = await tutorMessageRepository.nextSeq(conversationId);
   const assistantMessage = await tutorMessageRepository.create({

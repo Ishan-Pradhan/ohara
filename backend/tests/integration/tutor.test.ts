@@ -209,6 +209,13 @@ describe('Tutor endpoints', () => {
 
     expect(sendRes.status).toBe(201);
     expect(sendRes.body.data.assistantMessage.sources).toBeNull();
+    // Grounding is mandatory: zero retrieved chunks must be a hard code
+    // branch, not just a prompt-engineered refusal — the LLM must never be
+    // called at all in this case.
+    expect(generateText).not.toHaveBeenCalled();
+    expect(sendRes.body.data.assistantMessage.content).toBe(
+      "There's no course material available yet to answer this question.",
+    );
   });
 
   it("a student cannot view another student's conversation", async () => {
