@@ -18,6 +18,7 @@ import { Textarea } from '../../components/ui/Textarea.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Spinner } from '../../components/ui/Spinner.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { ChartRenderer } from '../../components/tutor/ChartRenderer.js';
 
 interface TutorPanelProps {
   courseId: string;
@@ -46,6 +47,7 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
 
   const { data: messages, isLoading: messagesLoading } = useMessages(courseId, selectedId ?? '');
   const sendMessage = useSendMessage(courseId, selectedId ?? '');
+  const selectedConversation = conversations?.find((conversation) => conversation.id === selectedId);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -163,38 +165,44 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                   <Skeleton className="ml-auto h-12 w-1/2" />
                 </div>
               ) : (
-                (messages ?? []).map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex flex-col gap-1',
-                      message.role === 'user' ? 'items-end' : 'items-start',
-                    )}
-                  >
+                (messages ?? [])
+                  .filter((message) => message.type !== 'tool_call' && message.type !== 'tool_result')
+                  .map((message) => (
                     <div
+                      key={message.id}
                       className={cn(
-                        'max-w-[85%] rounded-card px-3.5 py-2.5 text-sm',
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-fg'
-                          : 'bg-surface-hover text-fg',
+                        'flex flex-col gap-1',
+                        message.role === 'user' ? 'items-end' : 'items-start',
                       )}
                     >
-                      {message.content}
-                    </div>
-                    {message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
-                      <details className="max-w-[85%] text-xs text-muted">
-                        <summary className="cursor-pointer select-none text-subtle">Sources</summary>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {message.sources.map((source) => (
-                            <Badge key={source.documentId} variant="neutral">
-                              {source.filename}
-                            </Badge>
-                          ))}
+                      {message.type === 'chart' && message.chart ? (
+                        <ChartRenderer spec={message.chart} />
+                      ) : (
+                        <div
+                          className={cn(
+                            'max-w-[85%] rounded-card px-3.5 py-2.5 text-sm',
+                            message.role === 'user'
+                              ? 'bg-primary text-primary-fg'
+                              : 'bg-surface-hover text-fg',
+                          )}
+                        >
+                          {message.content}
                         </div>
-                      </details>
-                    ) : null}
-                  </div>
-                ))
+                      )}
+                      {message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
+                        <details className="max-w-[85%] text-xs text-muted">
+                          <summary className="cursor-pointer select-none text-subtle">Sources</summary>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {message.sources.map((source) => (
+                              <Badge key={source.documentId} variant="neutral">
+                                {source.filename}
+                              </Badge>
+                            ))}
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
+                  ))
               )}
 
               {sendMessage.isPending ? (
@@ -213,6 +221,12 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                   ? sendMessage.error.message
                   : "Couldn't send your message — try again."}
               </Alert>
+            ) : null}
+
+            {selectedConversation?.status === 'awaiting_student' ? (
+              <Badge variant="accent" className="self-start">
+                Waiting for your reply
+              </Badge>
             ) : null}
 
             <div className="flex items-end gap-2 border-t border-border pt-3">

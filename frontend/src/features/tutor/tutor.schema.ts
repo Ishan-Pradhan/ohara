@@ -34,6 +34,20 @@ export const tutorSourceSchema = z.object({
   chunkContent: z.string(),
 });
 
+export const chartSpecSchema = z.object({
+  type: z.enum(['line', 'bar', 'scatter', 'function']),
+  title: z.string(),
+  xLabel: z.string(),
+  yLabel: z.string(),
+  series: z.array(
+    z.object({
+      name: z.string(),
+      points: z.array(z.object({ x: z.number(), y: z.number() })),
+    }),
+  ),
+});
+export type ChartSpec = z.infer<typeof chartSpecSchema>;
+
 export const tutorMessageSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
@@ -41,6 +55,9 @@ export const tutorMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'tool']),
   type: z.enum(['text', 'tool_call', 'tool_result', 'chart']),
   content: z.string().nullable(),
+  toolCalls: z.unknown().nullable(),
+  toolResult: z.unknown().nullable(),
+  chart: chartSpecSchema.nullable(),
   sources: z.array(tutorSourceSchema).nullable(),
   createdAt: z.string(),
 });
