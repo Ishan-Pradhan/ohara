@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  bulkPromoteSection,
   createClassMembership,
   createEnrollment,
   fetchClassMemberships,
+  fetchSectionRoster,
   fetchStudentPlacement,
   setClassMembershipOutcome,
   transferClassMembership,
 } from './placement.api.js';
-import type { OutcomeInput, TransferInput } from './placement.schema.js';
+import type { BulkPromoteInput, OutcomeInput, TransferInput } from './placement.schema.js';
 
 export const studentPlacementKey = (studentId: string) =>
   ['placement', 'student', studentId] as const;
@@ -70,5 +72,22 @@ export const useSetClassMembershipOutcome = (studentId: string) => {
     mutationFn: ({ membershipId, input }: { membershipId: string; input: OutcomeInput }) =>
       setClassMembershipOutcome(membershipId, input),
     onSuccess: () => invalidateStudent(qc, studentId),
+  });
+};
+
+export const sectionRosterKey = (sectionId: string) => ['placement', 'roster', sectionId] as const;
+
+export const useSectionRoster = (sectionId: string) =>
+  useQuery({
+    queryKey: sectionRosterKey(sectionId),
+    queryFn: () => fetchSectionRoster(sectionId),
+    enabled: Boolean(sectionId),
+  });
+
+export const useBulkPromoteSection = (sectionId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkPromoteInput) => bulkPromoteSection(sectionId, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sectionRosterKey(sectionId) }),
   });
 };

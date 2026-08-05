@@ -71,6 +71,35 @@ export const studentPlacementSchema = z.object({
   ),
 });
 
+export const rosterEntrySchema = z.object({
+  membershipId: z.string(),
+  student: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    status: z.string(),
+    avatarUrl: z.string().nullable(),
+  }),
+});
+
+export const bulkPromoteInputSchema = z.object({
+  defaultTargetSectionId: z.string().min(1, 'Choose a target section'),
+  overrides: z.array(
+    z.object({
+      studentId: z.string(),
+      outcome: z.enum(['retained', 'graduated']),
+      targetSectionId: z.string().optional(),
+    }),
+  ),
+});
+
+export const bulkPromoteResultSchema = z.object({
+  studentId: z.string(),
+  status: z.enum(['ok', 'error']),
+  membership: classMembershipSchema.optional(),
+  error: z.string().optional(),
+});
+
 export type CreateClassMembershipInput = z.infer<typeof createClassMembershipSchema>;
 export type ClassMembership = z.infer<typeof classMembershipSchema>;
 export type CreateEnrollmentInput = z.infer<typeof createEnrollmentSchema>;
@@ -78,3 +107,6 @@ export type Enrollment = z.infer<typeof enrollmentSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;
 export type OutcomeInput = z.infer<typeof outcomeSchema>;
 export type StudentPlacement = z.infer<typeof studentPlacementSchema>;
+export type RosterEntry = z.infer<typeof rosterEntrySchema>;
+export type BulkPromoteInput = z.infer<typeof bulkPromoteInputSchema>;
+export type BulkPromoteResult = z.infer<typeof bulkPromoteResultSchema>;

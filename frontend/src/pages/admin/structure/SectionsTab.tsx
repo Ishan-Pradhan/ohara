@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarRange, LayoutGrid, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  CalendarRange,
+  LayoutGrid,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { z } from 'zod';
 
 import type { Section } from '../../../features/institution/institution.schema.js';
 import {
   useAcademicYears,
+  useClasses,
   useCreateSection,
   useDeleteSection,
   useSections,
   useUpdateSection,
 } from '../../../features/institution/useInstitution.js';
 import { useTeachers } from '../../../features/users/useUsers.js';
+import {
+  useBulkPromoteSection,
+  useSectionRoster,
+} from '../../../features/placement/usePlacement.js';
+import type { BulkPromoteResult } from '../../../features/placement/placement.schema.js';
 import { ApiError } from '../../../lib/apiError.js';
 import { toast } from '../../../lib/toast.js';
 import { Button } from '../../../components/ui/Button.js';
@@ -49,6 +63,7 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: years, isLoading: yearsLoading } = useAcademicYears();
   const { data: sections, isLoading: sectionsLoading } = useSections();
+  const { data: classes } = useClasses();
   const { data: teachers } = useTeachers();
   const createSection = useCreateSection();
   const updateSection = useUpdateSection();
@@ -57,6 +72,7 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Section | null>(null);
   const [deleting, setDeleting] = useState<Section | null>(null);
+  const [promoting, setPromoting] = useState<Section | null>(null);
 
   const selectedYearId =
     searchParams.get('year') ?? years?.find((y) => y.isCurrent)?.id ?? years?.[0]?.id ?? '';
@@ -76,6 +92,26 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   const teacherName = (id: string | null) => teachers?.find((t) => t.id === id)?.name ?? null;
   const teacherOptions = (teachers ?? []).map((t) => ({ value: t.id, label: t.name }));
   const yearOptions = (years ?? []).map((y) => ({ value: y.id, label: y.name }));
+
+  // Promotion always moves a section's students into the same program's next
+  // class (by orderIndex), regardless of which academic year that class's
+  // sections belong to — mirrors StudentDetailPage's OutcomeDialog logic.
+  const currentClass = classes?.find((c) => c.id === classId);
+  const promotedSectionOptions = (sections ?? [])
+    .filter((s) => {
+      const targetClass = classes?.find((c) => c.id === s.classId);
+      return (
+        targetClass &&
+        currentClass &&
+        targetClass.programId === currentClass.programId &&
+        targetClass.orderIndex === currentClass.orderIndex + 1
+      );
+    })
+    .map((s) => {
+      const className = classes?.find((c) => c.id === s.classId)?.name ?? '—';
+      const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
+      return { value: s.id, label: `${className} — ${s.name} (${yearName})` };
+    });
 
   const openCreate = () => {
     setEditing(null);
@@ -195,6 +231,15 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
                 ) : (
                   <Badge>{section.enrolledCount} student{section.enrolledCount === 1 ? '' : 's'}</Badge>
                 )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={section.enrolledCount === 0}
+                  onClick={() => setPromoting(section)}
+                >
+                  <ArrowUpCircle className="size-4" aria-hidden />
+                  Promote all
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger className="rounded-control p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-fg">
                     <MoreVertical className="size-4" aria-hidden />
@@ -285,6 +330,164 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
         loading={deleteSection.isPending}
         onConfirm={confirmDelete}
       />
+
+      <BulkPromoteDialog
+        section={promoting}
+        targetSectionOptions={promotedSectionOptions}
+        onOpenChange={(open) => !open && setPromoting(null)}
+      />
     </div>
+  );
+};
+
+const outcomeOverrideOptions = [
+  { value: 'promoted', label: 'Promote' },
+  { value: 'retained', label: 'Retained' },
+  { value: 'graduated', label: 'Graduated' },
+];
+
+interface BulkPromoteDialogProps {
+  section: Section | null;
+  targetSectionOptions: { value: string; label: string }[];
+  onOpenChange: (open: boolean) => void;
+}
+
+const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: BulkPromoteDialogProps) => {
+  const sectionId = section?.id ?? '';
+  const { data: roster, isLoading: rosterLoading, isError: rosterError } = useSectionRoster(sectionId);
+  const bulkPromote = useBulkPromoteSection(sectionId);
+
+  const [defaultTargetSectionId, setDefaultTargetSectionId] = useState('');
+  const [overrides, setOverrides] = useState<Record<string, 'retained' | 'graduated'>>({});
+  const [results, setResults] = useState<BulkPromoteResult[] | null>(null);
+
+  // Reset local state whenever a different section is opened (or the dialog closes).
+  useEffect(() => {
+    setDefaultTargetSectionId('');
+    setOverrides({});
+    setResults(null);
+    bulkPromote.reset();
+    // Only re-run when switching sections — bulkPromote itself is intentionally
+    // excluded, since including it would re-fire this effect on every mutation
+    // state change (isPending/error) rather than only on section switches.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionId]);
+
+  const setOverride = (studentId: string, outcome: string) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (outcome === 'promoted') {
+        delete next[studentId];
+      } else {
+        next[studentId] = outcome as 'retained' | 'graduated';
+      }
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    if (!section) return;
+    const payload = {
+      defaultTargetSectionId,
+      overrides: Object.entries(overrides).map(([studentId, outcome]) => ({ studentId, outcome })),
+    };
+    const outcomeResults = await bulkPromote.mutateAsync(payload);
+    setResults(outcomeResults);
+    const okCount = outcomeResults.filter((r) => r.status === 'ok').length;
+    toast.success(`${okCount} of ${outcomeResults.length} students promoted`);
+    if (outcomeResults.every((r) => r.status === 'ok')) {
+      onOpenChange(false);
+    }
+  };
+
+  const errorResults = (results ?? []).filter((r) => r.status === 'error');
+  const studentName = (studentId: string) =>
+    roster?.find((entry) => entry.student.id === studentId)?.student.name ?? studentId;
+
+  return (
+    <Dialog
+      open={Boolean(section)}
+      onOpenChange={onOpenChange}
+      title={`Promote all — ${section?.name ?? ''}`}
+      description="Applies to every student currently placed in this section. Override individual students below before submitting."
+    >
+      <div className="flex flex-col gap-4">
+        {bulkPromote.error instanceof ApiError ? <Alert>{bulkPromote.error.message}</Alert> : null}
+
+        {errorResults.length > 0 ? (
+          <Alert variant="warning">
+            <p className="mb-1 font-medium">Some students could not be promoted:</p>
+            <ul className="flex flex-col gap-0.5">
+              {errorResults.map((r) => (
+                <li key={r.studentId}>
+                  <span className="font-medium">{studentName(r.studentId)}</span>: {r.error}
+                </li>
+              ))}
+            </ul>
+          </Alert>
+        ) : null}
+
+        {rosterLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : rosterError ? (
+          <Alert>Could not load this section's roster.</Alert>
+        ) : !roster || roster.length === 0 ? (
+          <p className="text-sm text-muted">No students are placed in this section.</p>
+        ) : (
+          <>
+            <Field label="Default target section" htmlFor="defaultTargetSectionId">
+              <Select
+                id="defaultTargetSectionId"
+                options={targetSectionOptions}
+                value={defaultTargetSectionId}
+                onValueChange={setDefaultTargetSectionId}
+                placeholder={
+                  targetSectionOptions.length
+                    ? 'Select a section'
+                    : 'No next-class sections exist for this program yet'
+                }
+              />
+            </Field>
+
+            <div className="flex flex-col gap-2">
+              {roster.map((entry) => (
+                <div
+                  key={entry.membershipId}
+                  className="flex items-center justify-between gap-3 rounded-control border border-border px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-fg">{entry.student.name}</p>
+                    <p className="truncate text-xs text-muted">{entry.student.email}</p>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      options={outcomeOverrideOptions}
+                      value={overrides[entry.student.id] ?? 'promoted'}
+                      onValueChange={(value) => setOverride(entry.student.id, value)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="mt-2 flex justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          {roster && roster.length > 0 ? (
+            <Button
+              type="button"
+              loading={bulkPromote.isPending}
+              disabled={!defaultTargetSectionId}
+              onClick={submit}
+            >
+              Promote all
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </Dialog>
   );
 };
