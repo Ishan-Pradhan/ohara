@@ -224,6 +224,110 @@ registry.registerPath({
   },
 });
 
+// ── BATCHES ─────────────────────────────────────────────────────────────────
+
+export const createBatchSchema = {
+  body: z.object({
+    programId: z.uuid(),
+    name: z.string().min(1, 'Name is required'),
+    startAcademicYearId: z.uuid(),
+  }),
+};
+
+export const listBatchesSchema = {
+  query: z.object({
+    programId: z.uuid().optional(),
+  }),
+};
+
+export const batchSchema = registry.register(
+  'Batch',
+  z.object({
+    id: z.uuid(),
+    programId: z.uuid(),
+    name: z.string(),
+    startAcademicYearId: z.uuid(),
+    createdAt: z.iso.datetime(),
+  }),
+);
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/batches',
+  tags: ['Institution'],
+  request: {
+    body: { content: { 'application/json': { schema: createBatchSchema.body } } },
+  },
+  responses: {
+    201: {
+      description: 'Batch created',
+      content: { 'application/json': { schema: envelope(batchSchema) } },
+    },
+    400: { description: 'Validation failed, or (programId, name) already in use' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Program or academic year not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/batches',
+  tags: ['Institution'],
+  request: { query: listBatchesSchema.query },
+  responses: {
+    200: {
+      description: 'List of batches',
+      content: { 'application/json': { schema: envelope(z.array(batchSchema)) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});
+
+export const updateBatchSchema = {
+  params: idParams.params,
+  body: z.object({
+    name: z.string().min(1, 'Name is required').optional(),
+  }),
+};
+
+export const deleteBatchSchema = idParams;
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/batches/{id}',
+  tags: ['Institution'],
+  request: {
+    params: updateBatchSchema.params,
+    body: { content: { 'application/json': { schema: updateBatchSchema.body } } },
+  },
+  responses: {
+    200: {
+      description: 'Batch updated',
+      content: { 'application/json': { schema: envelope(batchSchema) } },
+    },
+    400: { description: 'Validation failed' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Batch not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/batches/{id}',
+  tags: ['Institution'],
+  request: { params: deleteBatchSchema.params },
+  responses: {
+    200: { description: 'Batch deleted' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Batch not found' },
+    409: { description: 'Batch still has students placed under it — cannot delete' },
+  },
+});
+
 // ── ACADEMIC YEARS ──────────────────────────────────────────────────────────
 
 export const createAcademicYearSchema = {

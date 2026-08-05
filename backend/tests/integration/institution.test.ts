@@ -313,6 +313,163 @@ describe('DELETE /admin/classes/:id', () => {
   });
 });
 
+const { createAcademicYear: createAcademicYearHelper, createBatch: createBatchHelper } =
+  await import('../helpers/institution.js');
+
+const BATCHES = '/api/v1/admin/batches';
+
+describe('POST /admin/batches', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const res = await request(app)
+      .post(BATCHES)
+      .send({ programId: 'x', name: '26/27', startAcademicYearId: 'x' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const program = await createProgram();
+    const academicYear = await createAcademicYearHelper();
+    const res = await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: '26/27', startAcademicYearId: academicYear.id });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent programId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const academicYear = await createAcademicYearHelper();
+    const res = await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({
+        programId: '00000000-0000-0000-0000-000000000000',
+        name: '26/27',
+        startAcademicYearId: academicYear.id,
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a non-existent startAcademicYearId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const res = await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({
+        programId: program.id,
+        name: '26/27',
+        startAcademicYearId: '00000000-0000-0000-0000-000000000000',
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('creates a batch under a program', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const academicYear = await createAcademicYearHelper();
+    const res = await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: '26/27', startAcademicYearId: academicYear.id });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({
+      programId: program.id,
+      name: '26/27',
+      startAcademicYearId: academicYear.id,
+    });
+  });
+
+  it('rejects a duplicate batch name within the same program with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const academicYear = await createAcademicYearHelper();
+    await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Dup', startAcademicYearId: academicYear.id });
+
+    const res = await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: program.id, name: 'Dup', startAcademicYearId: academicYear.id });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /admin/batches', () => {
+  it('filters by programId', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const programA = await createProgram({ name: 'A' });
+    const programB = await createProgram({ name: 'B' });
+    const academicYear = await createAcademicYearHelper();
+    await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: programA.id, name: '26/27', startAcademicYearId: academicYear.id });
+    await request(app)
+      .post(BATCHES)
+      .set('Cookie', cookies)
+      .send({ programId: programB.id, name: '27/28', startAcademicYearId: academicYear.id });
+
+    const res = await request(app)
+      .get(BATCHES)
+      .query({ programId: programA.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].programId).toBe(programA.id);
+  });
+});
+
+describe('PATCH /admin/batches/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch(`${BATCHES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies)
+      .send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('updates a batch as admin', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const batch = await createBatchHelper();
+
+    const res = await request(app)
+      .patch(`${BATCHES}/${batch.id}`)
+      .set('Cookie', cookies)
+      .send({ name: '27/28' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ name: '27/28' });
+  });
+});
+
+describe('DELETE /admin/batches/:id', () => {
+  it('rejects a non-existent id with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .delete(`${BATCHES}/00000000-0000-0000-0000-000000000000`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes a batch with no students placed under it', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const batch = await createBatchHelper();
+
+    const res = await request(app)
+      .delete(`${BATCHES}/${batch.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+  });
+});
+
 const YEARS = '/api/v1/admin/academic-years';
 
 describe('POST /admin/academic-years', () => {

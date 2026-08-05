@@ -21,6 +21,20 @@ export type ProgramCreationAttributes = Optional<
   'id' | 'description' | 'affiliation' | 'createdAt' | 'updatedAt'
 >;
 
+export interface BatchAttributes {
+  id: string;
+  programId: string;
+  name: string;
+  startAcademicYearId: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type BatchCreationAttributes = Optional<
+  BatchAttributes,
+  'id' | 'createdAt' | 'updatedAt'
+>;
+
 export interface ClassAttributes {
   id: string;
   programId: string;

@@ -1,15 +1,16 @@
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import type { ProgramCreationAttributes, ClassCreationAttributes, AcademicYearCreationAttributes, SectionCreationAttributes, CourseCreationAttributes } from '../types/institution.types.js';
-import type { CourseTeacherCreationAttributes } from '../types/institution.types.js';
+import type { CourseTeacherCreationAttributes, BatchCreationAttributes } from '../types/institution.types.js';
 import { programRepository } from '../repositories/programs.repository.js';
+import { batchRepository } from '../repositories/batches.repository.js';
 import { classRepository } from '../repositories/classes.repository.js';
 import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
 import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
-import { serializeProgram, serializeClass, serializeAcademicYear, serializeSection, serializeCourse, serializeCourseTeacher } from '../serializers/institution.serializer.js';
+import { serializeProgram, serializeBatch, serializeClass, serializeAcademicYear, serializeSection, serializeCourse, serializeCourseTeacher } from '../serializers/institution.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -123,6 +124,63 @@ export const deleteClass = asyncHandler(
     }
 
     return ok(res, null, 'Class deleted');
+  },
+);
+
+// ── BATCHES ─────────────────────────────────────────────────────────────────
+
+export const createBatch = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { programId, name, startAcademicYearId } =
+      req.validated?.body as BatchCreationAttributes;
+
+    const program = await programRepository.findById(programId);
+    if (!program) {
+      throw new ApiError(404, 'Program not found');
+    }
+
+    const year = await academicYearRepository.findById(startAcademicYearId);
+    if (!year) {
+      throw new ApiError(404, 'Academic year not found');
+    }
+
+    const batch = await batchRepository.create({ programId, name, startAcademicYearId });
+    return ok(res, serializeBatch(batch), 'Batch created', 201);
+  },
+);
+
+export const listBatches = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { programId } = req.validated?.query as { programId?: string };
+    const batches = await batchRepository.findAll({ programId });
+    return ok(res, batches.map(serializeBatch), 'Batches retrieved');
+  },
+);
+
+export const updateBatch = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as Partial<Pick<BatchCreationAttributes, 'name'>>;
+
+    const batch = await batchRepository.update(id, body);
+    if (!batch) {
+      throw new ApiError(404, 'Batch not found');
+    }
+
+    return ok(res, serializeBatch(batch), 'Batch updated');
+  },
+);
+
+export const deleteBatch = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const deleted = await batchRepository.delete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Batch not found');
+    }
+
+    return ok(res, null, 'Batch deleted');
   },
 );
 

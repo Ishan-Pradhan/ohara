@@ -5,6 +5,7 @@ import { env } from './env.js';
 import { User } from '../models/users.model.js';
 import { Verification } from '../models/verification.model.js';
 import { Program } from '../models/programs.model.js';
+import { Batch } from '../models/batches.model.js';
 import { Class } from '../models/classes.model.js';
 import { AcademicYear } from '../models/academicYears.model.js';
 import { Section } from '../models/sections.model.js';
@@ -40,6 +41,7 @@ export const sequelize = new Sequelize({
     User,
     Verification,
     Program,
+    Batch,
     Class,
     AcademicYear,
     Section,

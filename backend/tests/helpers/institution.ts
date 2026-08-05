@@ -1,4 +1,5 @@
 import { programRepository } from '../../src/repositories/programs.repository.js';
+import { batchRepository } from '../../src/repositories/batches.repository.js';
 import { classRepository } from '../../src/repositories/classes.repository.js';
 import { academicYearRepository } from '../../src/repositories/academicYears.repository.js';
 import { sectionRepository } from '../../src/repositories/sections.repository.js';
@@ -6,6 +7,7 @@ import { courseRepository } from '../../src/repositories/courses.repository.js';
 import { userRepository } from '../../src/repositories/users.repository.js';
 import { enrollmentRepository } from '../../src/repositories/enrollments.repository.js';
 import type { Program } from '../../src/models/programs.model.js';
+import type { Batch } from '../../src/models/batches.model.js';
 import type { Class } from '../../src/models/classes.model.js';
 import type { AcademicYear } from '../../src/models/academicYears.model.js';
 import type { Section } from '../../src/models/sections.model.js';
@@ -37,6 +39,24 @@ export const createClass = async (
     programId,
     name: overrides.name ?? 'Test Class',
     orderIndex: overrides.orderIndex ?? 1,
+  });
+};
+
+export const createBatch = async (
+  overrides: Partial<{
+    programId: string;
+    name: string;
+    startAcademicYearId: string;
+  }> = {},
+): Promise<Batch> => {
+  const programId = overrides.programId ?? (await createProgram()).id;
+  const startAcademicYearId =
+    overrides.startAcademicYearId ?? (await createAcademicYear()).id;
+
+  return batchRepository.create({
+    programId,
+    name: overrides.name ?? '26/27',
+    startAcademicYearId,
   });
 };
 

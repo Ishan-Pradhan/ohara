@@ -10,6 +10,10 @@ import {
   listClassesSchema,
   updateClassSchema,
   deleteClassSchema,
+  createBatchSchema,
+  listBatchesSchema,
+  updateBatchSchema,
+  deleteBatchSchema,
   createAcademicYearSchema,
   updateAcademicYearSchema,
   deleteAcademicYearSchema,
@@ -33,6 +37,10 @@ import {
   listClasses,
   updateClass,
   deleteClass,
+  createBatch,
+  listBatches,
+  updateBatch,
+  deleteBatch,
   createAcademicYear,
   listAcademicYears,
   updateAcademicYear,
@@ -73,6 +81,16 @@ router
   .route('/classes/:id')
   .patch(validate(updateClassSchema), updateClass)
   .delete(validate(deleteClassSchema), deleteClass);
+
+router
+  .route('/batches')
+  .post(validate(createBatchSchema), createBatch)
+  .get(validate(listBatchesSchema), listBatches);
+
+router
+  .route('/batches/:id')
+  .patch(validate(updateBatchSchema), updateBatch)
+  .delete(validate(deleteBatchSchema), deleteBatch);
 
 router
   .route('/academic-years')
