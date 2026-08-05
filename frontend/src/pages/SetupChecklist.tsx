@@ -3,6 +3,7 @@ import { Check, ChevronRight, ClipboardList, GraduationCap, Layers, School, User
 
 import {
   useAcademicYears,
+  useBatches,
   useClasses,
   useCourses,
   useInstitutionProfile,
@@ -25,6 +26,7 @@ export const SetupChecklist = () => {
   const { data: programs, isLoading: programsLoading } = usePrograms();
   const { data: classes, isLoading: classesLoading } = useClasses();
   const { data: years, isLoading: yearsLoading } = useAcademicYears();
+  const { data: batches, isLoading: batchesLoading } = useBatches();
   const { data: sections, isLoading: sectionsLoading } = useSections();
   const { data: courses, isLoading: coursesLoading } = useCourses();
   const { data: staff, isLoading: staffLoading } = useUsers({ role: 'teacher', limit: 1 });
@@ -34,6 +36,7 @@ export const SetupChecklist = () => {
     programsLoading ||
     classesLoading ||
     yearsLoading ||
+    batchesLoading ||
     sectionsLoading ||
     coursesLoading ||
     staffLoading;
@@ -56,6 +59,11 @@ export const SetupChecklist = () => {
       label: 'Set the current academic year',
       done: (years ?? []).some((y) => y.isCurrent),
       to: '/admin/academic-years',
+    },
+    {
+      label: 'Create a batch',
+      done: (batches?.length ?? 0) > 0,
+      to: programs?.[0] ? `/admin/structure/${programs[0].id}` : '/admin/structure',
     },
     {
       label: 'Add a section',

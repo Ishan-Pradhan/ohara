@@ -44,6 +44,7 @@ const courseFormSchema = z.object({
   code: z.string().min(1, 'Code is required'),
   description: z.string().optional(),
   courseType: z.enum(['compulsory', 'elective']),
+  capacity: z.number().int().positive().optional(),
 });
 type CourseFormInput = z.infer<typeof courseFormSchema>;
 
@@ -79,7 +80,13 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ title: '', code: '', description: '', courseType: 'compulsory' });
+    resetForm({
+      title: '',
+      code: '',
+      description: '',
+      courseType: 'compulsory',
+      capacity: undefined,
+    });
     setDialogOpen(true);
   };
 
@@ -90,6 +97,7 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
       code: course.code,
       description: course.description ?? '',
       courseType: course.courseType,
+      capacity: course.capacity ?? undefined,
     });
     setDialogOpen(true);
   };
@@ -160,6 +168,7 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
             <TableRow>
               <TableHeadCell>Title</TableHeadCell>
               <TableHeadCell>Code</TableHeadCell>
+              <TableHeadCell>Enrolled</TableHeadCell>
               <TableHeadCell />
               <TableHeadCell />
               <TableHeadCell />
@@ -175,6 +184,15 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="text-muted">{course.code}</TableCell>
+                <TableCell>
+                  {course.capacity !== null ? (
+                    <Badge variant={course.enrolledCount >= course.capacity ? 'warning' : 'neutral'}>
+                      {course.enrolledCount}/{course.capacity}
+                    </Badge>
+                  ) : (
+                    <Badge>{course.enrolledCount} student{course.enrolledCount === 1 ? '' : 's'}</Badge>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Link
                     to={`/admin/courses/${course.id}`}
@@ -256,6 +274,19 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
                   placeholder="Select a type"
                 />
               )}
+            />
+          </Field>
+
+          <Field
+            label="Capacity"
+            htmlFor="capacity"
+            error={errors.capacity?.message}
+            hint="Optional — leave blank for no limit"
+          >
+            <Input
+              id="capacity"
+              type="number"
+              {...field('capacity', { valueAsNumber: true })}
             />
           </Field>
 
