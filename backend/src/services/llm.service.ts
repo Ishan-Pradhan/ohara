@@ -31,3 +31,27 @@ export const generateJson = async (
 
   return content;
 };
+
+/** Plain-text chat completion (no JSON mode) — used by the tutor, which
+ * returns prose, not a structured object. Same transport-only contract as
+ * generateJson: no retry/validation here, callers own that if they need it. */
+export const generateText = async (
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string> => {
+  const completion = await groq.chat.completions.create({
+    model: env.GROQ_MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.3,
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error('Groq returned an empty response');
+  }
+
+  return content;
+};
