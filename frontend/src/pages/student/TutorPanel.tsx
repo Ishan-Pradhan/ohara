@@ -7,7 +7,9 @@ import {
   useMessages,
   useSendMessage,
 } from '../../features/tutor/useTutor.js';
+import { ApiError } from '../../lib/apiError.js';
 import { cn } from '../../lib/cn.js';
+import { Alert } from '../../components/ui/Alert.js';
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
@@ -31,6 +33,10 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   const [draft, setDraft] = useState('');
 
   useEffect(() => {
+    setSelectedId(null);
+  }, [courseId]);
+
+  useEffect(() => {
     if (selectedId || !conversations || conversations.length === 0) return;
     const mostRecent = [...conversations].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -43,17 +49,27 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
 
   const startConversation = async () => {
     if (!newTitle.trim()) return;
-    const conversation = await createConversation.mutateAsync(newTitle.trim());
-    setSelectedId(conversation.id);
-    setNewTitle('');
-    setCreating(false);
+    try {
+      const conversation = await createConversation.mutateAsync(newTitle.trim());
+      setSelectedId(conversation.id);
+      setNewTitle('');
+      setCreating(false);
+    } catch {
+      // Keep the title and the prompt open so the user can retry — the
+      // error itself is surfaced via createConversation.isError below.
+    }
   };
 
   const submitMessage = async () => {
     if (!draft.trim() || !selectedId || sendMessage.isPending) return;
     const content = draft.trim();
-    setDraft('');
-    await sendMessage.mutateAsync(content);
+    try {
+      await sendMessage.mutateAsync(content);
+      setDraft('');
+    } catch {
+      // Leave the typed draft in place so the user doesn't lose their
+      // question — the error itself is surfaced via sendMessage.isError below.
+    }
   };
 
   return (
@@ -77,6 +93,13 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                 if (e.key === 'Enter') void startConversation();
               }}
             />
+            {createConversation.isError ? (
+              <p className="text-xs text-danger">
+                {createConversation.error instanceof ApiError
+                  ? createConversation.error.message
+                  : "Couldn't start the conversation — try again."}
+              </p>
+            ) : null}
             <Button
               size="sm"
               loading={createConversation.isPending}
@@ -176,6 +199,14 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                 </div>
               ) : null}
             </div>
+
+            {sendMessage.isError ? (
+              <Alert variant="danger">
+                {sendMessage.error instanceof ApiError
+                  ? sendMessage.error.message
+                  : "Couldn't send your message — try again."}
+              </Alert>
+            ) : null}
 
             <div className="flex items-end gap-2 border-t border-border pt-3">
               <Textarea
