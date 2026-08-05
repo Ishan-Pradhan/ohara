@@ -97,6 +97,15 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   // class (by orderIndex), regardless of which academic year that class's
   // sections belong to — mirrors StudentDetailPage's OutcomeDialog logic.
   const currentClass = classes?.find((c) => c.id === classId);
+  // Retention keeps a student in this same class, possibly moving them to a
+  // different section within it — mirrors StudentDetailPage's OutcomeDialog
+  // retainedSectionOptions (filtered by classId only, no year constraint).
+  const retainedSectionOptions = (sections ?? [])
+    .filter((s) => s.classId === currentClass?.id)
+    .map((s) => {
+      const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
+      return { value: s.id, label: `${s.name} (${yearName})` };
+    });
   const promotedSectionOptions = (sections ?? [])
     .filter((s) => {
       const targetClass = classes?.find((c) => c.id === s.classId);
@@ -333,7 +342,8 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
 
       <BulkPromoteDialog
         section={promoting}
-        targetSectionOptions={promotedSectionOptions}
+        promotedSectionOptions={promotedSectionOptions}
+        retainedSectionOptions={retainedSectionOptions}
         onOpenChange={(open) => !open && setPromoting(null)}
       />
     </div>
@@ -346,19 +356,33 @@ const outcomeOverrideOptions = [
   { value: 'graduated', label: 'Graduated' },
 ];
 
+interface OverrideState {
+  outcome: 'retained' | 'graduated';
+  /** Only meaningful (and required before submit) when outcome === 'retained' —
+   * graduation never needs a target section, and omitting it there is what
+   * correctly signals graduation to the backend. */
+  targetSectionId?: string;
+}
+
 interface BulkPromoteDialogProps {
   section: Section | null;
-  targetSectionOptions: { value: string; label: string }[];
+  promotedSectionOptions: { value: string; label: string }[];
+  retainedSectionOptions: { value: string; label: string }[];
   onOpenChange: (open: boolean) => void;
 }
 
-const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: BulkPromoteDialogProps) => {
+const BulkPromoteDialog = ({
+  section,
+  promotedSectionOptions,
+  retainedSectionOptions,
+  onOpenChange,
+}: BulkPromoteDialogProps) => {
   const sectionId = section?.id ?? '';
   const { data: roster, isLoading: rosterLoading, isError: rosterError } = useSectionRoster(sectionId);
   const bulkPromote = useBulkPromoteSection(sectionId);
 
   const [defaultTargetSectionId, setDefaultTargetSectionId] = useState('');
-  const [overrides, setOverrides] = useState<Record<string, 'retained' | 'graduated'>>({});
+  const [overrides, setOverrides] = useState<Record<string, OverrideState>>({});
   const [results, setResults] = useState<BulkPromoteResult[] | null>(null);
 
   // Reset local state whenever a different section is opened (or the dialog closes).
@@ -373,23 +397,43 @@ const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: Bulk
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  const setOverride = (studentId: string, outcome: string) => {
+  const setOverrideOutcome = (studentId: string, outcome: string) => {
     setOverrides((prev) => {
       const next = { ...prev };
       if (outcome === 'promoted') {
         delete next[studentId];
+      } else if (outcome === 'retained') {
+        // Keep a previously chosen target section if the admin flips back to
+        // 'retained' after trying something else.
+        next[studentId] = { outcome: 'retained', targetSectionId: next[studentId]?.targetSectionId };
       } else {
-        next[studentId] = outcome as 'retained' | 'graduated';
+        next[studentId] = { outcome: 'graduated' };
       }
       return next;
     });
   };
 
+  const setOverrideTargetSection = (studentId: string, targetSectionId: string) => {
+    setOverrides((prev) => {
+      const existing = prev[studentId];
+      if (!existing) return prev;
+      return { ...prev, [studentId]: { ...existing, targetSectionId } };
+    });
+  };
+
+  const hasIncompleteRetainedOverride = Object.values(overrides).some(
+    (o) => o.outcome === 'retained' && !o.targetSectionId,
+  );
+
   const submit = async () => {
     if (!section) return;
     const payload = {
       defaultTargetSectionId,
-      overrides: Object.entries(overrides).map(([studentId, outcome]) => ({ studentId, outcome })),
+      overrides: Object.entries(overrides).map(([studentId, o]) => ({
+        studentId,
+        outcome: o.outcome,
+        targetSectionId: o.outcome === 'retained' ? o.targetSectionId : undefined,
+      })),
     };
     const outcomeResults = await bulkPromote.mutateAsync(payload);
     setResults(outcomeResults);
@@ -435,14 +479,14 @@ const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: Bulk
           <p className="text-sm text-muted">No students are placed in this section.</p>
         ) : (
           <>
-            <Field label="Default target section" htmlFor="defaultTargetSectionId">
+            <Field label="Default target section" htmlFor="defaultTargetSectionId" hint="Applied to every student not overridden below.">
               <Select
                 id="defaultTargetSectionId"
-                options={targetSectionOptions}
+                options={promotedSectionOptions}
                 value={defaultTargetSectionId}
                 onValueChange={setDefaultTargetSectionId}
                 placeholder={
-                  targetSectionOptions.length
+                  promotedSectionOptions.length
                     ? 'Select a section'
                     : 'No next-class sections exist for this program yet'
                 }
@@ -450,24 +494,40 @@ const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: Bulk
             </Field>
 
             <div className="flex flex-col gap-2">
-              {roster.map((entry) => (
-                <div
-                  key={entry.membershipId}
-                  className="flex items-center justify-between gap-3 rounded-control border border-border px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-fg">{entry.student.name}</p>
-                    <p className="truncate text-xs text-muted">{entry.student.email}</p>
+              {roster.map((entry) => {
+                const override = overrides[entry.student.id];
+                return (
+                  <div
+                    key={entry.membershipId}
+                    className="flex flex-col gap-2 rounded-control border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg">{entry.student.name}</p>
+                      <p className="truncate text-xs text-muted">{entry.student.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {override?.outcome === 'retained' ? (
+                        <div className="w-44">
+                          <Select
+                            options={retainedSectionOptions}
+                            value={override.targetSectionId ?? ''}
+                            onValueChange={(value) => setOverrideTargetSection(entry.student.id, value)}
+                            placeholder="Target section"
+                            invalid={!override.targetSectionId}
+                          />
+                        </div>
+                      ) : null}
+                      <div className="w-36">
+                        <Select
+                          options={outcomeOverrideOptions}
+                          value={override?.outcome ?? 'promoted'}
+                          onValueChange={(value) => setOverrideOutcome(entry.student.id, value)}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-36 shrink-0">
-                    <Select
-                      options={outcomeOverrideOptions}
-                      value={overrides[entry.student.id] ?? 'promoted'}
-                      onValueChange={(value) => setOverride(entry.student.id, value)}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -480,7 +540,7 @@ const BulkPromoteDialog = ({ section, targetSectionOptions, onOpenChange }: Bulk
             <Button
               type="button"
               loading={bulkPromote.isPending}
-              disabled={!defaultTargetSectionId}
+              disabled={!defaultTargetSectionId || hasIncompleteRetainedOverride}
               onClick={submit}
             >
               Promote all
