@@ -29,6 +29,7 @@ const { lessonRepository } = await import('../../src/repositories/lessons.reposi
 const { tutorConversationRepository } = await import(
   '../../src/repositories/tutorConversations.repository.js'
 );
+const { tutorMessageRepository } = await import('../../src/repositories/tutorMessages.repository.js');
 const { EMBEDDING_DIMENSIONS, TUTOR_CONVERSATION_STATUSES } = await import(
   '../../src/constants/index.js'
 );
@@ -290,6 +291,57 @@ describe('Tutor endpoints', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.assistantMessage.content).toBe('Answer');
+  });
+
+  it('returns the exact message each request produced under a concurrent double-submit, not "whatever is last"', async () => {
+    // Regression test for Finding 1: the controller used to re-derive its
+    // response by re-fetching "the last message in the conversation by seq"
+    // after calling runTutorAgentTurn, instead of using the messageId it
+    // returns. Two concurrent sendMessage calls against the same
+    // conversation race on tutorMessageRepository's non-atomic nextSeq, so
+    // whichever request's controller re-fetched last previously risked
+    // returning the OTHER request's answer. Fetching by the orchestrator's
+    // own returned messageId must make each response correct regardless of
+    // interleaving.
+    const course = await createCourse();
+    const enrolledStudentCookie = await signInEnrolledStudent('double-submit@example.com', course.id);
+
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Double-submit test' });
+    const conversationId = createRes.body.data.id;
+
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({ type: 'text', content: 'Answer A' })
+      .mockResolvedValueOnce({ type: 'text', content: 'Answer B' });
+
+    const [resA, resB] = await Promise.all([
+      request(app)
+        .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+        .set('Cookie', enrolledStudentCookie)
+        .send({ content: 'Question A' }),
+      request(app)
+        .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+        .set('Cookie', enrolledStudentCookie)
+        .send({ content: 'Question B' }),
+    ]);
+
+    expect(resA.status).toBe(201);
+    expect(resB.status).toBe(201);
+
+    const contents = [resA.body.data.assistantMessage.content, resB.body.data.assistantMessage.content].sort();
+    expect(contents).toEqual(['Answer A', 'Answer B']);
+
+    // Each response must be a distinct row...
+    expect(resA.body.data.assistantMessage.id).not.toBe(resB.body.data.assistantMessage.id);
+
+    // ...and each response's own id must resolve, in the DB, to that same
+    // response's own content — never the other request's.
+    const rowA = await tutorMessageRepository.findById(resA.body.data.assistantMessage.id);
+    const rowB = await tutorMessageRepository.findById(resB.body.data.assistantMessage.id);
+    expect(rowA?.content).toBe(resA.body.data.assistantMessage.content);
+    expect(rowB?.content).toBe(resB.body.data.assistantMessage.content);
   });
 
   it('resumes a conversation from awaiting_student and flips status back to active', async () => {

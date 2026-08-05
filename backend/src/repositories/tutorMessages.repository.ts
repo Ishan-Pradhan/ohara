@@ -13,6 +13,10 @@ export const tutorMessageRepository = {
     });
   },
 
+  findById: async (id: string): Promise<TutorMessage | null> => {
+    return await TutorMessage.findByPk(id);
+  },
+
   /** Next sequence number for a new message in this conversation. */
   nextSeq: async (conversationId: string): Promise<number> => {
     const max = await TutorMessage.max('seq', { where: { conversationId } });

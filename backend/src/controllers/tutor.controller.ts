@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import { tutorConversationRepository } from '../repositories/tutorConversations.repository.js';
@@ -94,18 +95,39 @@ export const sendMessage = asyncHandler(async (req: AuthRequest, res: Response) 
     content,
   });
 
-  await runTutorAgentTurn(conversationId, courseId);
+  const result = await runTutorAgentTurn(conversationId, courseId);
 
-  // The agent loop persists its own final message(s) (text answer, or the
-  // ask_student question) — re-read the just-created assistant message so
-  // the response returns the real persisted row (with its id/seq), not a
-  // synthetic one built from runTutorAgentTurn's return value alone.
-  const allMessages = await tutorMessageRepository.findAllByConversation(conversationId);
-  const assistantMessage = allMessages[allMessages.length - 1]!;
+  // runTutorAgentTurn returns the id of the exact row it persisted for this
+  // turn's answer — fetch precisely that row rather than assuming "the last
+  // message in the conversation" is this request's own (that assumption
+  // breaks under a concurrent double-submit racing tutorMessageRepository's
+  // non-atomic nextSeq). messageId is only null in the rare case where
+  // persisting the answer itself failed (e.g. a DB blip); there is genuinely
+  // no row to fetch then, so the response is built directly from the
+  // orchestrator's returned content instead.
+  const assistantMessageRow = result.messageId
+    ? await tutorMessageRepository.findById(result.messageId)
+    : null;
+
+  const assistantMessage = assistantMessageRow
+    ? serializeTutorMessage(assistantMessageRow)
+    : {
+        id: randomUUID(),
+        conversationId,
+        seq: -1,
+        role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+        type: TUTOR_MESSAGE_TYPES.TEXT,
+        content: result.content,
+        toolCalls: null,
+        toolResult: null,
+        chart: null,
+        sources: result.sources,
+        createdAt: new Date(),
+      };
 
   return ok(
     res,
-    { userMessage: serializeTutorMessage(userMessage), assistantMessage: serializeTutorMessage(assistantMessage) },
+    { userMessage: serializeTutorMessage(userMessage), assistantMessage },
     'Message sent',
     201,
   );

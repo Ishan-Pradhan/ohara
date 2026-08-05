@@ -15,6 +15,8 @@ const { documentRepository } = await import('../../src/repositories/documents.re
 const { documentChunkRepository } = await import(
   '../../src/repositories/documentChunks.repository.js'
 );
+const { moduleRepository } = await import('../../src/repositories/modules.repository.js');
+const { lessonRepository } = await import('../../src/repositories/lessons.repository.js');
 const { tutorConversationRepository } = await import(
   '../../src/repositories/tutorConversations.repository.js'
 );
@@ -90,6 +92,12 @@ describe('runTutorAgentTurn', () => {
     expect(result.content).toBe('Answer');
     expect(result.sources).toBeNull();
     expect(runAgentTurn).toHaveBeenCalledTimes(1);
+
+    // Finding 1 regression: the returned messageId must identify the actual
+    // persisted row for this answer, not just describe its content.
+    expect(result.messageId).toBeTruthy();
+    const persisted = await tutorMessageRepository.findById(result.messageId!);
+    expect(persisted?.content).toBe('Answer');
   });
 
   it('executes a tool call, feeds the result back, and returns the eventual text answer', async () => {
@@ -114,6 +122,58 @@ describe('runTutorAgentTurn', () => {
     expect(messages.some((m) => m.type === 'tool_call')).toBe(true);
     expect(messages.some((m) => m.type === 'tool_result')).toBe(true);
     expect(runAgentTurn).toHaveBeenCalledTimes(2);
+
+    // Finding 1 regression: messageId must point at the row actually holding
+    // this answer's content, not merely "whatever's last in the conversation".
+    expect(result.messageId).toBeTruthy();
+    const persisted = messages.find((m) => m.id === result.messageId);
+    expect(persisted?.content).toBe('Grounded answer');
+  });
+
+  it('accumulates and dedupes sources across multiple grounding tool calls in one turn', async () => {
+    // Finding 2 regression: a model that calls a grounding tool more than
+    // once in a single turn (e.g. two get_lesson pulls before synthesizing a
+    // combined answer) must have EVERY call's sources attached to the final
+    // answer, deduped by documentId — not just the last call's (previously
+    // `lastToolSources = result.sources` was last-write-wins).
+    const course = await createCourse();
+    const module = await moduleRepository.create({ courseId: course.id, title: 'Module 1', orderIndex: 0 });
+    const lessonOne = await lessonRepository.create({
+      moduleId: module.id,
+      title: 'Lesson One',
+      content: 'Content of lesson one.',
+      keyTopics: ['topic-a'],
+      orderIndex: 0,
+    });
+    const lessonTwo = await lessonRepository.create({
+      moduleId: module.id,
+      title: 'Lesson Two',
+      content: 'Content of lesson two.',
+      keyTopics: ['topic-b'],
+      orderIndex: 1,
+    });
+    const conversationId = await seedConversationWithQuestion(course.id, 'Compare lesson one and two');
+
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({
+        type: 'tool_calls',
+        calls: [
+          { id: 'call_1', name: 'get_lesson', arguments: JSON.stringify({ lessonId: lessonOne.id }) },
+          { id: 'call_2', name: 'get_lesson', arguments: JSON.stringify({ lessonId: lessonTwo.id }) },
+          // Same lessonId as call_1 again, in the same turn — must not
+          // produce a duplicate source entry.
+          { id: 'call_3', name: 'get_lesson', arguments: JSON.stringify({ lessonId: lessonOne.id }) },
+        ],
+      })
+      .mockResolvedValueOnce({ type: 'text', content: 'Comparison answer' });
+
+    const result = await runTutorAgentTurn(conversationId, course.id);
+
+    expect(result.content).toBe('Comparison answer');
+    expect(result.sources).not.toBeNull();
+    expect(result.sources).toHaveLength(2);
+    const documentIds = result.sources!.map((s) => s.documentId).sort();
+    expect(documentIds).toEqual([lessonOne.id, lessonTwo.id].sort());
   });
 
   it('ask_student pauses the loop and sets the conversation to awaiting_student', async () => {
@@ -129,6 +189,7 @@ describe('runTutorAgentTurn', () => {
 
     expect(result.content).toBe('Which chapter?');
     expect(result.sources).toBeNull();
+    expect(result.messageId).toBeTruthy();
 
     const updated = await tutorConversationRepository.findById(conversationId);
     expect(updated?.status).toBe('awaiting_student');
@@ -217,6 +278,101 @@ describe('runTutorAgentTurn', () => {
         expect(entry.toolCalls && entry.toolCalls.length > 0).toBe(true);
       }
     }
+  });
+
+  it('replays an orphaned tool_call row (missing one of its tool_result pairs) as a valid, alternating history', async () => {
+    // Regression test for Finding 3: if the tool_result write for one call
+    // in a multi-call tool_call row fails after the tool_call row itself was
+    // already persisted, the DB is left with a tool_call row (2 toolCalls)
+    // paired with only 1 tool_result row. Replaying that as-is would produce
+    // an assistant message with toolCalls immediately followed by a plain
+    // assistant message — an invalid shape for Groq's tool-calling API that
+    // would permanently break the conversation into fallback-only mode.
+    // toAgentHistory must synthesize a placeholder result for the missing
+    // call id so every replay stays a valid alternating shape.
+    const course = await createCourse();
+    const student = await createStudentUser();
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: student.id,
+      title: 'Orphaned tool_call regression',
+    });
+
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: 'What do lesson one and two cover?',
+    });
+    // The tool_call row commits with two calls...
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 1,
+      role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TOOL_CALL,
+      content: null,
+      toolCalls: [
+        { id: 'call_1', name: 'get_lesson', arguments: '{"lessonId":"11111111-1111-1111-1111-111111111111"}' },
+        { id: 'call_2', name: 'get_lesson', arguments: '{"lessonId":"22222222-2222-2222-2222-222222222222"}' },
+      ],
+    });
+    // ...but only call_1's tool_result write succeeded before the DB blip —
+    // call_2's tool_result row was never persisted.
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 2,
+      role: TUTOR_MESSAGE_ROLES.TOOL,
+      type: TUTOR_MESSAGE_TYPES.TOOL_RESULT,
+      content: null,
+      toolResult: { toolCallId: 'call_1', content: '[Lesson: "Lesson One"]\nContent of lesson one.' },
+    });
+    // The outer catch caught the thrown write and fell back to stage-1,
+    // whose answer was persisted as a plain text row right after.
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 3,
+      role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: "There's no course material available yet to answer this question.",
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 4,
+      role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT,
+      content: 'Okay, what about lesson two specifically?',
+    });
+
+    let capturedHistory: { role: string; content: unknown; toolCalls?: { id: string }[] }[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce((history) => {
+      capturedHistory = history as typeof capturedHistory;
+      return Promise.resolve({ type: 'text', content: 'Answer about lesson two' });
+    });
+
+    const result = await runTutorAgentTurn(conversation.id, course.id);
+
+    expect(result.content).toBe('Answer about lesson two');
+    // runAgentTurn must have been called at all — if the replayed history
+    // were invalid and the mock threw, the outer catch would have swallowed
+    // it and fallen back to stage-1 instead of resolving 'Answer about lesson two'.
+    expect(runAgentTurn).toHaveBeenCalledTimes(1);
+
+    // The tool_call entry (2 toolCalls) must be immediately followed by
+    // exactly 2 tool-role entries — one real, one synthesized placeholder —
+    // never by a non-tool entry.
+    const toolCallIndex = capturedHistory.findIndex(
+      (entry) => entry.role === 'assistant' && (entry.toolCalls?.length ?? 0) > 0,
+    );
+    expect(toolCallIndex).toBeGreaterThanOrEqual(0);
+    const toolCallIds = capturedHistory[toolCallIndex]!.toolCalls!.map((c) => c.id);
+    expect(toolCallIds).toEqual(['call_1', 'call_2']);
+
+    const followingEntries = capturedHistory.slice(toolCallIndex + 1, toolCallIndex + 3);
+    expect(followingEntries.every((entry) => entry.role === 'tool')).toBe(true);
+    const followingContents = followingEntries.map((entry) => entry.content);
+    expect(followingContents).toContain('[Lesson: "Lesson One"]\nContent of lesson one.');
+    expect(followingContents).toContain('Tool result unavailable due to a persistence error.');
   });
 
   it('falls back to the stage-1 grounded answer when the loop hits AGENT_MAX_ITERATIONS', async () => {

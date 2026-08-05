@@ -46,6 +46,14 @@ export const useSendMessage = (courseId: string, conversationId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (content: string) => sendMessage(courseId, conversationId, content),
-    onSuccess: () => qc.invalidateQueries({ queryKey: messagesKey(courseId, conversationId) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: messagesKey(courseId, conversationId) });
+      // A message can flip the conversation's status (ask_student sets
+      // awaiting_student; a student reply resumes it back to active) — the
+      // "Waiting for your reply" badge in TutorPanel.tsx reads status from
+      // this list query, so it must be invalidated here too, same as
+      // useCreateConversation above.
+      qc.invalidateQueries({ queryKey: conversationsKey(courseId) });
+    },
   });
 };
