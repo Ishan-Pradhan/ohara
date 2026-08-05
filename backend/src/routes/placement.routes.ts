@@ -9,6 +9,8 @@ import {
   listEnrollmentsSchema,
   transferClassMembershipSchema,
   setClassMembershipOutcomeSchema,
+  getSectionRosterSchema,
+  bulkPromoteSectionSchema,
 } from '../validations/placement.validation.js';
 import {
   createClassMembership,
@@ -17,6 +19,8 @@ import {
   listEnrollments,
   transferClassMembership,
   setClassMembershipOutcome,
+  getSectionRoster,
+  bulkPromoteSection,
 } from '../controllers/placement.controller.js';
 
 const router = Router();
@@ -41,5 +45,13 @@ router
 router
   .route('/class-memberships/:id/outcome')
   .post(validate(setClassMembershipOutcomeSchema), setClassMembershipOutcome);
+
+router
+  .route('/sections/:sectionId/roster')
+  .get(validate(getSectionRosterSchema), getSectionRoster);
+
+router
+  .route('/sections/:sectionId/promote')
+  .post(validate(bulkPromoteSectionSchema), bulkPromoteSection);
 
 export default router;

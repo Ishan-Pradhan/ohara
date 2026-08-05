@@ -16,6 +16,7 @@ import {
   serializeClassMembership,
   serializeEnrollment,
 } from '../serializers/placement.serializer.js';
+import { serializeRosterStudent } from '../serializers/user.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -296,5 +297,62 @@ export const setClassMembershipOutcome = asyncHandler(
     const updated = await applyOutcome(membership, outcome, targetSectionId);
     const message = outcome === 'graduated' ? 'Student graduated' : 'Outcome recorded';
     return ok(res, serializeClassMembership(updated), message, 201);
+  },
+);
+
+// ── BULK PROMOTION ────────────────────────────────────────────────────────
+
+export const getSectionRoster = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { sectionId } = req.validated?.params as { sectionId: string };
+
+    const memberships = await classMembershipRepository.findBySectionWithStudents(sectionId);
+    const roster = memberships
+      .filter((m) => m.student)
+      .map((m) => ({ membershipId: m.id, student: serializeRosterStudent(m.student!) }));
+
+    return ok(res, roster, 'Roster retrieved');
+  },
+);
+
+interface BulkPromoteOverride {
+  studentId: string;
+  outcome: 'retained' | 'graduated';
+  targetSectionId?: string;
+}
+
+export const bulkPromoteSection = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { sectionId } = req.validated?.params as { sectionId: string };
+    const { defaultTargetSectionId, overrides } = req.validated?.body as {
+      defaultTargetSectionId: string;
+      overrides: BulkPromoteOverride[];
+    };
+
+    const memberships = await classMembershipRepository.findBySectionWithStudents(sectionId);
+    const overrideByStudent = new Map(overrides.map((o) => [o.studentId, o]));
+
+    const results = await Promise.all(
+      memberships.map(async (membership) => {
+        const override = overrideByStudent.get(membership.studentId);
+        const outcome = override?.outcome ?? 'promoted';
+        const targetSectionId =
+          outcome === 'graduated' ? undefined : (override?.targetSectionId ?? defaultTargetSectionId);
+
+        try {
+          const updated = await applyOutcome(membership, outcome, targetSectionId);
+          return {
+            studentId: membership.studentId,
+            status: 'ok' as const,
+            membership: serializeClassMembership(updated),
+          };
+        } catch (error) {
+          const message = error instanceof ApiError ? error.message : 'Unexpected error';
+          return { studentId: membership.studentId, status: 'error' as const, error: message };
+        }
+      }),
+    );
+
+    return ok(res, results, 'Bulk promotion complete');
   },
 );

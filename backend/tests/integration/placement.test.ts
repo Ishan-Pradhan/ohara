@@ -10,6 +10,7 @@ const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { cookiesFrom } = await import('../helpers/auth.js');
 const { User } = await import('../../src/models/users.model.js');
+const { ClassMembership } = await import('../../src/models/classMemberships.model.js');
 const {
   createSection,
   createStudentUser,
@@ -388,5 +389,136 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
     const enrolledCourseIds = enrollments.body.data.map((e: { courseId: string }) => e.courseId);
     expect(enrolledCourseIds).toContain(compulsoryCourse.id);
     expect(enrolledCourseIds).not.toContain(electiveCourse.id);
+  });
+});
+
+describe('POST /admin/sections/:sectionId/promote and GET /admin/sections/:sectionId/roster', () => {
+  it('bulk-promotes a section, applying an override for one student', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const oldYear = await createAcademicYear();
+    const newYear = await createAcademicYear();
+    const section = await createSection({ classId: classA.id, academicYearId: oldYear.id });
+    const nextSection = await createSection({
+      classId: classB.id,
+      academicYearId: newYear.id,
+      name: 'B',
+    });
+    // A same-class ("retained") target section — must be a *different*
+    // academic year from `section`, since ClassMemberships has a unique
+    // (studentId, academicYearId) index: promote() always inserts the new
+    // membership row before closing out the old one, so a retained target
+    // sharing the student's current academic year would collide with their
+    // own still-open row.
+    const retainedSection = await createSection({
+      classId: classA.id,
+      academicYearId: newYear.id,
+      name: 'C',
+    });
+    const batch = await createBatch({ programId: program.id });
+    const studentA = await createStudentUser();
+    const studentB = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: studentA.id, sectionId: section.id, batchId: batch.id });
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: studentB.id, sectionId: section.id, batchId: batch.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/sections/${section.id}/promote`)
+      .set('Cookie', cookies)
+      .send({
+        defaultTargetSectionId: nextSection.id,
+        overrides: [
+          { studentId: studentB.id, outcome: 'retained', targetSectionId: retainedSection.id },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    const byStudent = Object.fromEntries(
+      res.body.data.map((r: { studentId: string }) => [r.studentId, r]),
+    );
+    expect(byStudent[studentA.id].status).toBe('ok');
+    expect(byStudent[studentA.id].membership.sectionId).toBe(nextSection.id);
+    expect(byStudent[studentB.id].status).toBe('ok');
+    expect(byStudent[studentB.id].membership.sectionId).toBe(retainedSection.id);
+  });
+
+  it('reports a per-student failure without aborting the rest of the batch', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const oldYear = await createAcademicYear();
+    const newYear = await createAcademicYear();
+    const section = await createSection({ classId: classA.id, academicYearId: oldYear.id });
+    const nextSection = await createSection({
+      classId: classB.id,
+      academicYearId: newYear.id,
+      name: 'B',
+    });
+    const batch = await createBatch({ programId: program.id });
+    const alreadyPromotedStudent = await createStudentUser();
+    const stillCurrentStudent = await createStudentUser();
+
+    const alreadyPromotedPlacement = await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: alreadyPromotedStudent.id, sectionId: section.id, batchId: batch.id });
+    const stillCurrentPlacement = await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: stillCurrentStudent.id, sectionId: section.id, batchId: batch.id });
+
+    // Simulate a stale-roster race: this membership row already has
+    // promotedToId set (as if promoted via the single-student route a moment
+    // ago) while its outcome column is still 'enrolled', so it's still
+    // returned by findBySectionWithStudents. applyOutcome's "already
+    // advanced" guard must catch it per-student without aborting the batch.
+    await ClassMembership.update(
+      { promotedToId: stillCurrentPlacement.body.data.id },
+      { where: { id: alreadyPromotedPlacement.body.data.id } },
+    );
+
+    const res = await request(app)
+      .post(`/api/v1/admin/sections/${section.id}/promote`)
+      .set('Cookie', cookies)
+      .send({ defaultTargetSectionId: nextSection.id, overrides: [] });
+
+    expect(res.status).toBe(200);
+    const byStudent = Object.fromEntries(
+      res.body.data.map((r: { studentId: string }) => [r.studentId, r]),
+    );
+    expect(byStudent[alreadyPromotedStudent.id].status).toBe('error');
+    expect(byStudent[stillCurrentStudent.id].status).toBe('ok');
+  });
+
+  it('GET /admin/sections/:sectionId/roster returns the active roster', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
+
+    const res = await request(app)
+      .get(`/api/v1/admin/sections/${section.id}/roster`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data[0]).toHaveProperty('membershipId');
+    expect(res.body.data[0].student).toHaveProperty('name');
   });
 });

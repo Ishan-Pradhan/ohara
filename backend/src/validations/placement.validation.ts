@@ -211,3 +211,83 @@ registry.registerPath({
     404: { description: 'Class membership or target section not found' },
   },
 });
+
+// ── BULK PROMOTION ────────────────────────────────────────────────────────
+
+const sectionIdParams = { params: z.object({ sectionId: z.uuid() }) };
+
+export const getSectionRosterSchema = sectionIdParams;
+
+const rosterStudentSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+  status: z.string(),
+  avatarUrl: z.string().nullable(),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/sections/{sectionId}/roster',
+  tags: ['Placement'],
+  request: { params: getSectionRosterSchema.params },
+  responses: {
+    200: {
+      description: "The section's active membership roster",
+      content: {
+        'application/json': {
+          schema: envelope(
+            z.array(z.object({ membershipId: z.uuid(), student: rosterStudentSchema })),
+          ),
+        },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+  },
+});
+
+export const bulkPromoteSectionSchema = {
+  params: sectionIdParams.params,
+  body: z.object({
+    defaultTargetSectionId: z.uuid(),
+    overrides: z
+      .array(
+        z.object({
+          studentId: z.uuid(),
+          outcome: z.enum(['retained', 'graduated']),
+          targetSectionId: z.uuid().optional(),
+        }),
+      )
+      .default([]),
+  }),
+};
+
+const bulkPromoteResultSchema = z.object({
+  studentId: z.uuid(),
+  status: z.enum(['ok', 'error']),
+  membership: classMembershipSchema.optional(),
+  error: z.string().optional(),
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/sections/{sectionId}/promote',
+  tags: ['Placement'],
+  request: {
+    params: bulkPromoteSectionSchema.params,
+    body: { content: { 'application/json': { schema: bulkPromoteSectionSchema.body } } },
+  },
+  responses: {
+    200: {
+      description:
+        'One result per student in the section: every student not named in `overrides` is promoted to defaultTargetSectionId; overridden students get their specified outcome instead. Per-student failures (e.g. a student already promoted since the page loaded) are reported individually and do not abort the rest of the batch.',
+      content: {
+        'application/json': { schema: envelope(z.array(bulkPromoteResultSchema)) },
+      },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Section not found' },
+  },
+});
