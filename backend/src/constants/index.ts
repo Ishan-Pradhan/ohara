@@ -63,3 +63,26 @@ export const EMBEDDING_DIMENSIONS = 384;
 // Chunking is tuned to the embedding model above, not a deployment concern.
 export const CHUNK_SIZE_CHARS = 1000;
 export const CHUNK_OVERLAP_CHARS = 100;
+
+export const TUTOR_CONVERSATION_STATUSES = {
+  ACTIVE: 'active',
+  AWAITING_STUDENT: 'awaiting_student',
+  CLOSED: 'closed',
+} as const;
+
+export const TUTOR_MESSAGE_ROLES = {
+  USER: 'user',
+  ASSISTANT: 'assistant',
+  TOOL: 'tool',
+} as const;
+
+export const TUTOR_MESSAGE_TYPES = {
+  TEXT: 'text',
+  TOOL_CALL: 'tool_call',
+  TOOL_RESULT: 'tool_result',
+  CHART: 'chart',
+} as const;
+
+// How many chunks to retrieve per tutor question — a retrieval-quality
+// tuning knob, not a deployment concern, same reasoning as CHUNK_SIZE_CHARS.
+export const TUTOR_RETRIEVAL_K = 5;
