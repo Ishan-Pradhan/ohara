@@ -43,3 +43,25 @@ export const authLimiter = rateLimit({
     });
   },
 });
+
+// Stricter limiter for tutor messages (NFR-3): each request costs a real
+// embedding call + LLM call. Skipped under test for the same reason
+// authLimiter is.
+export const tutorLimiter = rateLimit({
+  windowMs: env.TUTOR_RATE_LIMIT_WINDOW_MS,
+  max: env.TUTOR_RATE_LIMIT_MAX,
+
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  skip: () => env.NODE_ENV === 'test',
+
+  handler: (_req, res) => {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many tutor messages, please try again in a while.',
+      data: null,
+      errors: null,
+    });
+  },
+});

@@ -59,6 +59,11 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(20),
 
+  // Stricter limiter for tutor messages (NFR-3): each one costs a real LLM
+  // call. Skipped entirely under NODE_ENV=test, same as AUTH_RATE_LIMIT_*.
+  TUTOR_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  TUTOR_RATE_LIMIT_MAX: z.coerce.number().default(30),
+
   // Seed data (sequelize-cli seeders read these from process.env directly)
   SEED_ADMIN_EMAIL: z.email().default('admin@ohara.local'),
   SEED_ADMIN_PASSWORD: z.string().min(6).default('changeme123'),
