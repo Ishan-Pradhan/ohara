@@ -15,6 +15,8 @@ import {
   TUTOR_CONVERSATION_STATUSES,
   TUTOR_MESSAGE_ROLES,
   TUTOR_MESSAGE_TYPES,
+  DEFAULT_CONVERSATION_TITLE,
+  AUTO_TITLE_MAX_LENGTH,
 } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -46,12 +48,25 @@ export const listConversations = asyncHandler(async (req: AuthRequest, res: Resp
 
 export const createConversation = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { courseId } = req.validated?.params as { courseId: string };
-  const { title } = req.validated?.body as { title: string };
+  const { title } = req.validated?.body as { title?: string };
   const studentId = req.user!.id;
 
-  const conversation = await tutorConversationRepository.create({ courseId, studentId, title });
+  const conversation = await tutorConversationRepository.create({
+    courseId,
+    studentId,
+    title: title ?? DEFAULT_CONVERSATION_TITLE,
+  });
   return ok(res, serializeTutorConversation(conversation), 'Conversation created', 201);
 });
+
+/** A single line derived from the student's first message — same idea as
+ * ChatGPT auto-titling a new chat, without a second LLM call for it. */
+const deriveTitleFromMessage = (content: string): string => {
+  const singleLine = content.replace(/\s+/g, ' ').trim();
+  return singleLine.length > AUTO_TITLE_MAX_LENGTH
+    ? `${singleLine.slice(0, AUTO_TITLE_MAX_LENGTH).trimEnd()}…`
+    : singleLine;
+};
 
 const findOwnedConversation = async (conversationId: string, studentId: string, courseId: string) => {
   const conversation = await tutorConversationRepository.findById(conversationId);
@@ -87,6 +102,13 @@ export const sendMessage = asyncHandler(async (req: AuthRequest, res: Response) 
   }
 
   const userSeq = await tutorMessageRepository.nextSeq(conversationId);
+  // seq 0 is always this conversation's very first message — retitle it from
+  // that message rather than leaving the "New conversation" placeholder, the
+  // same moment ChatGPT titles a new chat from your first prompt.
+  if (userSeq === 0 && conversation.title === DEFAULT_CONVERSATION_TITLE) {
+    await tutorConversationRepository.updateTitle(conversationId, deriveTitleFromMessage(content));
+  }
+
   const userMessage = await tutorMessageRepository.create({
     conversationId,
     seq: userSeq,

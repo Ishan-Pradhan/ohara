@@ -30,6 +30,7 @@ export const serializeStudentPlacement = (
     id: enrollment.course?.id,
     title: enrollment.course?.title,
     code: enrollment.course?.code,
+    isPublished: enrollment.course?.isPublished ?? false,
     teachers: (enrollment.course?.teachers ?? []).map((teacher) => ({
       id: teacher.id,
       name: teacher.name,

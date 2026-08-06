@@ -25,6 +25,7 @@ const placementResponseSchema = registry.register(
         id: z.uuid(),
         title: z.string(),
         code: z.string(),
+        isPublished: z.boolean(),
         teachers: z.array(z.object({ id: z.uuid(), name: z.string() })),
       }),
     ),

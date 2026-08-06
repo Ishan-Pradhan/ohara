@@ -211,6 +211,43 @@ describe('Tutor endpoints', () => {
     });
   });
 
+  it('auto-titles a new conversation from the student\'s first message, ChatGPT-style', async () => {
+    const course = await createCourse();
+    const enrolledStudentCookie = await signInEnrolledStudent('titler@example.com', course.id);
+
+    // No title given — starts as the placeholder.
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({});
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.title).toBe('New conversation');
+    const conversationId = createRes.body.data.id;
+
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Answer' });
+    await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'What is the capital of France?' });
+
+    const listRes = await request(app)
+      .get(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie);
+    expect(listRes.body.data[0].title).toBe('What is the capital of France?');
+
+    // A second message must not retitle it again.
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Answer 2' });
+    await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'And Germany?' });
+
+    const listRes2 = await request(app)
+      .get(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie);
+    expect(listRes2.body.data[0].title).toBe('What is the capital of France?');
+  });
+
   it('returns a "no material" response when the course has no ready documents', async () => {
     const emptyCourse = await createCourse();
     const enrolledStudentCookie = await signInEnrolledStudent(
@@ -393,14 +430,14 @@ describe('Tutor endpoints', () => {
     expect(res.status).toBe(404);
   });
 
-  it('GET /courses/:courseId/outline returns modules/lessons without full lesson content', async () => {
+  it('GET /courses/:courseId/outline returns full lesson content for reading, not just titles', async () => {
     const course = await createCourse();
     await courseRepository.setPublished(course.id, true);
     const module = await moduleRepository.create({ courseId: course.id, title: 'Module 1', orderIndex: 0 });
     await lessonRepository.create({
       moduleId: module.id,
       title: 'Lesson 1',
-      content: 'The full lesson body, which the outline must not expose.',
+      content: 'The full lesson body, which a student reads directly on the course page.',
       keyTopics: ['photosynthesis'],
       orderIndex: 0,
     });
@@ -410,7 +447,9 @@ describe('Tutor endpoints', () => {
       .get(`/api/v1/courses/${course.id}/outline`)
       .set('Cookie', enrolledStudentCookie);
     expect(res.status).toBe(200);
-    expect(res.body.data[0].lessons[0]).not.toHaveProperty('content');
+    expect(res.body.data[0].lessons[0].content).toBe(
+      'The full lesson body, which a student reads directly on the course page.',
+    );
     expect(res.body.data[0].lessons[0]).toHaveProperty('keyTopics');
   });
 

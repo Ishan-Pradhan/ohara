@@ -20,13 +20,15 @@ export const serializeModule = (m: Module) => ({
   lessons: (m.lessons ?? []).map(serializeLesson),
 });
 
-/** Outline view for the student-facing tutor page — title + keyTopics only,
- * deliberately omitting the full lesson `content`. The outline is a table
- * of contents; the tutor chat is where the material itself gets discussed. */
+/** Outline view for the student-facing course page — the same shape as the
+ * teacher's serializeLesson (students read lesson content directly, not
+ * only through the tutor chat), just without createdAt (irrelevant to a
+ * student's reading view). */
 export const serializeLessonOutline = (l: Lesson) => ({
   id: l.id,
   moduleId: l.moduleId,
   title: l.title,
+  content: l.content,
   keyTopics: l.keyTopics,
   orderIndex: l.orderIndex,
 });

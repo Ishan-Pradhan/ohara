@@ -31,4 +31,10 @@ export const tutorConversationRepository = {
     if (!conversation) return null;
     return await conversation.update({ status });
   },
+
+  updateTitle: async (id: string, title: string): Promise<TutorConversation | null> => {
+    const conversation = await TutorConversation.findByPk(id);
+    if (!conversation) return null;
+    return await conversation.update({ title });
+  },
 };

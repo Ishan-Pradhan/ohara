@@ -97,6 +97,7 @@ describe('GET /students/:studentId/placement', () => {
     expect(res.body.data.section.id).toBe(section.id);
     expect(res.body.data.courses).toHaveLength(1);
     expect(res.body.data.courses[0].title).toBe('Physics');
+    expect(res.body.data.courses[0].isPublished).toBe(false);
   });
 
   it('allows a student to view their own placement', async () => {

@@ -4,9 +4,12 @@ export const courseIdParamSchema = {
   params: z.object({ courseId: z.uuid() }),
 };
 
+// title is optional — a new conversation starts as "New conversation" and is
+// retitled from the student's first message (ChatGPT-style), so the student
+// never has to name it themselves.
 export const createConversationSchema = {
   params: z.object({ courseId: z.uuid() }),
-  body: z.object({ title: z.string().min(1, 'Title is required') }),
+  body: z.object({ title: z.string().min(1).optional() }),
 };
 
 export const listMessagesSchema = {
