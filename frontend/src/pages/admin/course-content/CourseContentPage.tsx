@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { BarChart3, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, LayoutGrid } from 'lucide-react';
+import { AlertTriangle, BarChart3, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, LayoutGrid } from 'lucide-react';
 
 import {
   useClasses,
@@ -23,6 +23,7 @@ import { QuizzesSection } from './QuizzesSection.js';
 import { GradebookSection } from './GradebookSection.js';
 import { AttendanceSection } from './AttendanceSection.js';
 import { ProjectsSection } from './ProjectsSection.js';
+import { AtRiskSection } from './AtRiskSection.js';
 
 export const CourseContentPage = () => {
   const { courseId = '' } = useParams();
@@ -145,6 +146,10 @@ export const CourseContentPage = () => {
             <LayoutGrid className="size-4" aria-hidden />
             Projects
           </TabsTrigger>
+          <TabsTrigger value="at-risk">
+            <AlertTriangle className="size-4" aria-hidden />
+            At-Risk
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="content">
@@ -172,6 +177,10 @@ export const CourseContentPage = () => {
 
         <TabsContent value="projects">
           <ProjectsSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="at-risk">
+          <AtRiskSection courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>

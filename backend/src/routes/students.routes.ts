@@ -5,7 +5,9 @@ import {
   getStudentPlacementSchema,
   getStudentElectivesSchema,
 } from '../validations/students.validation.js';
+import { getReportCardSchema } from '../validations/reportCard.validation.js';
 import { getStudentPlacement, getStudentElectives } from '../controllers/students.controller.js';
+import { getReportCard } from '../controllers/reportCard.controller.js';
 
 const router = Router();
 
@@ -14,5 +16,6 @@ router.use(verifyJWT);
 
 router.get('/:studentId/placement', validate(getStudentPlacementSchema), getStudentPlacement);
 router.get('/:studentId/electives', validate(getStudentElectivesSchema), getStudentElectives);
+router.get('/:studentId/report-card', validate(getReportCardSchema), getReportCard);
 
 export default router;

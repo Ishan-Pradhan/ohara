@@ -31,6 +31,7 @@ import quizzesRoutes from './routes/quizzes.routes.js';
 import gradebookRoutes from './routes/gradebook.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
 import kanbanRoutes from './routes/kanban.routes.js';
+import atRiskRoutes from './routes/atRisk.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import eventsRoutes from './routes/events.routes.js';
@@ -72,6 +73,7 @@ app.use('/api/v1/courses', quizzesRoutes);
 app.use('/api/v1/courses', gradebookRoutes);
 app.use('/api/v1/courses', attendanceRoutes);
 app.use('/api/v1/courses', kanbanRoutes);
+app.use('/api/v1/courses', atRiskRoutes);
 // electivesRoutes applies a blanket router.use(verifyJWT, requireRole(STUDENT))
 // to everything mounted here — every other /api/v1/courses router (teacher/
 // admin routes included) must be registered above this line, or their

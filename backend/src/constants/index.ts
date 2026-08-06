@@ -140,3 +140,11 @@ export const QUESTION_TYPES = {
   MCQ: 'mcq',
   SHORT_ANSWER: 'short_answer',
 } as const;
+
+// FR-41 at-risk thresholds. Code constants, not admin-configurable yet
+// (FR-41 says "configurable" — deliberately deferred; wiring these through
+// the Institution Settings UI is a follow-up, not done in this pass). A
+// student is flagged if ANY threshold is crossed.
+export const AT_RISK_MIN_AVERAGE_PERCENT = 50;
+export const AT_RISK_MIN_ATTENDANCE_PERCENT = 75;
+export const AT_RISK_MAX_MISSING_SUBMISSIONS = 2;

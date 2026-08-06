@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, GraduationCap, ListPlus, MapPin, User } from 'lucide-react';
+import { BookOpen, Download, GraduationCap, ListPlus, MapPin, User } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import {
@@ -30,7 +30,22 @@ export const StudentCoursesPage = () => {
 
   return (
     <AppShell>
-      <PageHeader title="My Courses" description={placementLine ?? 'Courses you’re enrolled in'} />
+      <PageHeader
+        title="My Courses"
+        description={placementLine ?? 'Courses you’re enrolled in'}
+        actions={
+          placement ? (
+            <a
+              href={`/api/v1/students/${studentId}/report-card`}
+              download
+              className="inline-flex items-center justify-center gap-2 rounded-control border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover hover:border-border-strong active:scale-[0.98]"
+            >
+              <Download className="size-4" aria-hidden />
+              Report card
+            </a>
+          ) : undefined
+        }
+      />
 
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

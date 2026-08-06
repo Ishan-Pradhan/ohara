@@ -19,6 +19,8 @@ import '../validations/gradebook.validation.js';
 import '../validations/attendance.validation.js';
 import '../validations/events.validation.js';
 import '../validations/kanban.validation.js';
+import '../validations/atRisk.validation.js';
+import '../validations/reportCard.validation.js';
 import '../validations/notifications.validation.js';
 import '../validations/dashboard.validation.js';
 
@@ -63,6 +65,8 @@ export const swaggerSpec = generator.generateDocument({
     { name: 'Attendance', description: 'Attendance sessions, present/absent/late marking, and per-student percentage' },
     { name: 'Events', description: 'Scoped events (global/program/class/section/course) and each user’s relevant upcoming events' },
     { name: 'Projects', description: 'Course Kanban boards — projects, columns, and tasks' },
+    { name: 'At-Risk Analytics', description: 'Per-student risk metrics and AI-generated explanations' },
+    { name: 'Report Cards', description: 'Per-term PDF report cards / marksheets' },
     { name: 'Notifications', description: 'In-app notification feed' },
     { name: 'Dashboard', description: 'Per-role landing page aggregation' },
   ],

@@ -16,7 +16,7 @@ import { ApiError } from '../utils/ApiError.js';
 
 /** Gathers every input buildGradebook needs, then hands off to that pure
  * function — this is the only place that queries the DB for the gradebook. */
-const loadGradebook = async (courseId: string) => {
+export const loadGradebook = async (courseId: string) => {
   const [assignments, quizzes, roster] = await Promise.all([
     assignmentRepository.findAllByCourse(courseId),
     quizRepository.findAllByCourse(courseId, QUIZ_STATUS.PUBLISHED),
