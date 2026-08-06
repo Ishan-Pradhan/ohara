@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/Badge.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { SetupChecklist } from './SetupChecklist.js';
+import { StudentDashboardWidgets } from './student/StudentDashboardWidgets.js';
 
 const roleBadge = {
   admin: { label: 'Administrator', variant: 'primary' as const },
@@ -45,6 +46,8 @@ export const DashboardPage = () => {
 
           {user.role === 'admin' ? (
             <SetupChecklist />
+          ) : user.role === 'student' ? (
+            <StudentDashboardWidgets />
           ) : (
             <Card>
               <div className="flex items-start gap-4">

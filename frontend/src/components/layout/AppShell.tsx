@@ -16,6 +16,7 @@ import { useCurrentUser, useLogout } from '../../features/auth/useAuth.js';
 import { useInstitutionProfile } from '../../features/institution/useInstitution.js';
 import type { CurrentUser } from '../../schemas/auth.schema.js';
 import { Avatar } from '../ui/Avatar.js';
+import { NotificationBell } from './NotificationBell.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,22 +134,25 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <span className="hidden md:block" />
 
           {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-control p-1 pr-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-                <Avatar name={user.name} src={user.avatarUrl} size="sm" />
-                <span className="hidden text-sm font-medium text-fg sm:block">
-                  {user.name}
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => signOut()} destructive>
-                  <LogOut className="size-4" aria-hidden />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex items-center gap-1.5">
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-control p-1 pr-2.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                  <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                  <span className="hidden text-sm font-medium text-fg sm:block">
+                    {user.name}
+                  </span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => signOut()} destructive>
+                    <LogOut className="size-4" aria-hidden />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ) : null}
         </header>
 

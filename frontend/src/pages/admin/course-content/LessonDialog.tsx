@@ -114,8 +114,13 @@ export const LessonDialog = ({
           <Input id="title" {...field('title')} />
         </Field>
 
-        <Field label="Content" htmlFor="content" error={errors.content?.message}>
-          <Textarea id="content" rows={6} {...field('content')} />
+        <Field
+          label="Content"
+          htmlFor="content"
+          error={errors.content?.message}
+          hint="Markdown — headings, tables, and ```fenced code blocks``` all render on the lesson page."
+        >
+          <Textarea id="content" rows={10} {...field('content')} />
         </Field>
 
         <Field
