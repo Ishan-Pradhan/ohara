@@ -11,6 +11,7 @@ import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { SetupChecklist } from './SetupChecklist.js';
 import { StudentDashboardWidgets } from './student/StudentDashboardWidgets.js';
+import { EventsWidget } from './EventsWidget.js';
 
 const roleBadge = {
   admin: { label: 'Administrator', variant: 'primary' as const },
@@ -65,6 +66,10 @@ export const DashboardPage = () => {
               </div>
             </Card>
           )}
+
+          <div className="mt-6">
+            <EventsWidget />
+          </div>
         </>
       )}
     </AppShell>
