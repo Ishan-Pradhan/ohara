@@ -33,6 +33,9 @@ import { Notification } from '../models/notifications.model.js';
 import { AttendanceSession } from '../models/attendanceSessions.model.js';
 import { AttendanceRecord } from '../models/attendanceRecords.model.js';
 import { Event } from '../models/events.model.js';
+import { Project } from '../models/projects.model.js';
+import { BoardColumn } from '../models/boardColumns.model.js';
+import { Task } from '../models/tasks.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -80,5 +83,8 @@ export const sequelize = new Sequelize({
     AttendanceSession,
     AttendanceRecord,
     Event,
+    Project,
+    BoardColumn,
+    Task,
   ],
 });

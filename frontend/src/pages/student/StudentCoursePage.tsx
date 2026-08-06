@@ -7,6 +7,7 @@ import {
   ClipboardList,
   HelpCircle,
   Layers,
+  LayoutGrid,
   MessageCircle,
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ import { StudentAssignmentsSection } from './StudentAssignmentsSection.js';
 import { StudentQuizzesSection } from './StudentQuizzesSection.js';
 import { StudentGradesSection } from './StudentGradesSection.js';
 import { StudentAttendanceSection } from './StudentAttendanceSection.js';
+import { StudentProjectsSection } from './StudentProjectsSection.js';
 
 export const StudentCoursePage = () => {
   const { courseId = '' } = useParams();
@@ -75,6 +77,10 @@ export const StudentCoursePage = () => {
           <TabsTrigger value="attendance">
             <CalendarCheck className="size-4" aria-hidden />
             Attendance
+          </TabsTrigger>
+          <TabsTrigger value="projects">
+            <LayoutGrid className="size-4" aria-hidden />
+            Projects
           </TabsTrigger>
         </TabsList>
 
@@ -148,6 +154,10 @@ export const StudentCoursePage = () => {
 
         <TabsContent value="attendance">
           <StudentAttendanceSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="projects">
+          <StudentProjectsSection courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>
