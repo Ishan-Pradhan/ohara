@@ -26,7 +26,12 @@ import documentsRoutes from './routes/documents.routes.js';
 import courseContentRoutes from './routes/courseContent.routes.js';
 import tutorRoutes from './routes/tutor.routes.js';
 import electivesRoutes from './routes/electives.routes.js';
+import assignmentsRoutes from './routes/assignments.routes.js';
+import quizzesRoutes from './routes/quizzes.routes.js';
+import gradebookRoutes from './routes/gradebook.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
+import notificationsRoutes from './routes/notifications.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
 import healthRoutes from './routes/health.routes.js';
 
 export const app = express();
@@ -59,8 +64,17 @@ app.use('/api/v1/students', studentsRoutes);
 app.use('/api/v1/courses', documentsRoutes);
 app.use('/api/v1/courses', courseContentRoutes);
 app.use('/api/v1/courses', tutorRoutes);
+app.use('/api/v1/courses', assignmentsRoutes);
+app.use('/api/v1/courses', quizzesRoutes);
+app.use('/api/v1/courses', gradebookRoutes);
+// electivesRoutes applies a blanket router.use(verifyJWT, requireRole(STUDENT))
+// to everything mounted here — every other /api/v1/courses router (teacher/
+// admin routes included) must be registered above this line, or their
+// requests get rejected by that student-only gate before ever reaching them.
 app.use('/api/v1/courses', electivesRoutes);
 app.use('/api/v1/teacher', teacherRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1', institutionProfileRoutes);
 app.use('/api/v1', healthRoutes);
 

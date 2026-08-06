@@ -38,8 +38,22 @@ const envSchema = z.object({
 
   // Document uploads (Phase 3) — deployment-tunable limits, no schema dependency.
   MAX_UPLOAD_PDF_BYTES: z.coerce.number().default(20 * 1024 * 1024),
-  MAX_LLM_SOURCE_CHARS: z.coerce.number().default(50_000),
+  // llama-3.3-70b-versatile has a 128K-token context window on Groq. 250,000
+  // chars is roughly 65-70K tokens at typical English/code density, leaving
+  // comfortable headroom for the system prompt and a detailed multi-module
+  // completion without ever approaching the model's limit. The previous
+  // 50,000-char default was silently truncating anything past the first
+  // ~15 pages of a real textbook-sized PDF, which is why generated lessons
+  // read as thin summaries instead of the source's actual depth.
+  MAX_LLM_SOURCE_CHARS: z.coerce.number().default(250_000),
   UPLOAD_DIR: z.string().default('uploads'),
+
+  // Assignment submission uploads (Phase 5) — broader file types than course
+  // material, stored in Cloudinary rather than local disk.
+  MAX_UPLOAD_SUBMISSION_BYTES: z.coerce.number().default(20 * 1024 * 1024),
+  CLOUD_NAME: z.string().min(1),
+  CLOUDINARY_API_KEY: z.string().min(1),
+  CLOUDINARY_API_SECRET: z.string().min(1),
 
   // OAuth
   GOOGLE_CLIENT_ID: z.string().min(1),
@@ -63,6 +77,11 @@ const envSchema = z.object({
   // call. Skipped entirely under NODE_ENV=test, same as AUTH_RATE_LIMIT_*.
   TUTOR_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
   TUTOR_RATE_LIMIT_MAX: z.coerce.number().default(30),
+
+  // Stricter limiter for AI grading (NFR-3/NFR-8): each submission graded
+  // costs a real LLM call. Skipped entirely under NODE_ENV=test.
+  GRADING_RATE_LIMIT_WINDOW_MS: z.coerce.number().default(15 * 60 * 1000),
+  GRADING_RATE_LIMIT_MAX: z.coerce.number().default(30),
 
   // Seed data (sequelize-cli seeders read these from process.env directly)
   SEED_ADMIN_EMAIL: z.email().default('admin@ohara.local'),

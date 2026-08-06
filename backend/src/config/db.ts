@@ -22,6 +22,14 @@ import { StudentProfile } from '../models/studentProfiles.model.js';
 import { StudentFlag } from '../models/studentFlags.model.js';
 import { TutorConversation } from '../models/tutorConversations.model.js';
 import { TutorMessage } from '../models/tutorMessages.model.js';
+import { Assignment } from '../models/assignments.model.js';
+import { Submission } from '../models/submissions.model.js';
+import { Grade } from '../models/grades.model.js';
+import { Quiz } from '../models/quizzes.model.js';
+import { Question } from '../models/questions.model.js';
+import { QuizAttempt } from '../models/quizAttempts.model.js';
+import { QuizAnswerGrade } from '../models/quizAnswerGrades.model.js';
+import { Notification } from '../models/notifications.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -58,5 +66,13 @@ export const sequelize = new Sequelize({
     StudentFlag,
     TutorConversation,
     TutorMessage,
+    Assignment,
+    Submission,
+    Grade,
+    Quiz,
+    Question,
+    QuizAttempt,
+    QuizAnswerGrade,
+    Notification,
   ],
 });

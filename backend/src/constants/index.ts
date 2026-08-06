@@ -64,6 +64,16 @@ export const EMBEDDING_DIMENSIONS = 384;
 export const CHUNK_SIZE_CHARS = 1000;
 export const CHUNK_OVERLAP_CHARS = 100;
 
+// Course structure generation is two phases (see courseStructure.prompt.ts):
+// a cheap skeleton call (generateJson's default token budget is plenty —
+// titles and key topics only), then one content call per MODULE (a
+// module's handful of lessons, not the whole course in one call and not
+// one call per lesson — the former rations depth too thin, the latter
+// resends the full source text so often it burns through a Groq token
+// quota fast). A module can have a few lessons at 400+ words each plus
+// code blocks, so this budget is larger than a single lesson would need.
+export const MODULE_CONTENT_MAX_COMPLETION_TOKENS = 8192;
+
 export const TUTOR_CONVERSATION_STATUSES = {
   ACTIVE: 'active',
   AWAITING_STUDENT: 'awaiting_student',
@@ -87,9 +97,46 @@ export const TUTOR_MESSAGE_TYPES = {
 // tuning knob, not a deployment concern, same reasoning as CHUNK_SIZE_CHARS.
 export const TUTOR_RETRIEVAL_K = 5;
 
+// A new conversation's placeholder title before its first message retitles
+// it — see tutor.controller.ts's sendMessage.
+export const DEFAULT_CONVERSATION_TITLE = 'New conversation';
+export const AUTO_TITLE_MAX_LENGTH = 60;
+
 // Bounded-agent-loop guardrails (ARCHITECTURE.md §7) — hard caps, not tuning
 // knobs to raise casually. If the agent legitimately needs more steps than
 // this, the fallback (stage-1 grounded answer) is the correct behavior, not
 // a higher cap.
 export const AGENT_MAX_ITERATIONS = 5;
 export const AGENT_TURN_TIMEOUT_MS = 30_000;
+
+// Grade lifecycle (Phase 5, golden rule 6): AI only ever writes 'draft'; a
+// teacher action is the only path to 'approved'.
+export const GRADE_STATUS = {
+  DRAFT: 'draft',
+  APPROVED: 'approved',
+} as const;
+
+// Submission file types AI grading can extract text from — see
+// utils/fileExtraction.utils.ts. Broader types (xlsx, images) are accepted
+// for upload but graded manually by the teacher.
+export const SUBMISSION_ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/png',
+  'image/jpeg',
+] as const;
+
+// Quiz lifecycle (FR-22/23): a quiz is only attemptable by students once a
+// teacher explicitly publishes it — mirrors courses.isPublished.
+export const QUIZ_STATUS = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+} as const;
+
+// FR-24: only 'mcq' is auto-scored. 'short_answer' responses are stored but
+// not scored — no grading workflow for them exists in this sub-project.
+export const QUESTION_TYPES = {
+  MCQ: 'mcq',
+  SHORT_ANSWER: 'short_answer',
+} as const;

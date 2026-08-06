@@ -65,3 +65,25 @@ export const tutorLimiter = rateLimit({
     });
   },
 });
+
+// Stricter limiter for AI grading (NFR-3/NFR-8): each submission graded is a
+// real LLM call. Applies to both the single-submission and grade-all routes.
+// Skipped under test, same as the other LLM-backed limiters.
+export const assignmentGradingLimiter = rateLimit({
+  windowMs: env.GRADING_RATE_LIMIT_WINDOW_MS,
+  max: env.GRADING_RATE_LIMIT_MAX,
+
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  skip: () => env.NODE_ENV === 'test',
+
+  handler: (_req, res) => {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many grading requests, please try again in a while.',
+      data: null,
+      errors: null,
+    });
+  },
+});

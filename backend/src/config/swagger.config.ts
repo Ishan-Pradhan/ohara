@@ -11,6 +11,13 @@ import '../validations/institution.validation.js';
 import '../validations/placement.validation.js';
 import '../validations/students.validation.js';
 import '../validations/admission.validation.js';
+import '../validations/assignments.validation.js';
+import '../validations/submissions.validation.js';
+import '../validations/quizzes.validation.js';
+import '../validations/quizAttempts.validation.js';
+import '../validations/gradebook.validation.js';
+import '../validations/notifications.validation.js';
+import '../validations/dashboard.validation.js';
 
 registry.registerComponent('securitySchemes', 'cookieAuth', {
   type: 'apiKey',
@@ -45,5 +52,12 @@ export const swaggerSpec = generator.generateDocument({
     { name: 'Institution', description: 'Academic hierarchy: programs, classes, academic years, sections, courses (admin only)' },
     { name: 'Placement', description: 'Student placement & enrollment (admin CRUD, plus a self-service view)' },
     { name: 'Admission', description: 'Single-request student admission: invite, place, and auto-enroll (admin only)' },
+    { name: 'Assignments', description: 'Course assignments (admin/teacher create, students view)' },
+    { name: 'Submissions', description: 'Student submissions and AI-assisted, teacher-approved grading' },
+    { name: 'Quizzes', description: 'AI-generated or manually authored quizzes (admin/teacher create, students take)' },
+    { name: 'Quiz Attempts', description: 'Student quiz attempts, MCQs auto-scored' },
+    { name: 'Gradebook', description: 'Class gradebook aggregating approved assignment grades and quiz attempts' },
+    { name: 'Notifications', description: 'In-app notification feed' },
+    { name: 'Dashboard', description: 'Per-role landing page aggregation' },
   ],
 });

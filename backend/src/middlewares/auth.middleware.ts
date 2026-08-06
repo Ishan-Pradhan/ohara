@@ -146,3 +146,46 @@ export const requireEnrolledStudent = async (
 
   next();
 };
+
+/**
+ * Read-only course access shared by both authoring and consuming roles
+ * (Phase 5 assignment list/detail): admins, assigned teachers, and enrolled
+ * students may all pass. Mutating endpoints (create/edit/grade a submission)
+ * still use requireCourseTeacher/requireEnrolledStudent, which are stricter.
+ */
+export const requireCourseAccess = async (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const user = req.user;
+  if (!user) {
+    throw new ApiError(401, 'Unauthorized request');
+  }
+  if (user.role === 'admin') {
+    return next();
+  }
+
+  const courseId = req.params.courseId;
+  if (typeof courseId !== 'string' || !courseId) {
+    throw new ApiError(500, 'requireCourseAccess: route is missing the :courseId param');
+  }
+
+  if (user.role === 'teacher') {
+    const isAssigned = await courseTeacherRepository.exists(user.id, courseId);
+    if (!isAssigned) {
+      throw new ApiError(403, 'Not authorized for this course');
+    }
+    return next();
+  }
+
+  if (user.role === 'student') {
+    const enrolled = await enrollmentRepository.isEnrolled(user.id, courseId);
+    if (!enrolled) {
+      throw new ApiError(403, 'Not enrolled in this course');
+    }
+    return next();
+  }
+
+  throw new ApiError(403, 'Not authorized');
+};
