@@ -6,6 +6,7 @@ export const lessonOutlineSchema = z.object({
   id: z.string(),
   moduleId: z.string(),
   title: z.string(),
+  content: z.string(),
   keyTopics: z.array(z.string()),
   orderIndex: z.number(),
 });

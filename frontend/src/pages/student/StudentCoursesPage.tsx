@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, ListPlus, MapPin } from 'lucide-react';
+import { BookOpen, GraduationCap, ListPlus, MapPin, User } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import {
@@ -22,14 +22,21 @@ export const StudentCoursesPage = () => {
   const studentId = currentUser?.id ?? '';
   const { data: placement, isLoading, isError } = useStudentPlacement(studentId);
 
+  const placementLine = placement
+    ? [placement.program?.name, placement.class?.name, placement.section ? `Section ${placement.section.name}` : null]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
+
   return (
     <AppShell>
-      <PageHeader title="My Courses" description="Courses you're enrolled in" />
+      <PageHeader title="My Courses" description={placementLine ?? 'Courses you’re enrolled in'} />
 
       {isLoading ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       ) : isError ? (
         <EmptyState
@@ -44,14 +51,30 @@ export const StudentCoursesPage = () => {
           description="You aren't enrolled in any courses yet — check back once you've been added to one."
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {placement.courses.map((course) => (
-            <Link key={course.id} to={`/student/courses/${course.id}`}>
-              <Card padding="sm" className="flex items-center justify-between gap-3 transition-colors hover:bg-surface-hover">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-fg">{course.title}</p>
-                  <p className="truncate text-xs text-muted">{course.code}</p>
+            <Link key={course.id} to={`/student/courses/${course.id}`} className="group">
+              <Card className="flex h-full flex-col gap-4 transition-all group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-primary-soft">
+                    <BookOpen className="size-5 text-primary" aria-hidden />
+                  </div>
+                  <Badge variant={course.isPublished ? 'success' : 'neutral'}>
+                    {course.isPublished ? 'Published' : 'Not published yet'}
+                  </Badge>
                 </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-fg group-hover:text-primary">{course.title}</p>
+                  <p className="mt-0.5 text-xs text-subtle">{course.code}</p>
+                </div>
+
+                <p className="flex items-center gap-1.5 truncate text-xs text-muted">
+                  <User className="size-3.5 shrink-0" aria-hidden />
+                  {course.teachers.length > 0
+                    ? course.teachers.map((t) => t.name).join(', ')
+                    : 'No teacher assigned yet'}
+                </p>
               </Card>
             </Link>
           ))}
@@ -59,8 +82,11 @@ export const StudentCoursesPage = () => {
       )}
 
       {!isLoading && !isError && placement ? (
-        <div className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold text-fg">Electives available this semester</h2>
+        <div className="mt-10">
+          <div className="mb-3 flex items-center gap-2">
+            <GraduationCap className="size-4 text-subtle" aria-hidden />
+            <h2 className="text-sm font-semibold text-fg">Electives available this semester</h2>
+          </div>
           <ElectivesSection studentId={studentId} />
         </div>
       ) : null}

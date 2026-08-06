@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, ChevronRight, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookOpen, ChevronDown, ChevronRight, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
 
 import {
   createModuleSchema,
@@ -193,8 +194,8 @@ export const ModulesSection = ({ courseId }: ModulesSectionProps) => {
                             key={lesson.id}
                             className="flex items-center justify-between gap-3 rounded-control border border-border bg-surface px-3 py-2"
                           >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-fg">{lesson.title}</p>
+                            <Link to={`/admin/courses/${courseId}/lessons/${lesson.id}`} className="min-w-0">
+                              <p className="truncate text-sm font-medium text-fg hover:underline">{lesson.title}</p>
                               {lesson.keyTopics.length > 0 ? (
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {lesson.keyTopics.map((topic) => (
@@ -204,8 +205,15 @@ export const ModulesSection = ({ courseId }: ModulesSectionProps) => {
                                   ))}
                                 </div>
                               ) : null}
-                            </div>
+                            </Link>
                             <div className="flex shrink-0 items-center gap-1">
+                              <Link
+                                to={`/admin/courses/${courseId}/lessons/${lesson.id}`}
+                                aria-label={`Read ${lesson.title}`}
+                                className="inline-flex items-center justify-center rounded-control p-1.5 text-fg transition-colors hover:bg-surface-hover"
+                              >
+                                <BookOpen className="size-4" aria-hidden />
+                              </Link>
                               <Button
                                 size="sm"
                                 variant="ghost"

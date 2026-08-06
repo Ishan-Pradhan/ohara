@@ -27,7 +27,7 @@ export const useConversations = (courseId: string) =>
 export const useCreateConversation = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (title: string) => createConversation(courseId, title),
+    mutationFn: () => createConversation(courseId),
     onSuccess: () => qc.invalidateQueries({ queryKey: conversationsKey(courseId) }),
   });
 };

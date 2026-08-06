@@ -22,11 +22,8 @@ export const fetchConversations = async (courseId: string): Promise<TutorConvers
   return z.array(tutorConversationSchema).parse(res.data.data);
 };
 
-export const createConversation = async (
-  courseId: string,
-  title: string,
-): Promise<TutorConversation> => {
-  const res = await api.post(`/courses/${courseId}/tutor/conversations`, { title });
+export const createConversation = async (courseId: string): Promise<TutorConversation> => {
+  const res = await api.post(`/courses/${courseId}/tutor/conversations`, {});
   return tutorConversationSchema.parse(res.data.data);
 };
 

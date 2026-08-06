@@ -13,7 +13,6 @@ import { Alert } from '../../components/ui/Alert.js';
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
-import { Input } from '../../components/ui/Input.js';
 import { Textarea } from '../../components/ui/Textarea.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Spinner } from '../../components/ui/Spinner.js';
@@ -29,9 +28,8 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   const createConversation = useCreateConversation(courseId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
   const [draft, setDraft] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setSelectedId(null);
@@ -54,28 +52,35 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages, sendMessage.isPending]);
 
+  // Focus follows the conversation the moment it's ready to type into — new
+  // chat, switching threads, or right after a reply comes back (the
+  // textarea is never disabled, so this is the only place focus needs
+  // restoring after a click moved it to the Send button).
+  useEffect(() => {
+    if (selectedId && !sendMessage.isPending) {
+      textareaRef.current?.focus();
+    }
+  }, [selectedId, sendMessage.isPending]);
+
   const startConversation = async () => {
-    if (!newTitle.trim()) return;
     try {
-      const conversation = await createConversation.mutateAsync(newTitle.trim());
+      const conversation = await createConversation.mutateAsync();
       setSelectedId(conversation.id);
-      setNewTitle('');
-      setCreating(false);
     } catch {
-      // Keep the title and the prompt open so the user can retry — the
-      // error itself is surfaced via createConversation.isError below.
+      // createConversation.isError surfaces the failure below the list.
     }
   };
 
   const submitMessage = async () => {
     if (!draft.trim() || !selectedId || sendMessage.isPending) return;
     const content = draft.trim();
+    setDraft('');
     try {
       await sendMessage.mutateAsync(content);
-      setDraft('');
     } catch {
-      // Leave the typed draft in place so the user doesn't lose their
-      // question — the error itself is surfaced via sendMessage.isError below.
+      // Put the draft back so the student doesn't lose their question — the
+      // error itself is surfaced via sendMessage.isError below.
+      setDraft(content);
     }
   };
 
@@ -84,38 +89,23 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
       <Card padding="sm" className="flex min-h-0 flex-col gap-2 overflow-y-auto">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-subtle">Conversations</span>
-          <Button size="sm" variant="ghost" aria-label="New conversation" onClick={() => setCreating((prev) => !prev)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="New conversation"
+            loading={createConversation.isPending}
+            onClick={() => void startConversation()}
+          >
             <Plus className="size-4" aria-hidden />
           </Button>
         </div>
 
-        {creating ? (
-          <div className="flex flex-col gap-2 rounded-control border border-border p-2">
-            <Input
-              autoFocus
-              placeholder="Conversation title"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void startConversation();
-              }}
-            />
-            {createConversation.isError ? (
-              <p className="text-xs text-danger">
-                {createConversation.error instanceof ApiError
-                  ? createConversation.error.message
-                  : "Couldn't start the conversation — try again."}
-              </p>
-            ) : null}
-            <Button
-              size="sm"
-              loading={createConversation.isPending}
-              disabled={!newTitle.trim()}
-              onClick={() => void startConversation()}
-            >
-              Start
-            </Button>
-          </div>
+        {createConversation.isError ? (
+          <p className="px-1 text-xs text-danger">
+            {createConversation.error instanceof ApiError
+              ? createConversation.error.message
+              : "Couldn't start a new conversation — try again."}
+          </p>
         ) : null}
 
         {conversationsLoading ? (
@@ -153,8 +143,14 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
         {!selectedId ? (
           <EmptyState
             icon={MessageCircle}
-            title="Start a conversation"
-            description="Ask the tutor a question about this course to begin."
+            title="Ask the tutor anything"
+            description="Start a conversation about this course's material — your first question becomes its title."
+            action={
+              <Button loading={createConversation.isPending} onClick={() => void startConversation()}>
+                <Plus className="size-4" aria-hidden />
+                New conversation
+              </Button>
+            }
           />
         ) : (
           <>
@@ -231,10 +227,10 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
 
             <div className="flex items-end gap-2 border-t border-border pt-3">
               <Textarea
+                ref={textareaRef}
                 rows={2}
                 placeholder="Ask a question about this course…"
                 value={draft}
-                disabled={sendMessage.isPending}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
