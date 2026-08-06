@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import {
   BarChart3,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -23,6 +24,7 @@ import { TutorPanel } from './TutorPanel.js';
 import { StudentAssignmentsSection } from './StudentAssignmentsSection.js';
 import { StudentQuizzesSection } from './StudentQuizzesSection.js';
 import { StudentGradesSection } from './StudentGradesSection.js';
+import { StudentAttendanceSection } from './StudentAttendanceSection.js';
 
 export const StudentCoursePage = () => {
   const { courseId = '' } = useParams();
@@ -69,6 +71,10 @@ export const StudentCoursePage = () => {
           <TabsTrigger value="grades">
             <BarChart3 className="size-4" aria-hidden />
             Grades
+          </TabsTrigger>
+          <TabsTrigger value="attendance">
+            <CalendarCheck className="size-4" aria-hidden />
+            Attendance
           </TabsTrigger>
         </TabsList>
 
@@ -138,6 +144,10 @@ export const StudentCoursePage = () => {
 
         <TabsContent value="grades">
           <StudentGradesSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="attendance">
+          <StudentAttendanceSection courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>

@@ -29,6 +29,7 @@ import electivesRoutes from './routes/electives.routes.js';
 import assignmentsRoutes from './routes/assignments.routes.js';
 import quizzesRoutes from './routes/quizzes.routes.js';
 import gradebookRoutes from './routes/gradebook.routes.js';
+import attendanceRoutes from './routes/attendance.routes.js';
 import teacherRoutes from './routes/teacher.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
@@ -67,6 +68,7 @@ app.use('/api/v1/courses', tutorRoutes);
 app.use('/api/v1/courses', assignmentsRoutes);
 app.use('/api/v1/courses', quizzesRoutes);
 app.use('/api/v1/courses', gradebookRoutes);
+app.use('/api/v1/courses', attendanceRoutes);
 // electivesRoutes applies a blanket router.use(verifyJWT, requireRole(STUDENT))
 // to everything mounted here — every other /api/v1/courses router (teacher/
 // admin routes included) must be registered above this line, or their

@@ -16,6 +16,7 @@ import '../validations/submissions.validation.js';
 import '../validations/quizzes.validation.js';
 import '../validations/quizAttempts.validation.js';
 import '../validations/gradebook.validation.js';
+import '../validations/attendance.validation.js';
 import '../validations/notifications.validation.js';
 import '../validations/dashboard.validation.js';
 
@@ -57,6 +58,7 @@ export const swaggerSpec = generator.generateDocument({
     { name: 'Quizzes', description: 'AI-generated or manually authored quizzes (admin/teacher create, students take)' },
     { name: 'Quiz Attempts', description: 'Student quiz attempts, MCQs auto-scored' },
     { name: 'Gradebook', description: 'Class gradebook aggregating approved assignment grades and quiz attempts' },
+    { name: 'Attendance', description: 'Attendance sessions, present/absent/late marking, and per-student percentage' },
     { name: 'Notifications', description: 'In-app notification feed' },
     { name: 'Dashboard', description: 'Per-role landing page aggregation' },
   ],
