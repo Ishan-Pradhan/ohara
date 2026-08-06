@@ -43,25 +43,36 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
   return cookiesFrom(login);
 };
 
-const validStructureJson = JSON.stringify({
+// Generation is two phases now (see courseContent.controller.ts): one
+// skeleton call over the whole document, then one content call per module
+// (covering all of that module's lessons in one response).
+const validSkeletonJson = JSON.stringify({
   modules: [
     {
       title: 'Photosynthesis',
       lessons: [
-        {
-          title: 'Light-dependent reactions',
-          content: 'Plants convert light energy into chemical energy.',
-          keyTopics: ['chlorophyll', 'ATP'],
-        },
-        {
-          title: 'Calvin cycle',
-          content: 'Carbon fixation produces glucose.',
-          keyTopics: ['carbon fixation'],
-        },
+        { title: 'Light-dependent reactions', keyTopics: ['chlorophyll', 'ATP'] },
+        { title: 'Calvin cycle', keyTopics: ['carbon fixation'] },
       ],
     },
   ],
 });
+
+const moduleContentJson = (lessons: { title: string; content: string }[]) =>
+  JSON.stringify({ lessons });
+
+const defaultModuleContent = moduleContentJson([
+  { title: 'Light-dependent reactions', content: 'Plants convert light energy into chemical energy.' },
+  { title: 'Calvin cycle', content: 'Carbon fixation produces glucose.' },
+]);
+
+/** Queues one skeleton response followed by one module-content response —
+ * the exact call sequence a successful generation makes for the single-module
+ * validSkeletonJson fixture above. */
+const mockSuccessfulGeneration = (moduleContent = defaultModuleContent) => {
+  vi.mocked(generateJson).mockResolvedValueOnce(validSkeletonJson);
+  vi.mocked(generateJson).mockResolvedValueOnce(moduleContent);
+};
 
 /** Creates a document row that's already "ready", pointing at the real
  * sample fixture on disk — skips the ingestion pipeline entirely (that's
@@ -114,7 +125,7 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
     const document = await createReadyDocument(course.id, teacher.id);
     const cookies = await signInAs(teacher.email, 'teacher');
-    vi.mocked(generateJson).mockResolvedValueOnce(validStructureJson);
+    mockSuccessfulGeneration();
 
     const res = await request(app)
       .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
@@ -158,7 +169,7 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     const admin = await createTeacherUser({ email: 'x@example.com' });
     const document = await createReadyDocument(course.id, admin.id);
     const cookies = await signInAs('admin@example.com', 'admin');
-    vi.mocked(generateJson).mockResolvedValueOnce(validStructureJson);
+    mockSuccessfulGeneration();
 
     const res = await request(app)
       .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
@@ -170,8 +181,13 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     expect(res.body.data[0].lessons).toHaveLength(2);
     expect(res.body.data[0].lessons[0]).toMatchObject({
       title: 'Light-dependent reactions',
+      content: 'Plants convert light energy into chemical energy.',
       keyTopics: ['chlorophyll', 'ATP'],
       orderIndex: 0,
+    });
+    expect(res.body.data[0].lessons[1]).toMatchObject({
+      title: 'Calvin cycle',
+      content: 'Carbon fixation produces glucose.',
     });
 
     const modules = await Module.findAll({ where: { courseId: course.id } });
@@ -186,12 +202,16 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     const document = await createReadyDocument(course.id, admin.id);
     const cookies = await signInAs('admin@example.com', 'admin');
 
-    vi.mocked(generateJson).mockResolvedValueOnce(validStructureJson);
+    const firstBatchContent = moduleContentJson([
+      { title: 'Light-dependent reactions', content: 'First lesson content.' },
+      { title: 'Calvin cycle', content: 'Second lesson content.' },
+    ]);
+    mockSuccessfulGeneration(firstBatchContent);
     await request(app)
       .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
       .set('Cookie', cookies);
 
-    vi.mocked(generateJson).mockResolvedValueOnce(validStructureJson);
+    mockSuccessfulGeneration(firstBatchContent);
     const second = await request(app)
       .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
       .set('Cookie', cookies);
@@ -207,16 +227,63 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     const document = await createReadyDocument(course.id, admin.id);
     const cookies = await signInAs('admin@example.com', 'admin');
 
+    // Skeleton call is invalid once, then retries successfully; the module
+    // content call succeeds on the first try.
     vi.mocked(generateJson)
       .mockResolvedValueOnce('not valid json')
-      .mockResolvedValueOnce(validStructureJson);
+      .mockResolvedValueOnce(validSkeletonJson)
+      .mockResolvedValueOnce(defaultModuleContent);
 
     const res = await request(app)
       .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
       .set('Cookie', cookies);
 
     expect(res.status).toBe(201);
-    expect(generateJson).toHaveBeenCalledTimes(2);
+    expect(generateJson).toHaveBeenCalledTimes(3);
+  });
+
+  it('falls back to a placeholder for a module whose content call never succeeds, without failing the whole generation', async () => {
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+
+    vi.mocked(generateJson)
+      .mockResolvedValueOnce(validSkeletonJson)
+      .mockResolvedValueOnce('not valid json')
+      .mockResolvedValueOnce('still not valid json');
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data[0].lessons[0].content).toContain('Content generation failed');
+    expect(res.body.data[0].lessons[1].content).toContain('Content generation failed');
+  });
+
+  it('falls back to a placeholder for just the lesson a module response omits', async () => {
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+
+    vi.mocked(generateJson)
+      .mockResolvedValueOnce(validSkeletonJson)
+      .mockResolvedValueOnce(
+        moduleContentJson([
+          { title: 'Light-dependent reactions', content: 'Plants convert light energy into chemical energy.' },
+          // "Calvin cycle" omitted — the model didn't cover every lesson it was asked for.
+        ]),
+      );
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data[0].lessons[0].content).toBe('Plants convert light energy into chemical energy.');
+    expect(res.body.data[0].lessons[1].content).toContain('Content generation failed');
   });
 
   it('returns 502 and creates nothing if the LLM never produces a valid structure', async () => {

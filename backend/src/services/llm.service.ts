@@ -10,10 +10,16 @@ const groq = new Groq({ apiKey: env.GROQ_API_KEY });
  * shape they asked for — this is a thin transport wrapper, not a schema
  * enforcer (see courseContent.controller.ts for the parse/validate/retry
  * loop that uses this). The only file in the codebase that touches the Groq
- * SDK directly. */
+ * SDK directly.
+ *
+ * maxCompletionTokens defaults to a modest budget (grading/quiz-gen output is
+ * short); course structure generation passes a much larger explicit value
+ * since a detailed, code/table-preserving multi-lesson response needs it —
+ * otherwise the completion silently cuts off mid-JSON. */
 export const generateJson = async (
   systemPrompt: string,
   userPrompt: string,
+  maxCompletionTokens = 4096,
 ): Promise<string> => {
   const completion = await groq.chat.completions.create({
     model: env.GROQ_MODEL,
@@ -23,6 +29,7 @@ export const generateJson = async (
     ],
     response_format: { type: 'json_object' },
     temperature: 0.3,
+    max_completion_tokens: maxCompletionTokens,
   });
 
   const content = completion.choices[0]?.message?.content;

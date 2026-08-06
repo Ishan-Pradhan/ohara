@@ -4,21 +4,33 @@ import { envelope } from './user.response.js';
 const unauthenticated = { description: 'Not authenticated' };
 const forbidden = { description: 'Caller is not an admin or a teacher assigned to this course' };
 
-// ── LLM output shape — also the schema the prompt describes ────────────────
+// ── LLM output shapes — also the schemas the prompts describe ──────────────
+// Two-phase generation (see courseContent.controller.ts): a skeleton call
+// over the whole document, then one content call per lesson.
 
-export const generatedLessonSchema = z.object({
+export const generatedLessonSkeletonSchema = z.object({
   title: z.string().min(1),
-  content: z.string().min(1),
   keyTopics: z.array(z.string()).default([]),
 });
 
-export const generatedModuleSchema = z.object({
+export const generatedModuleSkeletonSchema = z.object({
   title: z.string().min(1),
-  lessons: z.array(generatedLessonSchema).min(1),
+  lessons: z.array(generatedLessonSkeletonSchema).min(1),
 });
 
-export const generatedCourseStructureSchema = z.object({
-  modules: z.array(generatedModuleSchema).min(1),
+export const generatedCourseSkeletonSchema = z.object({
+  modules: z.array(generatedModuleSkeletonSchema).min(1),
+});
+
+export const generatedModuleContentSchema = z.object({
+  lessons: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        content: z.string().min(1),
+      }),
+    )
+    .min(1),
 });
 
 // ── Request schemas ─────────────────────────────────────────────────────────

@@ -11,42 +11,98 @@ import { serializeModule, serializeLesson } from '../serializers/courseContent.s
 import { extractText } from '../services/pdf.service.js';
 import { generateJson } from '../services/llm.service.js';
 import {
-  courseStructureSystemPrompt,
-  courseStructureUserPrompt,
-  courseStructureCorrectivePrompt,
+  courseSkeletonSystemPrompt,
+  courseSkeletonUserPrompt,
+  courseSkeletonCorrectivePrompt,
+  moduleContentSystemPrompt,
+  moduleContentUserPrompt,
+  moduleContentCorrectivePrompt,
 } from '../prompts/courseStructure.prompt.js';
-import { generatedCourseStructureSchema } from '../validations/courseContent.validation.js';
-import { DOCUMENT_STATUS } from '../constants/index.js';
+import {
+  generatedCourseSkeletonSchema,
+  generatedModuleContentSchema,
+} from '../validations/courseContent.validation.js';
+import { DOCUMENT_STATUS, MODULE_CONTENT_MAX_COMPLETION_TOKENS } from '../constants/index.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
+import { logger } from '../utils/logger.js';
 import type { Module } from '../models/modules.model.js';
 
-/** Calls the LLM, parses and Zod-validates the response, and retries once
- * with a corrective re-prompt if it isn't valid JSON matching the required
- * shape. Bounded — never loops beyond one retry. */
-const generateStructure = async (sourceText: string) => {
-  const userPrompt = courseStructureUserPrompt(sourceText);
-  const raw = await generateJson(courseStructureSystemPrompt, userPrompt);
+/** Phase 1: one call over the whole source, producing just module/lesson
+ * titles + key topics — see courseStructure.prompt.ts for why content is
+ * deliberately not requested here. Retries once on invalid JSON. */
+const generateSkeleton = async (sourceText: string) => {
+  const userPrompt = courseSkeletonUserPrompt(sourceText);
+  const raw = await generateJson(courseSkeletonSystemPrompt, userPrompt);
 
-  const firstAttempt = tryParse(raw);
+  const firstAttempt = tryParseSkeleton(raw);
   if (firstAttempt.success) return firstAttempt.data;
 
   const retryRaw = await generateJson(
-    courseStructureSystemPrompt,
-    courseStructureCorrectivePrompt(raw),
+    courseSkeletonSystemPrompt,
+    courseSkeletonCorrectivePrompt(raw),
   );
-  const secondAttempt = tryParse(retryRaw);
+  const secondAttempt = tryParseSkeleton(retryRaw);
   if (secondAttempt.success) return secondAttempt.data;
 
   throw new ApiError(502, 'The LLM could not produce a valid course structure');
 };
 
-const tryParse = (raw: string) => {
+const tryParseSkeleton = (raw: string) => {
   try {
     const json: unknown = JSON.parse(raw);
-    return generatedCourseStructureSchema.safeParse(json);
+    return generatedCourseSkeletonSchema.safeParse(json);
+  } catch {
+    return { success: false as const };
+  }
+};
+
+const placeholderContent = (lesson: { title: string; keyTopics: string[] }): string =>
+  `_Content generation failed for this lesson. Topics: ${lesson.keyTopics.join(', ') || lesson.title}. Edit this lesson manually or try Generate structure again._`;
+
+/** Phase 2: one call per MODULE — every lesson in that module written in
+ * one response, not the whole course in one call (rations depth too thin
+ * across many items) and not one call per lesson (resends the full source
+ * text so often it burns through a Groq token quota fast). See
+ * courseStructure.prompt.ts. Falls back to a placeholder per lesson rather
+ * than aborting the rest of the generation if this module's call never
+ * produces valid JSON, or omits a lesson the skeleton asked for. */
+const generateModuleContent = async (
+  sourceText: string,
+  moduleTitle: string,
+  lessons: { title: string; keyTopics: string[] }[],
+): Promise<Map<string, string>> => {
+  const userPrompt = moduleContentUserPrompt(sourceText, moduleTitle, lessons);
+  const raw = await generateJson(
+    moduleContentSystemPrompt,
+    userPrompt,
+    MODULE_CONTENT_MAX_COMPLETION_TOKENS,
+  );
+
+  const firstAttempt = tryParseModuleContent(raw);
+  if (firstAttempt.success) return contentByTitle(firstAttempt.data);
+
+  const retryRaw = await generateJson(
+    moduleContentSystemPrompt,
+    moduleContentCorrectivePrompt(raw),
+    MODULE_CONTENT_MAX_COMPLETION_TOKENS,
+  );
+  const secondAttempt = tryParseModuleContent(retryRaw);
+  if (secondAttempt.success) return contentByTitle(secondAttempt.data);
+
+  logger.warn({ moduleTitle }, 'Module content generation failed twice; using placeholders');
+  return new Map();
+};
+
+const contentByTitle = (data: { lessons: { title: string; content: string }[] }): Map<string, string> =>
+  new Map(data.lessons.map((l) => [l.title, l.content]));
+
+const tryParseModuleContent = (raw: string) => {
+  try {
+    const json: unknown = JSON.parse(raw);
+    return generatedModuleContentSchema.safeParse(json);
   } catch {
     return { success: false as const };
   }
@@ -74,13 +130,31 @@ export const generateCourseStructure = asyncHandler(
     // doc, not solved here).
     const sourceText = fullText.slice(0, env.MAX_LLM_SOURCE_CHARS);
 
-    const structure = await generateStructure(sourceText);
+    const skeleton = await generateSkeleton(sourceText);
+
+    // Phase 2 — one call per module, sequential rather than parallel: this is
+    // already several Groq calls for one generation, and firing them
+    // concurrently risks bursting past rate limits for no real benefit (this
+    // is a teacher-triggered, infrequent action, not a latency-critical one).
+    const modulesWithContent: { title: string; lessons: { title: string; keyTopics: string[]; content: string }[] }[] = [];
+    for (const generatedModule of skeleton.modules) {
+      const contentByLessonTitle = await generateModuleContent(
+        sourceText,
+        generatedModule.title,
+        generatedModule.lessons,
+      );
+      const lessonsWithContent = generatedModule.lessons.map((lesson) => ({
+        ...lesson,
+        content: contentByLessonTitle.get(lesson.title) ?? placeholderContent(lesson),
+      }));
+      modulesWithContent.push({ title: generatedModule.title, lessons: lessonsWithContent });
+    }
 
     const startOrderIndex = (await moduleRepository.maxOrderIndex(courseId)) + 1;
 
     const createdModules = await sequelize.transaction(async (transaction) => {
       const modules: Module[] = [];
-      for (const [moduleOffset, generatedModule] of structure.modules.entries()) {
+      for (const [moduleOffset, generatedModule] of modulesWithContent.entries()) {
         const module = await moduleRepository.create(
           {
             courseId,
