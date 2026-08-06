@@ -11,8 +11,8 @@ import {
 } from './teacher.api.js';
 import type { CreateFlagInput } from './teacher.schema.js';
 
-export const useMyCourses = () =>
-  useQuery({ queryKey: ['teacher', 'courses'], queryFn: fetchMyCourses });
+export const useMyCourses = (enabled = true) =>
+  useQuery({ queryKey: ['teacher', 'courses'], queryFn: fetchMyCourses, enabled });
 
 export const useCourseRoster = (courseId: string) =>
   useQuery({

@@ -22,6 +22,19 @@ export const archiveUserSchema = {
   params: z.object({ id: uuid }),
 };
 
+export const setDateOfBirthSchema = {
+  params: z.object({ id: uuid }),
+  body: z.object({ dateOfBirth: z.iso.date() }),
+};
+
+/** Not `userPublicSchema` — a student's DOB lives on `StudentProfile`, not
+ * `users.dateOfBirth` (that column is teacher/admin-only), so the response
+ * reports the id + value actually written rather than the whole user. */
+export const dateOfBirthResultSchema = z.object({
+  id: z.uuid(),
+  dateOfBirth: z.iso.date(),
+});
+
 // Students self-register (auth.controller.ts); teacher and admin accounts
 // only ever come from here — there is deliberately no role picker at
 // self-registration.
@@ -182,6 +195,25 @@ registry.registerPath({
       description:
         'User archived (soft removal — access revoked, academic record preserved)',
       content: { 'application/json': { schema: envelope(userPublicSchema) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'User not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/users/{id}/date-of-birth',
+  tags: ['Admin'],
+  request: {
+    params: setDateOfBirthSchema.params,
+    body: { content: { 'application/json': { schema: setDateOfBirthSchema.body } } },
+  },
+  responses: {
+    200: {
+      description: "The user's date of birth set (feeds the admin birthday calendar)",
+      content: { 'application/json': { schema: envelope(dateOfBirthResultSchema) } },
     },
     401: unauthenticated,
     403: forbidden,

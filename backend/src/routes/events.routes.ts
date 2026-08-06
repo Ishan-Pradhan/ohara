@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { verifyJWT, requireRole } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { USER_ROLES } from '../constants/index.js';
-import { createEventSchema, deleteEventSchema } from '../validations/events.validation.js';
+import { createEventSchema, listMyEventsSchema, deleteEventSchema } from '../validations/events.validation.js';
 import { createEvent, listMyEvents, deleteEvent } from '../controllers/events.controller.js';
 
 const router = Router();
@@ -15,7 +15,7 @@ router.post(
   validate(createEventSchema),
   createEvent,
 );
-router.get('/me', listMyEvents);
+router.get('/me', validate(listMyEventsSchema), listMyEvents);
 router.delete('/:id', validate(deleteEventSchema), deleteEvent);
 
 export default router;

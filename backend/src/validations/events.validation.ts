@@ -6,17 +6,27 @@ const unauthenticated = { description: 'Not authenticated' };
 const base = {
   title: z.string().min(1, 'Title is required'),
   description: z.string().nullable().optional(),
+  type: z.enum(['event', 'holiday', 'exam']).default('event'),
   startAt: z.iso.datetime(),
+  endAt: z.iso.datetime().nullable().optional(),
+  allDay: z.boolean().default(false),
 };
 
 export const createEventSchema = {
   body: z.discriminatedUnion('audience', [
     z.object({ ...base, audience: z.literal('global') }),
+    z.object({
+      ...base,
+      audience: z.literal('institution_type'),
+      institutionType: z.enum(['school', 'college', 'university']),
+    }),
     z.object({ ...base, audience: z.literal('program'), programId: z.uuid() }),
     z.object({ ...base, audience: z.literal('class'), classId: z.uuid() }),
-    z.object({ ...base, audience: z.literal('section'), sectionId: z.uuid() }),
-    z.object({ ...base, audience: z.literal('course'), courseId: z.uuid() }),
   ]),
+};
+
+export const listMyEventsSchema = {
+  query: z.object({ from: z.iso.datetime().optional(), to: z.iso.datetime().optional() }),
 };
 
 export const deleteEventSchema = {
@@ -28,16 +38,18 @@ export const deleteEventSchema = {
 const eventSchema = registry.register(
   'Event',
   z.object({
-    id: z.uuid(),
+    id: z.string(),
     title: z.string(),
     description: z.string().nullable(),
+    type: z.enum(['event', 'holiday', 'exam', 'birthday']),
     startAt: z.iso.datetime(),
-    audience: z.enum(['global', 'program', 'class', 'section', 'course']),
+    endAt: z.iso.datetime().nullable(),
+    allDay: z.boolean(),
+    audience: z.enum(['global', 'institution_type', 'program', 'class']),
+    institutionType: z.enum(['school', 'college', 'university']).nullable(),
     programId: z.uuid().nullable(),
     classId: z.uuid().nullable(),
-    sectionId: z.uuid().nullable(),
-    courseId: z.uuid().nullable(),
-    createdBy: z.uuid(),
+    createdBy: z.string(),
   }),
 );
 
@@ -52,7 +64,7 @@ registry.registerPath({
       content: { 'application/json': { schema: envelope(eventSchema) } },
     },
     401: unauthenticated,
-    403: { description: 'Teachers may only scope events to a course they teach or its class; program/section/global scopes are admin-only' },
+    403: { description: 'Teachers may only scope events to a class they teach; institution_type/program/global are admin-only' },
   },
 });
 
@@ -60,9 +72,10 @@ registry.registerPath({
   method: 'get',
   path: '/events/me',
   tags: ['Events'],
+  request: { query: listMyEventsSchema.query },
   responses: {
     200: {
-      description: "Upcoming events relevant to the caller (FR-36): global, plus their program/class/section/course scope",
+      description: 'Events relevant to the caller in the given range (FR-36), plus every birthday if the caller is an admin',
       content: { 'application/json': { schema: envelope(z.array(eventSchema)) } },
     },
     401: unauthenticated,

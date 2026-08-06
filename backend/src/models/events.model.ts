@@ -11,12 +11,11 @@ import {
   BelongsTo,
 } from 'sequelize-typescript';
 
-import type { EventAudience } from '../types/events.types.js';
+import type { EventAudience, EventType } from '../types/events.types.js';
+import type { InstitutionType } from '../types/institution.types.js';
 import { User } from './users.model.js';
 import { Program } from './programs.model.js';
 import { Class } from './classes.model.js';
-import { Section } from './sections.model.js';
-import { Course } from './courses.model.js';
 
 @Table({ tableName: 'Events', timestamps: true })
 export class Event extends Model {
@@ -41,12 +40,28 @@ export class Event extends Model {
   declare description: string | null;
 
   @AllowNull(false)
+  @Default('event')
+  @Column(DataType.ENUM('event', 'holiday', 'exam'))
+  declare type: EventType;
+
+  @AllowNull(false)
   @Column(DataType.DATE)
   declare startAt: Date;
 
+  @Column(DataType.DATE)
+  declare endAt: Date | null;
+
   @AllowNull(false)
-  @Column(DataType.ENUM('global', 'program', 'class', 'section', 'course'))
+  @Default(false)
+  @Column(DataType.BOOLEAN)
+  declare allDay: boolean;
+
+  @AllowNull(false)
+  @Column(DataType.ENUM('global', 'institution_type', 'program', 'class'))
   declare audience: EventAudience;
+
+  @Column(DataType.ENUM('school', 'college', 'university'))
+  declare institutionType: InstitutionType | null;
 
   @ForeignKey(() => Program)
   @Column(DataType.UUID)
@@ -61,18 +76,4 @@ export class Event extends Model {
 
   @BelongsTo(() => Class)
   declare class?: Class;
-
-  @ForeignKey(() => Section)
-  @Column(DataType.UUID)
-  declare sectionId: string | null;
-
-  @BelongsTo(() => Section)
-  declare section?: Section;
-
-  @ForeignKey(() => Course)
-  @Column(DataType.UUID)
-  declare courseId: string | null;
-
-  @BelongsTo(() => Course)
-  declare course?: Course;
 }

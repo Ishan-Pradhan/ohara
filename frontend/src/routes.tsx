@@ -8,6 +8,7 @@ import { ResetPasswordPage } from './features/auth/ResetPasswordPage.js';
 import { VerifyEmailPage } from './features/auth/VerifyEmailPage.js';
 import { VerifyEmailSentPage } from './features/auth/VerifyEmailSentPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
+import { CalendarPage } from './pages/CalendarPage.js';
 import { ForbiddenPage } from './pages/ForbiddenPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
@@ -72,6 +73,15 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <DashboardPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/calendar',
+    element: (
+      <ProtectedRoute>
+        <CalendarPage />
       </ProtectedRoute>
     ),
     errorElement: <ErrorPage />,

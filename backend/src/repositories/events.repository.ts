@@ -1,14 +1,27 @@
-import { Op } from 'sequelize';
+import { Op, type WhereOptions } from 'sequelize';
 
 import { Event } from '../models/events.model.js';
 import type { EventCreationAttributes } from '../types/events.types.js';
+import type { InstitutionType } from '../types/institution.types.js';
 
 interface RelevantScope {
-  courseIds: string[];
-  classIds: string[];
-  sectionIds: string[];
+  institutionTypes: InstitutionType[];
   programIds: string[];
+  classIds: string[];
 }
+
+/** An event with no `endAt` is a single point in time at `startAt`; one
+ * with `endAt` spans a range (e.g. a multi-day holiday). Either way it
+ * overlaps [from, to] when it starts on/before `to` and ends on/after
+ * `from`. Wrapped in its own `Op.and` so a caller can safely combine it
+ * with a second `Op.or` (e.g. audience scoping) without either clobbering
+ * the other under the same object key. */
+const rangeOverlap = (from: Date, to: Date): WhereOptions => ({
+  [Op.and]: [
+    { startAt: { [Op.lte]: to } },
+    { [Op.or]: [{ endAt: { [Op.gte]: from } }, { endAt: null, startAt: { [Op.gte]: from } }] },
+  ],
+});
 
 export const eventRepository = {
   create: async (data: EventCreationAttributes): Promise<Event> => {
@@ -24,26 +37,21 @@ export const eventRepository = {
     return deleted > 0;
   },
 
-  /** Every upcoming global event, plus any upcoming scoped event whose
-   * program/class/section/course id is in the caller's own scope — the
-   * caller (controller) resolves that scope from placement/enrollment or
-   * teaching assignments; this only does the OR query. */
-  findAllUpcoming: async (): Promise<Event[]> => {
-    return await Event.findAll({
-      where: { startAt: { [Op.gte]: new Date() } },
-      order: [['startAt', 'ASC']],
-    });
+  /** Admin sees every event in range — no scope filter. */
+  findAllInRange: async (from: Date, to: Date): Promise<Event[]> => {
+    return await Event.findAll({ where: rangeOverlap(from, to), order: [['startAt', 'ASC']] });
   },
 
-  findUpcomingRelevantTo: async (scope: RelevantScope): Promise<Event[]> => {
+  findRelevantInRange: async (scope: RelevantScope, from: Date, to: Date): Promise<Event[]> => {
     const or: Record<string, unknown>[] = [{ audience: 'global' }];
+    if (scope.institutionTypes.length > 0) {
+      or.push({ audience: 'institution_type', institutionType: scope.institutionTypes });
+    }
     if (scope.programIds.length > 0) or.push({ audience: 'program', programId: scope.programIds });
     if (scope.classIds.length > 0) or.push({ audience: 'class', classId: scope.classIds });
-    if (scope.sectionIds.length > 0) or.push({ audience: 'section', sectionId: scope.sectionIds });
-    if (scope.courseIds.length > 0) or.push({ audience: 'course', courseId: scope.courseIds });
 
     return await Event.findAll({
-      where: { startAt: { [Op.gte]: new Date() }, [Op.or]: or },
+      where: { [Op.and]: [rangeOverlap(from, to), { [Op.or]: or }] },
       order: [['startAt', 'ASC']],
     });
   },

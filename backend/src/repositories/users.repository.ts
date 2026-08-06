@@ -70,6 +70,14 @@ export const userRepository = {
     return await User.findByPk(id);
   },
 
+  /** Teacher/admin birthdays for the admin calendar. */
+  findAllWithDateOfBirth: async (): Promise<User[]> => {
+    return await User.findAll({
+      where: { dateOfBirth: { [Op.ne]: null } },
+      attributes: ['id', 'name', 'dateOfBirth'],
+    });
+  },
+
   findByIdWithSecrets: async (id: string) => {
     return await User.unscoped().findByPk(id);
   },
@@ -97,6 +105,14 @@ export const userRepository = {
       blockedCount,
       adminsCount,
     };
+  },
+
+  /** Teacher/admin birthday, for the admin calendar — students have their
+   * own DOB on `StudentProfile` (`studentProfileRepository.upsert`) instead. */
+  updateDateOfBirth: async (id: string, dateOfBirth: string): Promise<User | null> => {
+    const user = await User.findByPk(id);
+    if (!user) return null;
+    return await user.update({ dateOfBirth });
   },
 
   /** Any status change invalidates outstanding refresh tokens — a safe default. */

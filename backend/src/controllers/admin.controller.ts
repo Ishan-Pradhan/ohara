@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import { userRepository } from '../repositories/users.repository.js';
+import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
 import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
 import type { AuthRequest } from '../types/auth.types.js';
@@ -213,6 +214,27 @@ export const archiveUser = asyncHandler(
     }
 
     return ok(res, serializeUser(user), 'User archived successfully');
+  },
+);
+
+// SET DATE OF BIRTH (feeds the admin birthday calendar)
+export const setDateOfBirth = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const { dateOfBirth } = req.validated?.body as { dateOfBirth: string };
+
+    const existing = await userRepository.findById(id);
+    if (!existing) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    if (existing.role === 'student') {
+      await studentProfileRepository.upsert(id, { dateOfBirth });
+    } else {
+      await userRepository.updateDateOfBirth(id, dateOfBirth);
+    }
+
+    return ok(res, { id, dateOfBirth }, 'Date of birth updated');
   },
 );
 

@@ -17,6 +17,7 @@ export interface Users {
   isBlocked: boolean;
   authProvider: 'local' | 'google' | 'github';
   refreshToken: string | null;
+  dateOfBirth: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -32,6 +33,7 @@ export type UserCreationAttributes = Optional<
   | 'isBlocked'
   | 'authProvider'
   | 'refreshToken'
+  | 'dateOfBirth'
   | 'createdAt'
   | 'updatedAt'
 >;

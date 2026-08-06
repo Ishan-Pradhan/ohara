@@ -64,8 +64,8 @@ afterAll(async () => {
   await closeDb();
 });
 
-describe('Events', () => {
-  it('scopes creation and relevance correctly across global/class/course, and enforces delete ownership', async () => {
+describe('Events (academic calendar)', () => {
+  it('scopes creation and relevance across global/institution_type/program/class, and enforces delete ownership', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram({ institutionType: 'college' });
     const cls = await createClass({ programId: program.id });
@@ -81,79 +81,100 @@ describe('Events', () => {
     const studentCookies = await signInAs(student.email, 'student');
     const teacherCookies = await signInAs(teacher.email, 'teacher');
 
-    // Outsider (unrelated teacher, no course/class ties) should never see scoped events.
-    const outsider = await createTeacherUser({ email: `outsider-${Date.now()}@example.com` });
-    const outsiderCookies = await signInAs(outsider.email, 'teacher');
+    // A school-scoped teacher/student pair has no overlap with the college program above.
+    const schoolProgram = await createProgram({ institutionType: 'school' });
+    const outsiderTeacher = await createTeacherUser({ email: `outsider-${Date.now()}@example.com` });
+    const outsiderCourse = await createCourse({
+      classId: (await createClass({ programId: schoolProgram.id })).id,
+      title: 'Outsider course',
+    });
+    await courseTeacherRepository.assign({ teacherId: outsiderTeacher.id, courseId: outsiderCourse.id });
+    const outsiderCookies = await signInAs(outsiderTeacher.email, 'teacher');
 
     // Teacher is rejected trying to create a program-scoped event.
     const rejected = await request(app)
       .post('/api/v1/events')
       .set('Cookie', teacherCookies)
-      .send({ title: 'Bad', startAt: new Date(Date.now() + 3600_000).toISOString(), audience: 'program', programId: program.id });
+      .send({
+        title: 'Bad',
+        type: 'event',
+        startAt: new Date(Date.now() + 3600_000).toISOString(),
+        allDay: false,
+        audience: 'program',
+        programId: program.id,
+      });
     expect(rejected.status).toBe(403);
 
-    // Admin creates a global event.
+    // Admin creates a global holiday.
     const globalRes = await request(app)
       .post('/api/v1/events')
       .set('Cookie', adminCookies)
-      .send({ title: 'Global Assembly', startAt: new Date(Date.now() + 3600_000).toISOString(), audience: 'global' });
+      .send({
+        title: 'Winter Break',
+        type: 'holiday',
+        startAt: new Date(Date.now() + 3600_000).toISOString(),
+        allDay: true,
+        audience: 'global',
+      });
     expect(globalRes.status).toBe(201);
 
-    // Teacher creates a course-scoped event for their own course.
-    const courseEventRes = await request(app)
+    // Admin creates a college-wide exam period (institution_type-scoped).
+    const collegeExamRes = await request(app)
       .post('/api/v1/events')
-      .set('Cookie', teacherCookies)
+      .set('Cookie', adminCookies)
       .send({
-        title: 'Physics quiz review',
-        startAt: new Date(Date.now() + 7200_000).toISOString(),
-        audience: 'course',
-        courseId: course.id,
+        title: 'College Finals',
+        type: 'exam',
+        startAt: new Date(Date.now() + 5400_000).toISOString(),
+        allDay: false,
+        audience: 'institution_type',
+        institutionType: 'college',
       });
-    expect(courseEventRes.status).toBe(201);
-    const courseEventId = courseEventRes.body.data.id;
+    expect(collegeExamRes.status).toBe(201);
 
-    // Teacher creates a class-scoped event.
+    // Teacher creates a class-scoped event for their own class.
     const classEventRes = await request(app)
       .post('/api/v1/events')
       .set('Cookie', teacherCookies)
       .send({
         title: 'Class trip',
+        type: 'event',
         startAt: new Date(Date.now() + 10800_000).toISOString(),
+        allDay: false,
         audience: 'class',
         classId: cls.id,
       });
     expect(classEventRes.status).toBe(201);
+    const classEventId = classEventRes.body.data.id;
 
-    // Student sees global + course + class events (all 3), sorted soonest-first.
+    // Student sees all 3 (global + college institution_type + their class), sorted soonest-first.
     const studentEvents = await request(app).get('/api/v1/events/me').set('Cookie', studentCookies);
     expect(studentEvents.body.data.map((e: { title: string }) => e.title)).toEqual([
-      'Global Assembly',
-      'Physics quiz review',
+      'Winter Break',
+      'College Finals',
       'Class trip',
     ]);
 
-    // The teacher who created them also sees all 3.
+    // The teacher who created the class event also sees all 3.
     const teacherEvents = await request(app).get('/api/v1/events/me').set('Cookie', teacherCookies);
     expect(teacherEvents.body.data).toHaveLength(3);
 
-    // An unrelated outsider only sees the global one.
+    // A school-scoped outsider only sees the global holiday — not the college exam or the class trip.
     const outsiderEvents = await request(app).get('/api/v1/events/me').set('Cookie', outsiderCookies);
-    expect(outsiderEvents.body.data.map((e: { title: string }) => e.title)).toEqual(['Global Assembly']);
+    expect(outsiderEvents.body.data.map((e: { title: string }) => e.title)).toEqual(['Winter Break']);
 
     // Outsider cannot delete an event they didn't create.
     const forbiddenDelete = await request(app)
-      .delete(`/api/v1/events/${courseEventId}`)
+      .delete(`/api/v1/events/${classEventId}`)
       .set('Cookie', outsiderCookies);
     expect(forbiddenDelete.status).toBe(403);
 
     // The creator can delete their own event.
-    const okDelete = await request(app)
-      .delete(`/api/v1/events/${courseEventId}`)
-      .set('Cookie', teacherCookies);
+    const okDelete = await request(app).delete(`/api/v1/events/${classEventId}`).set('Cookie', teacherCookies);
     expect(okDelete.status).toBe(200);
 
     const afterDelete = await request(app).get('/api/v1/events/me').set('Cookie', studentCookies);
-    expect(afterDelete.body.data.map((e: { title: string }) => e.title)).toEqual(['Global Assembly', 'Class trip']);
+    expect(afterDelete.body.data.map((e: { title: string }) => e.title)).toEqual(['Winter Break', 'College Finals']);
   });
 
   it('rejects a student trying to create an event', async () => {
@@ -162,7 +183,60 @@ describe('Events', () => {
     const res = await request(app)
       .post('/api/v1/events')
       .set('Cookie', studentCookies)
-      .send({ title: 'Nope', startAt: new Date(Date.now() + 3600_000).toISOString(), audience: 'global' });
+      .send({
+        title: 'Nope',
+        type: 'event',
+        startAt: new Date(Date.now() + 3600_000).toISOString(),
+        allDay: false,
+        audience: 'global',
+      });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('Admin birthday calendar', () => {
+  it('sets a birthday for a teacher and a student, and surfaces both to the admin only', async () => {
+    const adminCookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser({ email: `bday-teacher-${Date.now()}@example.com` });
+    const student = await createStudentUser({ email: `bday-student-${Date.now()}@example.com` });
+    const teacherCookies = await signInAs(teacher.email, 'teacher');
+
+    const now = new Date();
+    const soon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3);
+    const dob = `1995-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+
+    const teacherDobRes = await request(app)
+      .patch(`/api/v1/admin/users/${teacher.id}/date-of-birth`)
+      .set('Cookie', adminCookies)
+      .send({ dateOfBirth: dob });
+    expect(teacherDobRes.status).toBe(200);
+
+    const studentDobRes = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/date-of-birth`)
+      .set('Cookie', adminCookies)
+      .send({ dateOfBirth: dob });
+    expect(studentDobRes.status).toBe(200);
+
+    // Non-admin can't set another user's birthday.
+    const forbidden = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/date-of-birth`)
+      .set('Cookie', teacherCookies)
+      .send({ dateOfBirth: dob });
+    expect(forbidden.status).toBe(403);
+
+    const adminEvents = await request(app)
+      .get(`/api/v1/events/me?from=${now.toISOString()}&to=${new Date(now.getTime() + 7 * 86400_000).toISOString()}`)
+      .set('Cookie', adminCookies);
+    const birthdayTitles = adminEvents.body.data
+      .filter((e: { type: string }) => e.type === 'birthday')
+      .map((e: { title: string }) => e.title)
+      .sort();
+    expect(birthdayTitles).toEqual([`${student.name}'s birthday`, `${teacher.name}'s birthday`]);
+
+    // A non-admin never sees birthdays, even in the same date range.
+    const teacherEvents = await request(app)
+      .get(`/api/v1/events/me?from=${now.toISOString()}&to=${new Date(now.getTime() + 7 * 86400_000).toISOString()}`)
+      .set('Cookie', teacherCookies);
+    expect(teacherEvents.body.data.some((e: { type: string }) => e.type === 'birthday')).toBe(false);
   });
 });

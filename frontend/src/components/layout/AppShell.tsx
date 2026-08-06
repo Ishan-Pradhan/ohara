@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BookOpen,
+  CalendarDays,
   CalendarRange,
   LayoutDashboard,
   LayoutGrid,
@@ -41,7 +42,12 @@ interface NavGroup {
 }
 
 const navGroups: NavGroup[] = [
-  { items: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true }] },
+  {
+    items: [
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+    ],
+  },
   {
     label: 'Institution',
     items: [

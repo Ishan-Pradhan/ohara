@@ -30,6 +30,7 @@ export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response
       const program = cls ? await programRepository.findById(cls.programId) : null;
       return {
         ...serializeCourse(course),
+        classId: cls?.id ?? null,
         className: cls?.name ?? null,
         programName: program?.name ?? null,
       };

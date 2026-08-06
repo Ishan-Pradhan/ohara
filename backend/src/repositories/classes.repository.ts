@@ -19,6 +19,13 @@ export const classRepository = {
     return await Class.findByPk(id);
   },
 
+  /** Powers events.controller.ts's teacher-scope resolution — needs the
+   * class's program (for institutionType) without changing findById's
+   * existing no-include contract for its other callers. */
+  findByIdWithProgram: async (id: string): Promise<Class | null> => {
+    return await Class.findByPk(id, { include: ['program'] });
+  },
+
   update: async (
     id: string,
     data: ClassUpdateAttributes,

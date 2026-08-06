@@ -10,6 +10,7 @@ export const serializeUser = (u: User) => ({
   isBlocked: u.isBlocked,
   authProvider: u.authProvider,
   avatarUrl: u.avatarUrl,
+  dateOfBirth: u.dateOfBirth,
   createdAt: u.createdAt,
 });
 

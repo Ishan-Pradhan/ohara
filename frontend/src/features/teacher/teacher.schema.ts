@@ -5,6 +5,7 @@ import { courseSchema, sectionSchema } from '../institution/institution.schema.j
 /* Mirrors backend/src/validations/teacher.validation.ts and the roster/flag serializers. */
 
 export const teacherCourseSchema = courseSchema.extend({
+  classId: z.string().nullable(),
   className: z.string().nullable(),
   programName: z.string().nullable(),
 });

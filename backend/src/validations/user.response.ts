@@ -16,6 +16,7 @@ export const userPublicSchema = registry.register(
     isVerified: z.boolean(),
     isBlocked: z.boolean(),
     authProvider: z.enum(['local', 'google', 'github']),
+    dateOfBirth: z.iso.date().nullable(),
     createdAt: z.iso.datetime(),
   }),
 );

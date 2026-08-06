@@ -7,6 +7,7 @@ import {
   archiveUser,
   hardDeleteUser,
   inviteUsersBatch,
+  setDateOfBirth,
 } from '../controllers/admin.controller.js';
 import { listStudentFlags, resolveStudentFlag } from '../controllers/studentFlags.controller.js';
 import { requireRole, verifyJWT } from '../middlewares/auth.middleware.js';
@@ -19,6 +20,7 @@ import {
   hardDeleteUserSchema,
   createStaffSchema,
   inviteUsersBatchSchema,
+  setDateOfBirthSchema,
 } from '../validations/admin.validation.js';
 import {
   listStudentFlagsSchema,
@@ -69,6 +71,15 @@ router
     requireRole(USER_ROLES.ADMIN),
     validate(archiveUserSchema),
     archiveUser,
+  );
+
+router
+  .route('/users/:id/date-of-birth')
+  .patch(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(setDateOfBirthSchema),
+    setDateOfBirth,
   );
 
 router

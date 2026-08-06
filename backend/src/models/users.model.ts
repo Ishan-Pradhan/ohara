@@ -85,4 +85,12 @@ export class User extends Model {
   @Default(null)
   @Column(DataType.DATE)
   declare deletedAt: Date | null;
+
+  /** Teacher/admin birthdays for the admin calendar (FR-36-adjacent, not a
+   * formal FR). Students have their own DOB on `StudentProfile` instead —
+   * no profile table exists for teachers/admins, so a single nullable
+   * column is the right size here. */
+  @Default(null)
+  @Column(DataType.DATEONLY)
+  declare dateOfBirth: string | null;
 }
