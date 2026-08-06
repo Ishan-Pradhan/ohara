@@ -5,6 +5,7 @@ import { CalendarRange, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 
 import {
   createAcademicYearSchema,
+  academicYearTerms,
   type AcademicYear,
   type CreateAcademicYearInput,
 } from '../../features/institution/institution.schema.js';
@@ -22,6 +23,7 @@ import { Button } from '../../components/ui/Button.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Field } from '../../components/ui/Field.js';
 import { Input } from '../../components/ui/Input.js';
+import { Select } from '../../components/ui/Select.js';
 import { Checkbox } from '../../components/ui/Checkbox.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
@@ -61,7 +63,7 @@ export const AcademicYearsPage = () => {
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ name: '', startDate: '', endDate: '', isCurrent: false });
+    resetForm({ name: '', startDate: '', endDate: '', isCurrent: false, term: 'annual' });
     setDialogOpen(true);
   };
 
@@ -72,6 +74,7 @@ export const AcademicYearsPage = () => {
       startDate: year.startDate,
       endDate: year.endDate,
       isCurrent: year.isCurrent,
+      term: year.term,
     });
     setDialogOpen(true);
   };
@@ -114,7 +117,7 @@ export const AcademicYearsPage = () => {
     <AppShell>
       <PageHeader
         title="Academic years"
-        description="Exactly one year is marked current at a time."
+        description="One current year per term — an odd-semester and an even-semester year can both be current at once."
         actions={
           <Button onClick={openCreate}>
             <Plus className="size-4" aria-hidden />
@@ -140,6 +143,7 @@ export const AcademicYearsPage = () => {
           <TableHead>
             <TableRow>
               <TableHeadCell>Name</TableHeadCell>
+              <TableHeadCell>Term</TableHeadCell>
               <TableHeadCell>Starts</TableHeadCell>
               <TableHeadCell>Ends</TableHeadCell>
               <TableHeadCell>Status</TableHeadCell>
@@ -150,6 +154,11 @@ export const AcademicYearsPage = () => {
             {years.map((year) => (
               <TableRow key={year.id}>
                 <TableCell className="font-medium">{year.name}</TableCell>
+                <TableCell>
+                  <Badge variant={year.term === 'annual' ? 'neutral' : 'primary'} className="capitalize">
+                    {year.term}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-muted">{year.startDate}</TableCell>
                 <TableCell className="text-muted">{year.endDate}</TableCell>
                 <TableCell>
@@ -186,14 +195,36 @@ export const AcademicYearsPage = () => {
         open={dialogOpen}
         onOpenChange={(open) => (open ? setDialogOpen(true) : closeDialog())}
         title={editing ? 'Edit academic year' : 'New academic year'}
-        description="Marking this current unsets whichever year was current before."
+        description="Marking this current unsets whichever year was current before, within the same term."
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
 
           <Field label="Name" htmlFor="name" error={errors.name?.message}>
-            <Input id="name" placeholder="e.g. 2026–2027" {...field('name')} />
+            <Input id="name" placeholder="e.g. 2026/27 odd" {...field('name')} />
           </Field>
+
+          <Controller
+            control={control}
+            name="term"
+            render={({ field: termField }) => (
+              <Field
+                label="Term"
+                htmlFor="term"
+                hint="Odd (1/3/5/7) and even (2/4/6/8) semesters run on offset calendars — pick 'Annual' for schools, which don't split into odd/even."
+              >
+                <Select
+                  id="term"
+                  value={termField.value}
+                  onValueChange={termField.onChange}
+                  options={academicYearTerms.map((t) => ({
+                    value: t,
+                    label: t === 'annual' ? 'Annual (schools)' : t === 'odd' ? 'Odd semesters' : 'Even semesters',
+                  }))}
+                />
+              </Field>
+            )}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start date" htmlFor="startDate" error={errors.startDate?.message}>

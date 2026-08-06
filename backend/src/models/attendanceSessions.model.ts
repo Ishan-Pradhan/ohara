@@ -14,6 +14,7 @@ import {
 
 import { Course } from './courses.model.js';
 import { User } from './users.model.js';
+import { Section } from './sections.model.js';
 import { AttendanceRecord } from './attendanceRecords.model.js';
 
 @Table({ tableName: 'AttendanceSessions', timestamps: true })
@@ -30,6 +31,17 @@ export class AttendanceSession extends Model {
 
   @BelongsTo(() => Course)
   declare course?: Course;
+
+  /** Nullable at the DB level for a handful of pre-existing rows from before
+   * attendance was section-scoped; every new session is required (by Zod)
+   * to set this — a course can be taught to more than one section of its
+   * class, and a session is always for one specific class meeting. */
+  @ForeignKey(() => Section)
+  @Column(DataType.UUID)
+  declare sectionId: string | null;
+
+  @BelongsTo(() => Section)
+  declare section?: Section;
 
   @AllowNull(false)
   @Column(DataType.DATEONLY)

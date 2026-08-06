@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchAttendanceSessions,
   fetchAttendanceSession,
+  fetchAttendanceRoster,
+  fetchAttendanceSections,
   createAttendanceSession,
   updateAttendanceSession,
   deleteAttendanceSession,
@@ -29,6 +31,25 @@ export const useAttendanceSession = (courseId: string, id: string) =>
     queryKey: attendanceSessionKey(courseId, id),
     queryFn: () => fetchAttendanceSession(courseId, id),
     enabled: Boolean(courseId) && Boolean(id),
+  });
+
+export const attendanceSectionsKey = (courseId: string) => ['attendanceSections', courseId] as const;
+
+export const useAttendanceSections = (courseId: string) =>
+  useQuery({
+    queryKey: attendanceSectionsKey(courseId),
+    queryFn: () => fetchAttendanceSections(courseId),
+    enabled: Boolean(courseId),
+  });
+
+export const attendanceRosterKey = (courseId: string, sectionId: string) =>
+  ['attendanceRoster', courseId, sectionId] as const;
+
+export const useAttendanceRoster = (courseId: string, sectionId: string) =>
+  useQuery({
+    queryKey: attendanceRosterKey(courseId, sectionId),
+    queryFn: () => fetchAttendanceRoster(courseId, sectionId),
+    enabled: Boolean(courseId) && Boolean(sectionId),
   });
 
 export const useAttendanceSummary = (courseId: string) =>

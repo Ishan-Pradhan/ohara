@@ -65,7 +65,11 @@ export const ClassDetailPage = () => {
             <TabsTrigger value="courses">Courses</TabsTrigger>
           </TabsList>
           <TabsContent value="sections">
-            <SectionsTab classId={classId} />
+            <SectionsTab
+              classId={classId}
+              institutionType={program.institutionType}
+              orderIndex={cls.orderIndex}
+            />
           </TabsContent>
           <TabsContent value="courses">
             <CoursesTab classId={classId} />

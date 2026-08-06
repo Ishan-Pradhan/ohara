@@ -513,6 +513,59 @@ describe('POST /admin/academic-years', () => {
     expect(current).toHaveLength(1);
     expect(current[0].id).toBe(yearB.body.data.id);
   });
+
+  it('lets an odd-term and an even-term year both be current at once, without unsetting each other', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const odd = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2026/27 odd',
+        startDate: '2026-07-01',
+        endDate: '2027-01-31',
+        isCurrent: true,
+        term: 'odd',
+      });
+    expect(odd.body.data.isCurrent).toBe(true);
+
+    const even = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2026/27 even',
+        startDate: '2027-02-01',
+        endDate: '2027-06-30',
+        isCurrent: true,
+        term: 'even',
+      });
+    expect(even.body.data.isCurrent).toBe(true);
+
+    // Neither creation unset the other, because they're different terms.
+    const reread = await request(app).get(YEARS).set('Cookie', cookies);
+    const oddYear = reread.body.data.find((y: { id: string }) => y.id === odd.body.data.id);
+    const evenYear = reread.body.data.find((y: { id: string }) => y.id === even.body.data.id);
+    expect(oddYear.isCurrent).toBe(true);
+    expect(evenYear.isCurrent).toBe(true);
+
+    // A second odd-term year DOES unset the first odd one — uniqueness still
+    // holds within a term, just not globally.
+    const odd2 = await request(app)
+      .post(YEARS)
+      .set('Cookie', cookies)
+      .send({
+        name: '2027/28 odd',
+        startDate: '2027-07-01',
+        endDate: '2028-01-31',
+        isCurrent: true,
+        term: 'odd',
+      });
+    const finalList = await request(app).get(YEARS).set('Cookie', cookies);
+    const stillCurrentOdd = finalList.body.data.find((y: { id: string }) => y.id === odd.body.data.id);
+    const stillCurrentEven = finalList.body.data.find((y: { id: string }) => y.id === even.body.data.id);
+    expect(stillCurrentOdd.isCurrent).toBe(false);
+    expect(stillCurrentEven.isCurrent).toBe(true);
+    expect(odd2.body.data.isCurrent).toBe(true);
+  });
 });
 
 describe('PATCH /admin/academic-years/:id', () => {

@@ -49,19 +49,22 @@ export type ClassCreationAttributes = Optional<
   'id' | 'createdAt' | 'updatedAt'
 >;
 
+export type AcademicYearTerm = 'odd' | 'even' | 'annual';
+
 export interface AcademicYearAttributes {
   id: string;
   name: string;
   startDate: string;
   endDate: string;
   isCurrent: boolean;
+  term: AcademicYearTerm;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type AcademicYearCreationAttributes = Optional<
   AcademicYearAttributes,
-  'id' | 'isCurrent' | 'createdAt' | 'updatedAt'
+  'id' | 'isCurrent' | 'term' | 'createdAt' | 'updatedAt'
 >;
 
 export interface SectionAttributes {

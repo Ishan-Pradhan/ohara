@@ -13,9 +13,19 @@ const attendanceRecordInputSchema = z.object({
 export const createAttendanceSessionSchema = {
   params: z.object({ courseId: z.uuid() }),
   body: z.object({
+    sectionId: z.uuid(),
     sessionDate: z.iso.date(),
     records: z.array(attendanceRecordInputSchema).min(1),
   }),
+};
+
+export const getAttendanceRosterSchema = {
+  params: z.object({ courseId: z.uuid() }),
+  query: z.object({ sectionId: z.uuid() }),
+};
+
+export const listAttendanceSectionsSchema = {
+  params: z.object({ courseId: z.uuid() }),
 };
 
 export const listAttendanceSessionsSchema = {
@@ -56,6 +66,7 @@ const attendanceSessionSchema = registry.register(
   z.object({
     id: z.uuid(),
     courseId: z.uuid(),
+    sectionId: z.uuid().nullable(),
     sessionDate: z.iso.date(),
     records: z.array(attendanceRecordSchema),
   }),
@@ -66,9 +77,36 @@ const attendanceSessionSummarySchema = registry.register(
   z.object({
     id: z.uuid(),
     courseId: z.uuid(),
+    sectionId: z.uuid().nullable(),
     sessionDate: z.iso.date(),
   }),
 );
+
+const attendanceRosterEntrySchema = registry.register(
+  'AttendanceRosterEntry',
+  z.object({ studentId: z.uuid(), studentName: z.string() }),
+);
+
+const attendanceSectionOptionSchema = registry.register(
+  'AttendanceSectionOption',
+  z.object({ id: z.uuid(), name: z.string() }),
+);
+
+registry.registerPath({
+  method: 'get',
+  path: '/courses/{courseId}/attendance/sections',
+  tags: ['Attendance'],
+  request: { params: listAttendanceSectionsSchema.params },
+  responses: {
+    200: {
+      description: "This course's class's sections for whichever academic year is currently relevant — what a \"take attendance\" screen should offer",
+      content: { 'application/json': { schema: envelope(z.array(attendanceSectionOptionSchema)) } },
+    },
+    401: unauthenticated,
+    403: teacherOnly,
+    404: { description: 'Course not found' },
+  },
+});
 
 const attendancePercentageSchema = z.object({
   total: z.number(),
@@ -163,6 +201,21 @@ registry.registerPath({
     401: unauthenticated,
     403: teacherOnly,
     404: { description: 'Attendance session not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/courses/{courseId}/attendance/roster',
+  tags: ['Attendance'],
+  request: { params: getAttendanceRosterSchema.params, query: getAttendanceRosterSchema.query },
+  responses: {
+    200: {
+      description: 'Students enrolled in this course who are currently placed in the given section — the roster a "take attendance" screen marks',
+      content: { 'application/json': { schema: envelope(z.array(attendanceRosterEntrySchema)) } },
+    },
+    401: unauthenticated,
+    403: teacherOnly,
   },
 });
 

@@ -189,7 +189,7 @@ export const deleteBatch = asyncHandler(
 
 export const createAcademicYear = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { name, startDate, endDate, isCurrent } =
+    const { name, startDate, endDate, isCurrent, term } =
       req.validated?.body as AcademicYearCreationAttributes;
 
     const year = await academicYearRepository.create({
@@ -197,6 +197,7 @@ export const createAcademicYear = asyncHandler(
       startDate,
       endDate,
       isCurrent: isCurrent ?? false,
+      term,
     });
 
     return ok(res, serializeAcademicYear(year), 'Academic year created', 201);
@@ -214,7 +215,7 @@ export const updateAcademicYear = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
     const body = req.validated?.body as Partial<
-      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent'>
+      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent' | 'term'>
     >;
 
     const year = await academicYearRepository.update(id, body);

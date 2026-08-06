@@ -36,6 +36,15 @@ export class AcademicYear extends Model {
   @Column(DataType.BOOLEAN)
   declare isCurrent: boolean;
 
+  /** Odd/even semesters run on offset calendars for college/university
+   * programs — `isCurrent` is unique per `term`, not globally, so "26/27
+   * odd" and "26/27 even" can both be current at once. `annual` is what
+   * schools use (no odd/even split). */
+  @AllowNull(false)
+  @Default('annual')
+  @Column(DataType.ENUM('odd', 'even', 'annual'))
+  declare term: 'odd' | 'even' | 'annual';
+
   @HasMany(() => Section)
   declare sections?: Section[];
 }

@@ -5,9 +5,11 @@ import type { AcademicYearCreationAttributes } from '../types/institution.types.
 export const academicYearRepository = {
   /**
    * Plain insert unless `isCurrent: true` is requested, in which case the
-   * previous current year is unset and the new row inserted as current in one
-   * transaction — the partial unique index in the migration is the backstop,
-   * not the primary mechanism.
+   * previous current year *for the same term* is unset and the new row
+   * inserted as current in one transaction — the partial unique index in
+   * the migration is the backstop, not the primary mechanism. Scoped by
+   * term (not global) because odd/even semesters run on offset calendars
+   * and can both be legitimately current at once.
    */
   create: async (
     data: AcademicYearCreationAttributes,
@@ -19,7 +21,7 @@ export const academicYearRepository = {
     return await sequelize.transaction(async (transaction) => {
       await AcademicYear.update(
         { isCurrent: false },
-        { where: { isCurrent: true }, transaction },
+        { where: { isCurrent: true, term: data.term ?? 'annual' }, transaction },
       );
       return await AcademicYear.create(data, { transaction });
     });
@@ -34,11 +36,12 @@ export const academicYearRepository = {
   },
 
   /** Same current-year invariant as `create`: flipping `isCurrent` to true
-   * unsets whichever row previously held it, in one transaction. */
+   * unsets whichever row previously held it *for the resulting term*, in
+   * one transaction. */
   update: async (
     id: string,
     data: Partial<
-      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent'>
+      Pick<AcademicYearCreationAttributes, 'name' | 'startDate' | 'endDate' | 'isCurrent' | 'term'>
     >,
   ): Promise<AcademicYear | null> => {
     if (!data.isCurrent) {
@@ -52,7 +55,7 @@ export const academicYearRepository = {
       if (!year) return null;
       await AcademicYear.update(
         { isCurrent: false },
-        { where: { isCurrent: true }, transaction },
+        { where: { isCurrent: true, term: data.term ?? year.term }, transaction },
       );
       return await year.update(data, { transaction });
     });

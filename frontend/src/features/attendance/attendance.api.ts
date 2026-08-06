@@ -3,10 +3,14 @@ import { api } from '../../lib/axios.js';
 import {
   attendanceSessionSchema,
   attendanceSessionSummarySchema,
+  attendanceRosterEntrySchema,
+  attendanceSectionOptionSchema,
   attendancePercentageSchema,
   attendanceSummaryRowSchema,
   type AttendanceSession,
   type AttendanceSessionSummary,
+  type AttendanceRosterEntry,
+  type AttendanceSectionOption,
   type AttendancePercentage,
   type AttendanceSummaryRow,
   type CreateAttendanceSessionInput,
@@ -16,6 +20,19 @@ import {
 export const fetchAttendanceSessions = async (courseId: string): Promise<AttendanceSessionSummary[]> => {
   const res = await api.get(`/courses/${courseId}/attendance/sessions`);
   return z.array(attendanceSessionSummarySchema).parse(res.data.data);
+};
+
+export const fetchAttendanceSections = async (courseId: string): Promise<AttendanceSectionOption[]> => {
+  const res = await api.get(`/courses/${courseId}/attendance/sections`);
+  return z.array(attendanceSectionOptionSchema).parse(res.data.data);
+};
+
+export const fetchAttendanceRoster = async (
+  courseId: string,
+  sectionId: string,
+): Promise<AttendanceRosterEntry[]> => {
+  const res = await api.get(`/courses/${courseId}/attendance/roster`, { params: { sectionId } });
+  return z.array(attendanceRosterEntrySchema).parse(res.data.data);
 };
 
 export const fetchAttendanceSession = async (courseId: string, id: string): Promise<AttendanceSession> => {

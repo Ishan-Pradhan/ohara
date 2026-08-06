@@ -5,6 +5,7 @@ export type AttendanceStatus = 'present' | 'absent' | 'late';
 export interface AttendanceSessionAttributes {
   id: string;
   courseId: string;
+  sectionId: string | null;
   sessionDate: string;
   createdBy: string;
   createdAt?: Date;
@@ -13,7 +14,7 @@ export interface AttendanceSessionAttributes {
 
 export type AttendanceSessionCreationAttributes = Optional<
   AttendanceSessionAttributes,
-  'id' | 'createdAt' | 'updatedAt'
+  'id' | 'sectionId' | 'createdAt' | 'updatedAt'
 >;
 
 export interface AttendanceRecordAttributes {

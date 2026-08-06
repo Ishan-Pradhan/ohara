@@ -49,12 +49,16 @@ export const batchSchema = z.object({
   createdAt: z.string(),
 });
 
+export const academicYearTerms = ['odd', 'even', 'annual'] as const;
+export type AcademicYearTerm = (typeof academicYearTerms)[number];
+
 export const createAcademicYearSchema = z
   .object({
     name: z.string().min(1, 'Name is required'),
     startDate: z.string().min(1, 'Start date is required'),
     endDate: z.string().min(1, 'End date is required'),
     isCurrent: z.boolean().optional(),
+    term: z.enum(academicYearTerms),
   })
   .refine((val) => val.endDate > val.startDate, {
     message: 'End date must be after the start date',
@@ -67,6 +71,7 @@ export const academicYearSchema = z.object({
   startDate: z.string(),
   endDate: z.string(),
   isCurrent: z.boolean(),
+  term: z.enum(academicYearTerms),
   createdAt: z.string(),
 });
 

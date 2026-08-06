@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 
-import type { Section } from '../../../features/institution/institution.schema.js';
+import type { InstitutionType, Section } from '../../../features/institution/institution.schema.js';
 import {
   useAcademicYears,
   useClasses,
@@ -22,6 +22,7 @@ import {
   useSections,
   useUpdateSection,
 } from '../../../features/institution/useInstitution.js';
+import { deriveClassTerm } from '../../../lib/academicTerm.js';
 import { useTeachers } from '../../../features/users/useUsers.js';
 import {
   useBulkPromoteSection,
@@ -57,10 +58,13 @@ type SectionFormInput = z.infer<typeof sectionFormSchema>;
 
 interface SectionsTabProps {
   classId: string;
+  institutionType: InstitutionType;
+  orderIndex: number;
 }
 
-export const SectionsTab = ({ classId }: SectionsTabProps) => {
+export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTabProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showAllYears, setShowAllYears] = useState(false);
   const { data: years, isLoading: yearsLoading } = useAcademicYears();
   const { data: sections, isLoading: sectionsLoading } = useSections();
   const { data: classes } = useClasses();
@@ -74,8 +78,21 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   const [deleting, setDeleting] = useState<Section | null>(null);
   const [promoting, setPromoting] = useState<Section | null>(null);
 
+  // This class only ever runs in years matching its own term (annual for
+  // schools; odd/even for college/university, derived from the semester
+  // number) — filtering to those avoids mixing in an unrelated program's or
+  // the opposite-parity semester's years, which is what made the year
+  // dropdown confusing before. "Show all" is an escape hatch for browsing
+  // history or fixing a miscategorized year.
+  const classTerm = deriveClassTerm(institutionType, orderIndex);
+  const termYears = (years ?? []).filter((y) => y.term === classTerm);
+  const relevantYears = showAllYears || termYears.length === 0 ? years ?? [] : termYears;
+
   const selectedYearId =
-    searchParams.get('year') ?? years?.find((y) => y.isCurrent)?.id ?? years?.[0]?.id ?? '';
+    searchParams.get('year') ??
+    relevantYears.find((y) => y.isCurrent)?.id ??
+    relevantYears[0]?.id ??
+    '';
 
   const classSections = (sections ?? []).filter(
     (s) => s.classId === classId && s.academicYearId === selectedYearId,
@@ -91,7 +108,7 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
 
   const teacherName = (id: string | null) => teachers?.find((t) => t.id === id)?.name ?? null;
   const teacherOptions = (teachers ?? []).map((t) => ({ value: t.id, label: t.name }));
-  const yearOptions = (years ?? []).map((y) => ({ value: y.id, label: y.name }));
+  const yearOptions = relevantYears.map((y) => ({ value: y.id, label: y.name }));
 
   // Promotion always moves a section's students into the same program's next
   // class (by orderIndex), regardless of which academic year that class's
@@ -201,13 +218,26 @@ export const SectionsTab = ({ classId }: SectionsTabProps) => {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="max-w-xs">
-          <Select
-            value={selectedYearId}
-            onValueChange={(value) => setSearchParams({ year: value })}
-            options={yearOptions}
-            placeholder="Select a year"
-          />
+        <div className="flex items-center gap-3">
+          <div className="max-w-xs">
+            <Select
+              value={selectedYearId}
+              onValueChange={(value) => setSearchParams({ year: value })}
+              options={yearOptions}
+              placeholder="Select a year"
+            />
+          </div>
+          {termYears.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAllYears((prev) => !prev)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              {showAllYears
+                ? `Show only ${classTerm === 'annual' ? 'annual' : classTerm + '-semester'} years`
+                : 'Show all years'}
+            </button>
+          ) : null}
         </div>
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden />

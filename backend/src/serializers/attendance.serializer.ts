@@ -4,6 +4,7 @@ import type { AttendanceStatus } from '../types/attendance.types.js';
 export const serializeAttendanceSession = (session: AttendanceSession) => ({
   id: session.id,
   courseId: session.courseId,
+  sectionId: session.sectionId,
   sessionDate: session.sessionDate,
   records: (session.records ?? []).map((r) => ({
     studentId: r.studentId,
@@ -15,6 +16,7 @@ export const serializeAttendanceSession = (session: AttendanceSession) => ({
 export const serializeAttendanceSessionSummary = (session: AttendanceSession) => ({
   id: session.id,
   courseId: session.courseId,
+  sectionId: session.sectionId,
   sessionDate: session.sessionDate,
 });
 

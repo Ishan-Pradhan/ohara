@@ -21,6 +21,7 @@ interface RosterEntry {
 
 interface TakeAttendanceDialogProps {
   courseId: string;
+  sectionId: string;
   roster: RosterEntry[];
   session: AttendanceSession | null;
   open: boolean;
@@ -43,6 +44,7 @@ const statusStyles: Record<AttendanceStatus, string> = {
 
 export const TakeAttendanceDialog = ({
   courseId,
+  sectionId,
   roster,
   session,
   open,
@@ -74,7 +76,7 @@ export const TakeAttendanceDialog = ({
         await updateSession.mutateAsync({ id: session.id, records });
         toast.success('Attendance updated');
       } else {
-        await createSession.mutateAsync({ sessionDate, records });
+        await createSession.mutateAsync({ sectionId, sessionDate, records });
         toast.success('Attendance recorded');
       }
       onOpenChange(false);
@@ -104,7 +106,7 @@ export const TakeAttendanceDialog = ({
         </Field>
 
         {roster.length === 0 ? (
-          <p className="text-sm text-muted">No students are actively enrolled in this course yet.</p>
+          <p className="text-sm text-muted">No students in this section are enrolled in this course yet.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {roster.map((entry) => (

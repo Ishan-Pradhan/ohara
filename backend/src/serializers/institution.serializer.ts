@@ -38,6 +38,7 @@ export const serializeAcademicYear = (y: AcademicYear) => ({
   startDate: y.startDate,
   endDate: y.endDate,
   isCurrent: y.isCurrent,
+  term: y.term,
   createdAt: y.createdAt,
 });
 

@@ -336,6 +336,10 @@ export const createAcademicYearSchema = {
     startDate: z.iso.date(),
     endDate: z.iso.date(),
     isCurrent: z.boolean().optional(),
+    // Odd/even semesters (1/3/5/7 vs 2/4/6/8) run on offset calendars for
+    // college/university programs — 'annual' is what schools use, and the
+    // default, since they don't split into odd/even at all.
+    term: z.enum(['odd', 'even', 'annual']).default('annual'),
   }),
 };
 
@@ -347,6 +351,7 @@ export const academicYearSchema = registry.register(
     startDate: z.iso.date(),
     endDate: z.iso.date(),
     isCurrent: z.boolean(),
+    term: z.enum(['odd', 'even', 'annual']),
     createdAt: z.iso.datetime(),
   }),
 );
@@ -399,6 +404,7 @@ export const updateAcademicYearSchema = {
     startDate: z.iso.date().optional(),
     endDate: z.iso.date().optional(),
     isCurrent: z.boolean().optional(),
+    term: z.enum(['odd', 'even', 'annual']).optional(),
   }),
 };
 

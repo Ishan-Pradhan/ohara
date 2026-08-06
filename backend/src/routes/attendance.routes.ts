@@ -9,6 +9,8 @@ import {
   deleteAttendanceSessionSchema,
   getAttendanceSummarySchema,
   getMyAttendanceSchema,
+  getAttendanceRosterSchema,
+  listAttendanceSectionsSchema,
 } from '../validations/attendance.validation.js';
 import {
   createAttendanceSession,
@@ -18,6 +20,8 @@ import {
   deleteAttendanceSession,
   getAttendanceSummary,
   getMyAttendance,
+  getAttendanceRoster,
+  listAttendanceSections,
 } from '../controllers/attendance.controller.js';
 
 // Mounted at /api/v1/courses — must be registered before electivesRoutes,
@@ -34,6 +38,14 @@ router
   .get(verifyJWT, requireCourseTeacher, validate(getAttendanceSessionSchema), getAttendanceSession)
   .patch(verifyJWT, requireCourseTeacher, validate(updateAttendanceSessionSchema), updateAttendanceSession)
   .delete(verifyJWT, requireCourseTeacher, validate(deleteAttendanceSessionSchema), deleteAttendanceSession);
+
+router
+  .route('/:courseId/attendance/sections')
+  .get(verifyJWT, requireCourseTeacher, validate(listAttendanceSectionsSchema), listAttendanceSections);
+
+router
+  .route('/:courseId/attendance/roster')
+  .get(verifyJWT, requireCourseTeacher, validate(getAttendanceRosterSchema), getAttendanceRoster);
 
 router
   .route('/:courseId/attendance/summary')
