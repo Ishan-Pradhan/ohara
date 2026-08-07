@@ -35,16 +35,22 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
   return cookiesFrom(login);
 };
 
-const setupCourseWithTeacherAndStudent = async () => {
+/** A course with a teacher and two enrolled students — only `memberStudent`
+ * is later put on the project roster, `outsiderStudent` stays enrolled but
+ * not a member, so tests can tell "enrolled" and "project member" apart. */
+const setupCourseWithTeacherAndTwoStudents = async () => {
   const course = await createCourse();
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
-  const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
-  await createEnrollment({ studentId: student.id, courseId: course.id });
+  const memberStudent = await createStudentUser({ email: `member-${Date.now()}@example.com` });
+  const outsiderStudent = await createStudentUser({ email: `outsider-${Date.now()}@example.com` });
+  await createEnrollment({ studentId: memberStudent.id, courseId: course.id });
+  await createEnrollment({ studentId: outsiderStudent.id, courseId: course.id });
 
   const teacherCookies = await signInAs(teacher.email, 'teacher');
-  const studentCookies = await signInAs(student.email, 'student');
-  return { course, teacher, student, teacherCookies, studentCookies };
+  const memberCookies = await signInAs(memberStudent.email, 'student');
+  const outsiderCookies = await signInAs(outsiderStudent.email, 'student');
+  return { course, teacher, memberStudent, outsiderStudent, teacherCookies, memberCookies, outsiderCookies };
 };
 
 beforeEach(async () => {
@@ -55,96 +61,154 @@ afterAll(async () => {
   await closeDb();
 });
 
-describe('Kanban boards', () => {
-  it('creates a project with default columns, tasks, and lets the assignee (only) move their own task', async () => {
-    const { course, teacherCookies, studentCookies, student } = await setupCourseWithTeacherAndStudent();
+describe('Kanban team projects', () => {
+  it('creates a project with a member roster; only members can see or work the board', async () => {
+    const { course, teacherCookies, memberStudent, memberCookies, outsiderCookies } =
+      await setupCourseWithTeacherAndTwoStudents();
+
+    // Reject a roster containing a student not enrolled in the course.
+    const notEnrolled = await createStudentUser({ email: `not-enrolled-${Date.now()}@example.com` });
+    const rejectedCreate = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects`)
+      .set('Cookie', teacherCookies)
+      .send({ name: 'Term Project', memberIds: [notEnrolled.id] });
+    expect(rejectedCreate.status).toBe(400);
 
     const projectRes = await request(app)
       .post(`/api/v1/courses/${course.id}/projects`)
       .set('Cookie', teacherCookies)
-      .send({ name: 'Term Project' });
+      .send({ name: 'Term Project', memberIds: [memberStudent.id] });
     expect(projectRes.status).toBe(201);
     expect(projectRes.body.data.columns.map((c: { name: string }) => c.name)).toEqual([
       'To do',
       'In progress',
       'Done',
     ]);
+    expect(projectRes.body.data.members).toEqual([{ id: memberStudent.id, name: memberStudent.name }]);
     const projectId = projectRes.body.data.id;
-    const [todo, inProgress] = projectRes.body.data.columns;
 
-    // Reject assigning to a student not enrolled in the course.
-    const outsider = await createStudentUser({ email: `outsider-${Date.now()}@example.com` });
-    const rejected = await request(app)
-      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
-      .set('Cookie', teacherCookies)
-      .send({ title: 'Bad task', assigneeId: outsider.id });
-    expect(rejected.status).toBe(400);
-
-    const task1Res = await request(app)
-      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
-      .set('Cookie', teacherCookies)
-      .send({ title: 'Write proposal', description: 'First draft', assigneeId: student.id });
-    expect(task1Res.status).toBe(201);
-    expect(task1Res.body.data.assigneeName).toBe(student.name);
-    const task1Id = task1Res.body.data.id;
-
-    const task2Res = await request(app)
-      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
-      .set('Cookie', teacherCookies)
-      .send({ title: 'Unassigned task' });
-    const task2Id = task2Res.body.data.id;
-
-    // The student can't move the unassigned task (not theirs).
-    const forbiddenMove = await request(app)
-      .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${task2Id}/move`)
-      .set('Cookie', studentCookies)
-      .send({ columnId: inProgress.id, orderIndex: 0 });
-    expect(forbiddenMove.status).toBe(403);
-
-    // The student CAN move their own task across columns.
-    const moveRes = await request(app)
-      .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${task1Id}/move`)
-      .set('Cookie', studentCookies)
-      .send({ columnId: inProgress.id, orderIndex: 0 });
-    expect(moveRes.status).toBe(200);
-    expect(moveRes.body.data.columnId).toBe(inProgress.id);
-    expect(moveRes.body.data.orderIndex).toBe(0);
-
-    const afterMove = await request(app)
+    // The member can view it.
+    const memberView = await request(app)
       .get(`/api/v1/courses/${course.id}/projects/${projectId}`)
-      .set('Cookie', teacherCookies);
-    const todoAfter = afterMove.body.data.columns.find((c: { id: string }) => c.id === todo.id);
-    const inProgressAfter = afterMove.body.data.columns.find((c: { id: string }) => c.id === inProgress.id);
-    expect(todoAfter.tasks.map((t: { id: string }) => t.id)).toEqual([task2Id]);
-    expect(todoAfter.tasks[0].orderIndex).toBe(0); // reindexed after task1 left
-    expect(inProgressAfter.tasks.map((t: { id: string }) => t.id)).toEqual([task1Id]);
+      .set('Cookie', memberCookies);
+    expect(memberView.status).toBe(200);
 
-    // The teacher may move any task, including the unassigned one.
-    const teacherMove = await request(app)
-      .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${task2Id}/move`)
-      .set('Cookie', teacherCookies)
-      .send({ columnId: inProgress.id, orderIndex: 0 });
-    expect(teacherMove.status).toBe(200);
+    // An enrolled-but-not-a-member student gets a 404 (existence not leaked).
+    const outsiderView = await request(app)
+      .get(`/api/v1/courses/${course.id}/projects/${projectId}`)
+      .set('Cookie', outsiderCookies);
+    expect(outsiderView.status).toBe(404);
 
-    // Student is rejected from creating/editing/deleting.
-    const studentCreate = await request(app)
-      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
-      .set('Cookie', studentCookies)
-      .send({ title: 'Nope' });
-    expect(studentCreate.status).toBe(403);
+    // listProjects: the member sees it, the outsider does not.
+    const memberList = await request(app)
+      .get(`/api/v1/courses/${course.id}/projects`)
+      .set('Cookie', memberCookies);
+    expect(memberList.body.data.map((p: { id: string }) => p.id)).toEqual([projectId]);
 
-    const deleteRes = await request(app)
-      .delete(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${task2Id}`)
-      .set('Cookie', teacherCookies);
-    expect(deleteRes.status).toBe(200);
+    const outsiderList = await request(app)
+      .get(`/api/v1/courses/${course.id}/projects`)
+      .set('Cookie', outsiderCookies);
+    expect(outsiderList.body.data).toEqual([]);
   });
 
-  it('preserves order within a column when reordering', async () => {
-    const { course, teacherCookies } = await setupCourseWithTeacherAndStudent();
+  it('lets any project member create, assign, edit, move, and delete tasks — not just the teacher', async () => {
+    const { course, teacherCookies, memberStudent, memberCookies, outsiderStudent, outsiderCookies } =
+      await setupCourseWithTeacherAndTwoStudents();
+
     const projectRes = await request(app)
       .post(`/api/v1/courses/${course.id}/projects`)
       .set('Cookie', teacherCookies)
-      .send({ name: 'Reorder Project' });
+      .send({ name: 'Group Work', memberIds: [memberStudent.id] });
+    const projectId = projectRes.body.data.id;
+    const [todo, inProgress] = projectRes.body.data.columns;
+
+    // The member creates their own task and self-assigns — "split their
+    // work and assign what to do by themself instead of teachers".
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
+      .set('Cookie', memberCookies)
+      .send({ title: 'Write proposal', assigneeId: memberStudent.id });
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.data.assigneeName).toBe(memberStudent.name);
+    const taskId = createRes.body.data.id;
+
+    // Assigning to someone not on the roster (even though enrolled) is rejected.
+    const badAssign = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
+      .set('Cookie', memberCookies)
+      .send({ title: 'Bad assign', assigneeId: outsiderStudent.id });
+    expect(badAssign.status).toBe(400);
+
+    // A non-member (even though enrolled in the course) cannot touch tasks.
+    const outsiderCreate = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects/${projectId}/columns/${todo.id}/tasks`)
+      .set('Cookie', outsiderCookies)
+      .send({ title: 'Nope' });
+    expect(outsiderCreate.status).toBe(403);
+
+    // The member moves the task themself — no assignee-only restriction anymore.
+    const moveRes = await request(app)
+      .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${taskId}/move`)
+      .set('Cookie', memberCookies)
+      .send({ columnId: inProgress.id, orderIndex: 0 });
+    expect(moveRes.status).toBe(200);
+    expect(moveRes.body.data.columnId).toBe(inProgress.id);
+
+    // The member edits and deletes it too.
+    const updateRes = await request(app)
+      .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${taskId}`)
+      .set('Cookie', memberCookies)
+      .send({ title: 'Write proposal v2' });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.data.title).toBe('Write proposal v2');
+
+    const deleteRes = await request(app)
+      .delete(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${taskId}`)
+      .set('Cookie', memberCookies);
+    expect(deleteRes.status).toBe(200);
+  });
+
+  it('lets the teacher replace the member roster, and rejects a student changing it', async () => {
+    const { course, teacherCookies, memberStudent, outsiderStudent, memberCookies, outsiderCookies } =
+      await setupCourseWithTeacherAndTwoStudents();
+
+    const projectRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects`)
+      .set('Cookie', teacherCookies)
+      .send({ name: 'Group Work', memberIds: [memberStudent.id] });
+    const projectId = projectRes.body.data.id;
+
+    const rejected = await request(app)
+      .put(`/api/v1/courses/${course.id}/projects/${projectId}/members`)
+      .set('Cookie', memberCookies)
+      .send({ memberIds: [memberStudent.id, outsiderStudent.id] });
+    expect(rejected.status).toBe(403);
+
+    const updateRes = await request(app)
+      .put(`/api/v1/courses/${course.id}/projects/${projectId}/members`)
+      .set('Cookie', teacherCookies)
+      .send({ memberIds: [outsiderStudent.id] });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.data.members).toEqual([{ id: outsiderStudent.id, name: outsiderStudent.name }]);
+
+    // The old member lost access; the newly added one has it.
+    const oldMemberView = await request(app)
+      .get(`/api/v1/courses/${course.id}/projects/${projectId}`)
+      .set('Cookie', memberCookies);
+    expect(oldMemberView.status).toBe(404);
+
+    const newMemberView = await request(app)
+      .get(`/api/v1/courses/${course.id}/projects/${projectId}`)
+      .set('Cookie', outsiderCookies);
+    expect(newMemberView.status).toBe(200);
+  });
+
+  it('preserves order within a column when reordering', async () => {
+    const { course, teacherCookies, memberStudent } = await setupCourseWithTeacherAndTwoStudents();
+    const projectRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/projects`)
+      .set('Cookie', teacherCookies)
+      .send({ name: 'Reorder Project', memberIds: [memberStudent.id] });
     const projectId = projectRes.body.data.id;
     const todo = projectRes.body.data.columns[0];
 
@@ -158,7 +222,6 @@ describe('Kanban boards', () => {
       ids.push(res.body.data.id);
     }
 
-    // Move the last task ("C") to the front.
     await request(app)
       .patch(`/api/v1/courses/${course.id}/projects/${projectId}/tasks/${ids[2]}/move`)
       .set('Cookie', teacherCookies)
@@ -173,21 +236,87 @@ describe('Kanban boards', () => {
   });
 
   it('rejects a student trying to create a project or delete a column', async () => {
-    const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
+    const { course, teacherCookies, memberCookies, memberStudent } = await setupCourseWithTeacherAndTwoStudents();
     const createRes = await request(app)
       .post(`/api/v1/courses/${course.id}/projects`)
-      .set('Cookie', studentCookies)
-      .send({ name: 'Nope' });
+      .set('Cookie', memberCookies)
+      .send({ name: 'Nope', memberIds: [memberStudent.id] });
     expect(createRes.status).toBe(403);
 
     const projectRes = await request(app)
       .post(`/api/v1/courses/${course.id}/projects`)
       .set('Cookie', teacherCookies)
-      .send({ name: 'P' });
+      .send({ name: 'P', memberIds: [memberStudent.id] });
     const columnId = projectRes.body.data.columns[0].id;
     const deleteRes = await request(app)
       .delete(`/api/v1/courses/${course.id}/projects/${projectRes.body.data.id}/columns/${columnId}`)
-      .set('Cookie', studentCookies);
+      .set('Cookie', memberCookies);
     expect(deleteRes.status).toBe(403);
+  });
+});
+
+describe('Personal Kanban boards', () => {
+  it("creates a student's board lazily, is private to them, and supports full task CRUD + move", async () => {
+    const student = await createStudentUser({ email: `personal-${Date.now()}@example.com` });
+    const otherStudent = await createStudentUser({ email: `other-${Date.now()}@example.com` });
+    const studentCookies = await signInAs(student.email, 'student');
+    const otherCookies = await signInAs(otherStudent.email, 'student');
+    const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
+    const teacherCookies = await signInAs(teacher.email, 'teacher');
+
+    // A teacher has no personal board.
+    const teacherRejected = await request(app).get('/api/v1/me/kanban/board').set('Cookie', teacherCookies);
+    expect(teacherRejected.status).toBe(403);
+
+    const firstVisit = await request(app).get('/api/v1/me/kanban/board').set('Cookie', studentCookies);
+    expect(firstVisit.status).toBe(201);
+    expect(firstVisit.body.data.type).toBe('personal');
+    expect(firstVisit.body.data.columns.map((c: { name: string }) => c.name)).toEqual([
+      'To do',
+      'In progress',
+      'Done',
+    ]);
+    const [todo, inProgress] = firstVisit.body.data.columns;
+
+    // Visiting again returns the same board, not a second one.
+    const secondVisit = await request(app).get('/api/v1/me/kanban/board').set('Cookie', studentCookies);
+    expect(secondVisit.status).toBe(200);
+    expect(secondVisit.body.data.id).toBe(firstVisit.body.data.id);
+
+    const createRes = await request(app)
+      .post(`/api/v1/me/kanban/columns/${todo.id}/tasks`)
+      .set('Cookie', studentCookies)
+      .send({ title: 'Revise notes' });
+    expect(createRes.status).toBe(201);
+    const taskId = createRes.body.data.id;
+
+    // Another student can't see or touch this board — its columnId belongs to someone else's board.
+    const otherBoard = await request(app).get('/api/v1/me/kanban/board').set('Cookie', otherCookies);
+    expect(otherBoard.body.data.id).not.toBe(firstVisit.body.data.id);
+    const otherCreate = await request(app)
+      .post(`/api/v1/me/kanban/columns/${todo.id}/tasks`)
+      .set('Cookie', otherCookies)
+      .send({ title: 'Should fail' });
+    expect(otherCreate.status).toBe(404);
+    const otherDelete = await request(app)
+      .delete(`/api/v1/me/kanban/tasks/${taskId}`)
+      .set('Cookie', otherCookies);
+    expect(otherDelete.status).toBe(404);
+
+    const moveRes = await request(app)
+      .patch(`/api/v1/me/kanban/tasks/${taskId}/move`)
+      .set('Cookie', studentCookies)
+      .send({ columnId: inProgress.id, orderIndex: 0 });
+    expect(moveRes.status).toBe(200);
+    expect(moveRes.body.data.columnId).toBe(inProgress.id);
+
+    const updateRes = await request(app)
+      .patch(`/api/v1/me/kanban/tasks/${taskId}`)
+      .set('Cookie', studentCookies)
+      .send({ title: 'Revise notes thoroughly' });
+    expect(updateRes.status).toBe(200);
+
+    const deleteRes = await request(app).delete(`/api/v1/me/kanban/tasks/${taskId}`).set('Cookie', studentCookies);
+    expect(deleteRes.status).toBe(200);
   });
 });

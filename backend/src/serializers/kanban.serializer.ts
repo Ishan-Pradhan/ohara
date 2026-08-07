@@ -22,11 +22,16 @@ export const serializeColumn = (column: BoardColumn) => ({
     .map(serializeTask),
 });
 
+const serializeMembers = (project: Project) =>
+  (project.members ?? []).map((m) => ({ id: m.studentId, name: m.student?.name ?? 'Unknown student' }));
+
 export const serializeProject = (project: Project) => ({
   id: project.id,
   courseId: project.courseId,
+  type: project.type,
   name: project.name,
   createdBy: project.createdBy,
+  members: serializeMembers(project),
   columns: [...(project.columns ?? [])]
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map(serializeColumn),
@@ -35,5 +40,7 @@ export const serializeProject = (project: Project) => ({
 export const serializeProjectSummary = (project: Project) => ({
   id: project.id,
   courseId: project.courseId,
+  type: project.type,
   name: project.name,
+  members: serializeMembers(project),
 });

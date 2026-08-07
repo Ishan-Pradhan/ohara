@@ -3,6 +3,7 @@ import { verifyJWT, requireCourseTeacher, requireCourseAccess } from '../middlew
 import { validate } from '../middlewares/validate.middleware.js';
 import {
   createProjectSchema,
+  updateProjectMembersSchema,
   listProjectsSchema,
   getProjectSchema,
   deleteProjectSchema,
@@ -16,6 +17,7 @@ import {
 } from '../validations/kanban.validation.js';
 import {
   createProject,
+  updateProjectMembers,
   listProjects,
   getProject,
   deleteProject,
@@ -43,6 +45,10 @@ router
   .delete(verifyJWT, requireCourseTeacher, validate(deleteProjectSchema), deleteProject);
 
 router
+  .route('/:courseId/projects/:id/members')
+  .put(verifyJWT, requireCourseTeacher, validate(updateProjectMembersSchema), updateProjectMembers);
+
+router
   .route('/:courseId/projects/:id/columns')
   .post(verifyJWT, requireCourseTeacher, validate(createColumnSchema), createColumn);
 
@@ -51,14 +57,18 @@ router
   .patch(verifyJWT, requireCourseTeacher, validate(updateColumnSchema), updateColumn)
   .delete(verifyJWT, requireCourseTeacher, validate(deleteColumnSchema), deleteColumn);
 
+// Task CRUD + move are open to any project member (not just the teacher) —
+// requireCourseAccess admits admin/assigned-teacher/enrolled-student at the
+// route layer; the controller's assertCanManageTasks narrows a student
+// further to "member of this specific project."
 router
   .route('/:courseId/projects/:id/columns/:columnId/tasks')
-  .post(verifyJWT, requireCourseTeacher, validate(createTaskSchema), createTask);
+  .post(verifyJWT, requireCourseAccess, validate(createTaskSchema), createTask);
 
 router
   .route('/:courseId/projects/:id/tasks/:taskId')
-  .patch(verifyJWT, requireCourseTeacher, validate(updateTaskSchema), updateTask)
-  .delete(verifyJWT, requireCourseTeacher, validate(deleteTaskSchema), deleteTask);
+  .patch(verifyJWT, requireCourseAccess, validate(updateTaskSchema), updateTask)
+  .delete(verifyJWT, requireCourseAccess, validate(deleteTaskSchema), deleteTask);
 
 router
   .route('/:courseId/projects/:id/tasks/:taskId/move')

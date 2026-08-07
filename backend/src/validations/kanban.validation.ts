@@ -4,10 +4,19 @@ import { envelope } from './user.response.js';
 const unauthenticated = { description: 'Not authenticated' };
 const courseOnly = { description: 'Caller is not an admin, a teacher assigned to this course, or a student enrolled in it' };
 const teacherOnly = { description: 'Caller is not an admin or a teacher assigned to this course' };
+const memberOnly = { description: 'Caller is not an admin, a teacher assigned to this course, or a member of this project' };
 
 export const createProjectSchema = {
   params: z.object({ courseId: z.uuid() }),
-  body: z.object({ name: z.string().min(1, 'Name is required') }),
+  body: z.object({
+    name: z.string().min(1, 'Name is required'),
+    memberIds: z.array(z.uuid()).min(1, 'Pick at least one student for the group'),
+  }),
+};
+
+export const updateProjectMembersSchema = {
+  params: z.object({ courseId: z.uuid(), id: z.uuid() }),
+  body: z.object({ memberIds: z.array(z.uuid()).min(1, 'Pick at least one student for the group') }),
 };
 
 export const listProjectsSchema = { params: z.object({ courseId: z.uuid() }) };
@@ -81,20 +90,30 @@ const columnSchema = registry.register(
   }),
 );
 
+const projectMemberSchema = z.object({ id: z.uuid(), name: z.string() });
+
 const projectSchema = registry.register(
   'Project',
   z.object({
     id: z.uuid(),
-    courseId: z.uuid(),
+    courseId: z.uuid().nullable(),
+    type: z.enum(['course', 'personal']),
     name: z.string(),
     createdBy: z.uuid(),
+    members: z.array(projectMemberSchema),
     columns: z.array(columnSchema),
   }),
 );
 
 const projectSummarySchema = registry.register(
   'ProjectSummary',
-  z.object({ id: z.uuid(), courseId: z.uuid(), name: z.string() }),
+  z.object({
+    id: z.uuid(),
+    courseId: z.uuid().nullable(),
+    type: z.enum(['course', 'personal']),
+    name: z.string(),
+    members: z.array(projectMemberSchema),
+  }),
 );
 
 registry.registerPath({
@@ -103,9 +122,24 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: createProjectSchema.params, body: { content: { 'application/json': { schema: createProjectSchema.body } } } },
   responses: {
-    201: { description: 'Project created with the default To do / In progress / Done columns (FR-37)', content: { 'application/json': { schema: envelope(projectSchema) } } },
+    201: { description: 'Team project created with the default To do / In progress / Done columns and the given member roster (FR-37) — only these students (plus the course teacher/admin) can see or work the board', content: { 'application/json': { schema: envelope(projectSchema) } } },
+    400: { description: 'A member is not enrolled in this course' },
     401: unauthenticated,
     403: teacherOnly,
+  },
+});
+
+registry.registerPath({
+  method: 'put',
+  path: '/courses/{courseId}/projects/{id}/members',
+  tags: ['Projects'],
+  request: { params: updateProjectMembersSchema.params, body: { content: { 'application/json': { schema: updateProjectMembersSchema.body } } } },
+  responses: {
+    200: { description: 'Project roster replaced with the given set of students', content: { 'application/json': { schema: envelope(projectSchema) } } },
+    400: { description: 'A member is not enrolled in this course' },
+    401: unauthenticated,
+    403: teacherOnly,
+    404: { description: 'Project not found' },
   },
 });
 
@@ -115,7 +149,7 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: listProjectsSchema.params },
   responses: {
-    200: { description: 'Every project for this course', content: { 'application/json': { schema: envelope(z.array(projectSummarySchema)) } } },
+    200: { description: 'Every project for this course — a student only sees projects they are a member of', content: { 'application/json': { schema: envelope(z.array(projectSummarySchema)) } } },
     401: unauthenticated,
     403: courseOnly,
   },
@@ -127,10 +161,10 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: getProjectSchema.params },
   responses: {
-    200: { description: 'A project with its columns and tasks', content: { 'application/json': { schema: envelope(projectSchema) } } },
+    200: { description: 'A project with its columns, tasks, and member roster', content: { 'application/json': { schema: envelope(projectSchema) } } },
     401: unauthenticated,
     403: courseOnly,
-    404: { description: 'Project not found' },
+    404: { description: 'Project not found, or (for a student) not a member of it' },
   },
 });
 
@@ -192,10 +226,10 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: createTaskSchema.params, body: { content: { 'application/json': { schema: createTaskSchema.body } } } },
   responses: {
-    201: { description: 'Task created (FR-38)', content: { 'application/json': { schema: envelope(taskSchema) } } },
-    400: { description: 'Assignee is not enrolled in this course' },
+    201: { description: 'Task created — any project member may create tasks, not just the teacher (FR-38)', content: { 'application/json': { schema: envelope(taskSchema) } } },
+    400: { description: 'Assignee is not a member of this project' },
     401: unauthenticated,
-    403: teacherOnly,
+    403: memberOnly,
     404: { description: 'Column not found' },
   },
 });
@@ -206,10 +240,10 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: updateTaskSchema.params, body: { content: { 'application/json': { schema: updateTaskSchema.body } } } },
   responses: {
-    200: { description: 'Task edited', content: { 'application/json': { schema: envelope(taskSchema) } } },
-    400: { description: 'Assignee is not enrolled in this course' },
+    200: { description: 'Task edited by any project member', content: { 'application/json': { schema: envelope(taskSchema) } } },
+    400: { description: 'Assignee is not a member of this project' },
     401: unauthenticated,
-    403: teacherOnly,
+    403: memberOnly,
     404: { description: 'Task not found' },
   },
 });
@@ -220,9 +254,9 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: deleteTaskSchema.params },
   responses: {
-    200: { description: 'Task deleted' },
+    200: { description: 'Task deleted by any project member' },
     401: unauthenticated,
-    403: teacherOnly,
+    403: memberOnly,
     404: { description: 'Task not found' },
   },
 });
@@ -233,10 +267,10 @@ registry.registerPath({
   tags: ['Projects'],
   request: { params: moveTaskSchema.params, body: { content: { 'application/json': { schema: moveTaskSchema.body } } } },
   responses: {
-    200: { description: 'Task moved to a new column/position (FR-39) — the assignee may move their own task; a teacher/admin may move any', content: { 'application/json': { schema: envelope(taskSchema) } } },
+    200: { description: 'Task moved to a new column/position (FR-39) — any project member may move any task, not just their own assignment', content: { 'application/json': { schema: envelope(taskSchema) } } },
     400: { description: 'That column does not belong to this project' },
     401: unauthenticated,
-    403: { description: 'Not the assignee, and not a course teacher/admin' },
+    403: memberOnly,
     404: { description: 'Task not found' },
   },
 });

@@ -8,7 +8,11 @@ export const projectRepository = {
   },
 
   findAllByCourse: async (courseId: string): Promise<Project[]> => {
-    return await Project.findAll({ where: { courseId }, order: [['createdAt', 'ASC']] });
+    return await Project.findAll({
+      where: { courseId, type: 'course' },
+      include: [{ association: 'members', include: ['student'] }],
+      order: [['createdAt', 'ASC']],
+    });
   },
 
   findById: async (id: string): Promise<Project | null> => {
@@ -18,8 +22,16 @@ export const projectRepository = {
           association: 'columns',
           include: [{ association: 'tasks', include: ['assignee'] }],
         },
+        { association: 'members', include: ['student'] },
       ],
     });
+  },
+
+  /** A student's single personal (private, non-course) board, if they've
+   * ever opened one — `getOrCreateMyBoard` creates it lazily on first
+   * visit, so this returning `null` just means "not created yet." */
+  findPersonalByOwner: async (ownerId: string): Promise<Project | null> => {
+    return await Project.findOne({ where: { ownerId, type: 'personal' } });
   },
 
   delete: async (id: string): Promise<boolean> => {

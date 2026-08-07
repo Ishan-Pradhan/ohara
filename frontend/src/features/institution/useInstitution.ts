@@ -191,8 +191,8 @@ export const useDeleteSection = () => {
   });
 };
 
-export const useCourses = () =>
-  useQuery({ queryKey: COURSES_KEY, queryFn: fetchCourses });
+export const useCourses = (enabled = true) =>
+  useQuery({ queryKey: COURSES_KEY, queryFn: fetchCourses, enabled });
 
 export const useCreateCourse = () => {
   const qc = useQueryClient();

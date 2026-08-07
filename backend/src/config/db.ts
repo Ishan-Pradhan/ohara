@@ -36,6 +36,9 @@ import { Event } from '../models/events.model.js';
 import { Project } from '../models/projects.model.js';
 import { BoardColumn } from '../models/boardColumns.model.js';
 import { Task } from '../models/tasks.model.js';
+import { ProjectMember } from '../models/projectMembers.model.js';
+import { ExamTerm } from '../models/examTerms.model.js';
+import { ExamMark } from '../models/examMarks.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -86,5 +89,8 @@ export const sequelize = new Sequelize({
     Project,
     BoardColumn,
     Task,
+    ProjectMember,
+    ExamTerm,
+    ExamMark,
   ],
 });

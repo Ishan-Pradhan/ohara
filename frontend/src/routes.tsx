@@ -9,6 +9,10 @@ import { VerifyEmailPage } from './features/auth/VerifyEmailPage.js';
 import { VerifyEmailSentPage } from './features/auth/VerifyEmailSentPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
+import { GradebookPage } from './pages/GradebookPage.js';
+import { AttendancePage } from './pages/AttendancePage.js';
+import { AtRiskPage } from './pages/AtRiskPage.js';
+import { TranscriptPage } from './pages/TranscriptPage.js';
 import { ForbiddenPage } from './pages/ForbiddenPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { ErrorPage } from './pages/ErrorPage.js';
@@ -82,6 +86,38 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <CalendarPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/gradebook',
+    element: (
+      <ProtectedRoute>
+        <GradebookPage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/attendance',
+    element: (
+      <ProtectedRoute>
+        <AttendancePage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/at-risk',
+    element: <ProtectedRoute roles={['admin', 'teacher']}><AtRiskPage /></ProtectedRoute>,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/transcripts',
+    element: (
+      <ProtectedRoute>
+        <TranscriptPage />
       </ProtectedRoute>
     ),
     errorElement: <ErrorPage />,

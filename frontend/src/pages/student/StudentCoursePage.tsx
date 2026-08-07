@@ -1,15 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import {
-  BarChart3,
-  CalendarCheck,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  HelpCircle,
-  Layers,
-  LayoutGrid,
-  MessageCircle,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Layers, MessageCircle } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import { useStudentPlacement } from '../../features/placement/usePlacement.js';
@@ -24,9 +14,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Ta
 import { TutorPanel } from './TutorPanel.js';
 import { StudentAssignmentsSection } from './StudentAssignmentsSection.js';
 import { StudentQuizzesSection } from './StudentQuizzesSection.js';
-import { StudentGradesSection } from './StudentGradesSection.js';
-import { StudentAttendanceSection } from './StudentAttendanceSection.js';
-import { StudentProjectsSection } from './StudentProjectsSection.js';
 
 export const StudentCoursePage = () => {
   const { courseId = '' } = useParams();
@@ -69,18 +56,6 @@ export const StudentCoursePage = () => {
           <TabsTrigger value="quizzes">
             <HelpCircle className="size-4" aria-hidden />
             Quizzes
-          </TabsTrigger>
-          <TabsTrigger value="grades">
-            <BarChart3 className="size-4" aria-hidden />
-            Grades
-          </TabsTrigger>
-          <TabsTrigger value="attendance">
-            <CalendarCheck className="size-4" aria-hidden />
-            Attendance
-          </TabsTrigger>
-          <TabsTrigger value="projects">
-            <LayoutGrid className="size-4" aria-hidden />
-            Projects
           </TabsTrigger>
         </TabsList>
 
@@ -146,18 +121,6 @@ export const StudentCoursePage = () => {
 
         <TabsContent value="quizzes">
           <StudentQuizzesSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="grades">
-          <StudentGradesSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="attendance">
-          <StudentAttendanceSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="projects">
-          <StudentProjectsSection courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>

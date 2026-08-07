@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BookOpen, Check, Download, Flag, MapPin, Plus } from 'lucide-react';
+import { BookOpen, Check, Flag, GraduationCap, MapPin, Plus } from 'lucide-react';
 
 import { useStudentFlags, useResolveFlag } from '../../features/teacher/useTeacher.js';
 
@@ -127,14 +127,13 @@ export const StudentDetailPage = () => {
         description="Current program, class, section, and enrolled courses."
         actions={
           !notPlaced ? (
-            <a
-              href={`/api/v1/students/${studentId}/report-card`}
-              download
+            <Link
+              to={`/transcripts?studentId=${studentId}`}
               className="inline-flex items-center justify-center gap-2 rounded-control border border-border bg-surface px-4 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover hover:border-border-strong active:scale-[0.98]"
             >
-              <Download className="size-4" aria-hidden />
-              Report card
-            </a>
+              <GraduationCap className="size-4" aria-hidden />
+              Transcript
+            </Link>
           ) : undefined
         }
       />

@@ -1,15 +1,35 @@
 import type { Optional } from 'sequelize';
 
+export type ProjectType = 'course' | 'personal';
+
 export interface ProjectAttributes {
   id: string;
-  courseId: string;
+  courseId: string | null;
+  ownerId: string | null;
+  type: ProjectType;
   name: string;
   createdBy: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-export type ProjectCreationAttributes = Optional<ProjectAttributes, 'id' | 'createdAt' | 'updatedAt'>;
+export type ProjectCreationAttributes = Optional<
+  ProjectAttributes,
+  'id' | 'courseId' | 'ownerId' | 'type' | 'createdAt' | 'updatedAt'
+>;
+
+export interface ProjectMemberAttributes {
+  id: string;
+  projectId: string;
+  studentId: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export type ProjectMemberCreationAttributes = Optional<
+  ProjectMemberAttributes,
+  'id' | 'createdAt' | 'updatedAt'
+>;
 
 export interface BoardColumnAttributes {
   id: string;

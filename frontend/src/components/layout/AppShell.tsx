@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react';
 import {
+  AlertTriangle,
+  BarChart3,
   BookOpen,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
+  GraduationCap,
   LayoutDashboard,
   LayoutGrid,
   Layers,
@@ -46,6 +50,15 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+    ],
+  },
+  {
+    label: 'Academics',
+    items: [
+      { to: '/gradebook', label: 'Gradebook', icon: BarChart3 },
+      { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
+      { to: '/transcripts', label: 'Transcripts', icon: GraduationCap },
+      { to: '/at-risk', label: 'At-Risk', icon: AlertTriangle, roles: ['admin', 'teacher'] },
     ],
   },
   {

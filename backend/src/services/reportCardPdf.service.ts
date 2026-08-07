@@ -1,12 +1,6 @@
 import PDFDocument from 'pdfkit';
 
-export interface ReportCardCourseRow {
-  courseTitle: string;
-  score: number;
-  maxScore: number;
-  average: number | null;
-  attendancePercentage: number | null;
-}
+import type { ReportCardSemesterSection } from '../serializers/examMark.serializer.js';
 
 export interface ReportCardData {
   institutionName: string;
@@ -15,19 +9,14 @@ export interface ReportCardData {
   className: string;
   sectionName: string;
   academicYearName: string;
-  courses: ReportCardCourseRow[];
-  overallAverage: number | null;
-  overallAttendance: number | null;
+  semesters: ReportCardSemesterSection[];
+  overallPercentage: number | null;
   overallGrade: string;
 }
 
 const fmtPct = (value: number | null): string => (value === null ? '—' : `${value.toFixed(1)}%`);
 
-/** The only file that touches pdfkit directly, per CLAUDE.md's "vendor SDKs
- * only in services/" rule — reportCard.controller.ts hands this
- * already-aggregated data and gets a Buffer back, no pdfkit imports
- * anywhere else. Named distinctly from pdf.service.ts, which is PDF text
- * *extraction* (course-material ingestion) — this is PDF *generation*. */
+/** Generates an Academic Transcript PDF, grouping exam marks by semester/class in matrix tables. */
 export const generateReportCardPdf = (data: ReportCardData): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -37,7 +26,7 @@ export const generateReportCardPdf = (data: ReportCardData): Promise<Buffer> => 
     doc.on('error', reject);
 
     doc.fontSize(18).font('Helvetica-Bold').text(data.institutionName, { align: 'center' });
-    doc.fontSize(12).font('Helvetica').text('Report Card / Marksheet', { align: 'center' });
+    doc.fontSize(12).font('Helvetica').text('Academic Transcript', { align: 'center' });
     doc.moveDown(1.5);
 
     doc.fontSize(10).font('Helvetica-Bold').text('Student: ', { continued: true }).font('Helvetica').text(data.studentName);
@@ -46,36 +35,83 @@ export const generateReportCardPdf = (data: ReportCardData): Promise<Buffer> => 
     doc.font('Helvetica-Bold').text('Academic year: ', { continued: true }).font('Helvetica').text(data.academicYearName);
     doc.moveDown(1.5);
 
-    const tableTop = doc.y;
-    const columns = [
-      { label: 'Course', x: 50, width: 200 },
-      { label: 'Score', x: 250, width: 80 },
-      { label: 'Average', x: 330, width: 80 },
-      { label: 'Attendance', x: 410, width: 100 },
-    ];
-
-    doc.font('Helvetica-Bold').fontSize(10);
-    columns.forEach((c) => doc.text(c.label, c.x, tableTop, { width: c.width }));
-    doc.moveTo(50, tableTop + 15).lineTo(510, tableTop + 15).stroke();
-
-    let y = tableTop + 22;
-    doc.font('Helvetica').fontSize(10);
-    for (const course of data.courses) {
-      doc.text(course.courseTitle, columns[0]!.x, y, { width: columns[0]!.width });
-      doc.text(`${course.score}/${course.maxScore}`, columns[1]!.x, y, { width: columns[1]!.width });
-      doc.text(fmtPct(course.average), columns[2]!.x, y, { width: columns[2]!.width });
-      doc.text(fmtPct(course.attendancePercentage), columns[3]!.x, y, { width: columns[3]!.width });
-      y += 20;
+    if (data.semesters.length === 0) {
+      doc.font('Helvetica').fontSize(11).text('No exam marks have been entered yet.');
     }
 
-    doc.moveTo(50, y + 5).lineTo(510, y + 5).stroke();
-    y += 15;
-    doc.font('Helvetica-Bold').fontSize(11);
-    doc.text(`Overall average: ${fmtPct(data.overallAverage)}`, 50, y);
-    y += 18;
-    doc.text(`Overall attendance: ${fmtPct(data.overallAttendance)}`, 50, y);
-    y += 18;
-    doc.text(`Overall grade: ${data.overallGrade}`, 50, y);
+    for (const sem of data.semesters) {
+      if (doc.y > 680) doc.addPage();
+
+      doc.font('Helvetica-Bold').fontSize(13).text(sem.className);
+      doc.moveDown(0.3);
+
+      const leftMargin = 50;
+      const courseWidth = 160;
+      const termColWidth = 65;
+      const totalColWidth = 85;
+
+      const columns: { label: string; x: number; width: number }[] = [
+        { label: 'Course', x: leftMargin, width: courseWidth },
+      ];
+
+      let currentX = leftMargin + courseWidth;
+      for (const term of sem.examTerms) {
+        columns.push({ label: term.examTermName, x: currentX, width: termColWidth });
+        currentX += termColWidth;
+      }
+      columns.push({ label: 'Total', x: currentX, width: totalColWidth });
+
+      const tableTop = doc.y;
+      doc.font('Helvetica-Bold').fontSize(9);
+      columns.forEach((c) => {
+        doc.text(c.label, c.x, tableTop, {
+          width: c.width,
+          align: c.label === 'Course' ? 'left' : 'center',
+        });
+      });
+      
+      const lineEndX = Math.min(540, currentX + totalColWidth);
+      doc.moveTo(50, tableTop + 15).lineTo(lineEndX, tableTop + 15).stroke();
+
+      let y = tableTop + 22;
+      doc.font('Helvetica').fontSize(9);
+      for (const course of sem.courses) {
+        if (y > 700) {
+          doc.addPage();
+          y = 50;
+        }
+        doc.text(course.courseTitle, columns[0]!.x, y, { width: columns[0]!.width });
+
+        let colIndex = 1;
+        for (const term of sem.examTerms) {
+          const mark = course.marks[term.examTermId];
+          const text = mark ? `${mark.marksObtained}/${mark.maxMarks}` : '—';
+          doc.text(text, columns[colIndex]!.x, y, { width: columns[colIndex]!.width, align: 'center' });
+          colIndex++;
+        }
+
+        const totalText = `${course.courseTotalObtained}/${course.courseTotalMax} (${fmtPct(course.coursePercentage)})`;
+        doc.text(totalText, columns[colIndex]!.x, y, { width: columns[colIndex]!.width, align: 'center' });
+
+        y += 18;
+      }
+
+      doc.moveTo(50, y + 3).lineTo(lineEndX, y + 3).stroke();
+      y += 12;
+      doc.font('Helvetica-Bold').fontSize(9);
+      doc.text(
+        `Semester total: ${sem.totalObtained}/${sem.totalMax} (${fmtPct(sem.percentage)}) · Grade: ${sem.grade}`,
+        50,
+        y,
+      );
+      doc.moveDown(1.5);
+    }
+
+    if (doc.y > 680) doc.addPage();
+    doc.moveDown(0.5);
+    doc.font('Helvetica-Bold').fontSize(12);
+    doc.text(`Overall cumulative percentage: ${fmtPct(data.overallPercentage)}`);
+    doc.text(`Overall cumulative grade: ${data.overallGrade}`);
 
     doc.end();
   });
