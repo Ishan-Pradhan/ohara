@@ -5,6 +5,7 @@ import { quizRepository } from '../repositories/quizzes.repository.js';
 import { quizAttemptRepository } from '../repositories/quizAttempts.repository.js';
 import { quizAnswerGradeRepository } from '../repositories/quizAnswerGrades.repository.js';
 import { notificationRepository } from '../repositories/notifications.repository.js';
+import { studyPlanRepository } from '../repositories/studyPlan.repository.js';
 import {
   serializeQuizAttempt,
   serializeQuizAttemptForStudent,
@@ -87,6 +88,13 @@ export const submitAttempt = asyncHandler(
       maxScore,
       submittedAt: new Date(),
     });
+
+    // Fire-and-forget: mark the current week's study plan stale now that new
+    // quiz evidence exists. Never blocks the response.
+    void studyPlanRepository.markPlanStaleIfCurrentWeek(
+      studentId,
+      `You completed a quiz (${quiz.title}). Your plan may no longer reflect your current weak areas.`,
+    );
 
     return ok(res, serializeQuizAttemptForStudent(attempt, questions, []), 'Attempt scored', 201);
   },

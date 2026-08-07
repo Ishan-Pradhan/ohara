@@ -5,8 +5,13 @@ vi.mock('../../src/services/llm.service.js', () => ({
   generateText: vi.fn(),
 }));
 
+vi.mock('../../src/services/embeddings.service.js', () => ({
+  embed: vi.fn(),
+}));
+
 const { runTutorAgentTurn } = await import('../../src/agent/tutorAgent.js');
 const { runAgentTurn, generateText } = await import('../../src/services/llm.service.js');
+const { embed } = await import('../../src/services/embeddings.service.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { createCourse, createStudentUser, createTeacherUser } = await import(
   '../helpers/institution.js'
@@ -75,6 +80,12 @@ beforeEach(async () => {
   vi.mocked(runAgentTurn).mockReset();
   vi.mocked(generateText).mockReset();
   vi.mocked(generateText).mockResolvedValue('Fallback answer grounded in the material.');
+  // embed is called by stage1Fallback and searchCourseMaterial; return a
+  // valid non-zero vector so those paths succeed without the real model.
+  vi.mocked(embed).mockReset();
+  vi.mocked(embed).mockImplementation(async (texts: string[]) =>
+    texts.map(() => new Array(EMBEDDING_DIMENSIONS).fill(0.1) as number[]),
+  );
 });
 
 afterAll(async () => {
@@ -436,5 +447,47 @@ describe('runTutorAgentTurn', () => {
         m.content === "I'm having trouble answering right now — please try again in a moment.",
     );
     expect(persisted).toBeTruthy();
+  });
+
+  it('injects learningContext into the system prompt when provided', async () => {
+    const course = await createCourse();
+    const conversationId = await seedConversationWithQuestion(course.id);
+
+    let capturedHistory: { role: string; content: unknown }[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce((history) => {
+      capturedHistory = history as typeof capturedHistory;
+      return Promise.resolve({ type: 'text', content: 'Personalised answer' });
+    });
+
+    const learningContext =
+      'Student learning context (use only to personalise explanations — never invent grades or override official academic records):\nOverall average grade: 72.5%\nAttendance: 85.0%';
+
+    const result = await runTutorAgentTurn(conversationId, course.id, learningContext);
+
+    expect(result.content).toBe('Personalised answer');
+    // The system message (first entry in history) must contain the injected context
+    const systemEntry = capturedHistory[0];
+    expect(systemEntry?.role).toBe('system');
+    expect(typeof systemEntry?.content).toBe('string');
+    expect(systemEntry?.content as string).toContain('Student learning context');
+    expect(systemEntry?.content as string).toContain('Overall average grade: 72.5%');
+    expect(systemEntry?.content as string).toContain('Attendance: 85.0%');
+  });
+
+  it('omits learningContext from the system prompt when not provided', async () => {
+    const course = await createCourse();
+    const conversationId = await seedConversationWithQuestion(course.id);
+
+    let capturedHistory: { role: string; content: unknown }[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce((history) => {
+      capturedHistory = history as typeof capturedHistory;
+      return Promise.resolve({ type: 'text', content: 'Standard answer' });
+    });
+
+    await runTutorAgentTurn(conversationId, course.id);
+
+    const systemEntry = capturedHistory[0];
+    expect(systemEntry?.role).toBe('system');
+    expect(systemEntry?.content as string).not.toContain('Student learning context');
   });
 });

@@ -5,6 +5,7 @@ import { assignmentRepository } from '../repositories/assignments.repository.js'
 import { submissionRepository } from '../repositories/submissions.repository.js';
 import { gradeRepository } from '../repositories/grades.repository.js';
 import { notificationRepository } from '../repositories/notifications.repository.js';
+import { studyPlanRepository } from '../repositories/studyPlan.repository.js';
 import {
   serializeSubmission,
   serializeSubmissionForStudent,
@@ -353,6 +354,13 @@ export const editGrade = asyncHandler(
         body: `Score: ${score}/${assignment.rubric.reduce((sum, c) => sum + c.maxPoints, 0)}`,
         link: `/student/courses/${courseId}/assignments/${assignmentId}`,
       });
+
+      // Fire-and-forget: new grade evidence may change the student's weak
+      // areas — mark the current week's plan stale if one exists.
+      void studyPlanRepository.markPlanStaleIfCurrentWeek(
+        submission.studentId,
+        `Your assignment "${assignment.title}" was graded. Your plan may no longer reflect your current performance.`,
+      );
     }
 
     return ok(res, serializeGrade(grade), 'Grade updated');

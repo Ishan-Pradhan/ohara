@@ -11,6 +11,8 @@ import {
   serializeTutorMessage,
 } from '../serializers/tutor.serializer.js';
 import { serializeModuleOutline } from '../serializers/courseContent.serializer.js';
+import { buildTutorLearningContext } from '../serializers/dashboard.serializer.js';
+import { loadStudentPerformanceContext } from './dashboard.controller.js';
 import {
   TUTOR_CONVERSATION_STATUSES,
   TUTOR_MESSAGE_ROLES,
@@ -117,7 +119,20 @@ export const sendMessage = asyncHandler(async (req: AuthRequest, res: Response) 
     content,
   });
 
-  const result = await runTutorAgentTurn(conversationId, courseId);
+  // Build the student's performance learning context to inject into the
+  // tutor's system prompt. Failures here must not break the conversation —
+  // the tutor functions perfectly without the learning state; it just won't
+  // be able to personalise explanations based on the student's performance.
+  let learningContext: string | undefined;
+  try {
+    const performanceCtx = await loadStudentPerformanceContext(studentId);
+    const contextText = buildTutorLearningContext(performanceCtx.performance);
+    learningContext = contextText ?? undefined;
+  } catch {
+    // Non-fatal: proceed without learning context
+  }
+
+  const result = await runTutorAgentTurn(conversationId, courseId, learningContext);
 
   // runTutorAgentTurn returns the id of the exact row it persisted for this
   // turn's answer — fetch precisely that row rather than assuming "the last

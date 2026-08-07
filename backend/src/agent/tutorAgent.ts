@@ -183,13 +183,25 @@ const persistText = async (
  * before this runs, UNLESS this is a resume from `awaiting_student` — see
  * Task 4 for exactly which case does which; this function itself only reads
  * history and appends going forward, it never assumes who wrote the last row.
+ *
+ * `learningContext` is an optional compact text block (produced by
+ * `buildTutorLearningContext`) that is appended to the system prompt for this
+ * turn only — it is not persisted, so it gets rebuilt fresh on every call,
+ * which is intentional: the student's performance may have changed since the
+ * last message and we always want the most current snapshot.
  */
 export const runTutorAgentTurn = async (
   conversationId: string,
   courseId: string,
+  learningContext?: string,
 ): Promise<TutorAgentResult> => {
+  // Build the system prompt, optionally appending the current learning context.
+  const systemPrompt = learningContext
+    ? `${tutorAgentSystemPrompt}\n\n${learningContext}`
+    : tutorAgentSystemPrompt;
+
   const priorMessages = await tutorMessageRepository.findAllByConversation(conversationId);
-  const history = toAgentHistory(tutorAgentSystemPrompt, priorMessages);
+  const history = toAgentHistory(systemPrompt, priorMessages);
 
   // Known, deliberate limitation: this deadline only bounds time *between*
   // loop iterations (checked below, before each runAgentTurn call) — it has

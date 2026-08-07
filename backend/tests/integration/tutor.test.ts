@@ -11,6 +11,10 @@ vi.mock('../../src/services/llm.service.js', () => ({
   runAgentTurn: vi.fn(),
 }));
 
+vi.mock('../../src/services/embeddings.service.js', () => ({
+  embed: vi.fn(),
+}));
+
 const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { cookiesFrom } = await import('../helpers/auth.js');
@@ -34,6 +38,7 @@ const { EMBEDDING_DIMENSIONS, TUTOR_CONVERSATION_STATUSES } = await import(
   '../../src/constants/index.js'
 );
 const { generateText, runAgentTurn } = await import('../../src/services/llm.service.js');
+const { embed } = await import('../../src/services/embeddings.service.js');
 
 const PASSWORD = 'hunter2secret';
 
@@ -72,6 +77,13 @@ beforeEach(async () => {
     type: 'text',
     content: 'This is a tutor response grounded in the material.',
   });
+  // embed is called by the real tool handlers (search_course_material) and
+  // stage1Fallback; return a constant valid vector so those paths succeed
+  // without the real model and its filesystem cache.
+  vi.mocked(embed).mockReset();
+  vi.mocked(embed).mockImplementation(async (texts: string[]) =>
+    texts.map(() => new Array(EMBEDDING_DIMENSIONS).fill(0.1) as number[]),
+  );
 });
 
 afterAll(async () => {
