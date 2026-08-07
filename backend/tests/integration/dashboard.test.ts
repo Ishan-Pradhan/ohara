@@ -113,9 +113,20 @@ describe('GET /dashboard/me', () => {
         title: 'Essay 1',
         prompt: 'Explain photosynthesis.',
         rubric: RUBRIC,
-        dueAt: new Date(Date.now() + 3600_000).toISOString(),
+        dueAt: new Date(Date.now() - 3600_000).toISOString(),
       });
     const assignmentId = assignmentRes.body.data.id;
+
+    const missingAssignmentRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/assignments`)
+      .set('Cookie', teacherCookies)
+      .send({
+        title: 'Essay 2',
+        prompt: 'Explain respiration.',
+        rubric: RUBRIC,
+        dueAt: new Date(Date.now() - 3600_000).toISOString(),
+      });
+    expect(missingAssignmentRes.status).toBe(201);
 
     const quizRes = await request(app)
       .post(`/api/v1/courses/${course.id}/quizzes`)
@@ -139,6 +150,23 @@ describe('GET /dashboard/me', () => {
       .set('Cookie', teacherCookies)
       .send({ status: 'published' });
 
+    await request(app)
+      .post(`/api/v1/courses/${course.id}/attendance/sessions`)
+      .set('Cookie', teacherCookies)
+      .send({ sectionId: section.id, sessionDate: '2026-08-01', records: [{ studentId: student.id, status: 'present' }] });
+    await request(app)
+      .post(`/api/v1/courses/${course.id}/attendance/sessions`)
+      .set('Cookie', teacherCookies)
+      .send({ sectionId: section.id, sessionDate: '2026-08-02', records: [{ studentId: student.id, status: 'absent' }] });
+
+    // Submit Essay 1 now (past dueAt → will be marked late); this puts it
+    // in the "submitted" bucket so it drops out of upcoming and counts as
+    // one completed assessment in the performance snapshot.
+    await request(app)
+      .post(`/api/v1/courses/${course.id}/assignments/${assignmentId}/submissions`)
+      .set('Cookie', studentCookies)
+      .send({ content: 'Photosynthesis converts light into chemical energy.' });
+
     let dashboard = (
       await request(app).get('/api/v1/dashboard/me').set('Cookie', studentCookies)
     ).body.data;
@@ -150,7 +178,20 @@ describe('GET /dashboard/me', () => {
       'quiz',
     ]);
     expect(dashboard.recentGrades).toHaveLength(0);
-    expect(dashboard.unreadNotificationCount).toBe(2); // assignment_created + quiz_published
+    expect(dashboard.unreadNotificationCount).toBe(3); // assignment_created × 2 + quiz_published
+    expect(dashboard.performance.status).toBe('ready');
+    expect(dashboard.performance.averageGrade).toBeNull();
+    expect(dashboard.performance.attendancePercentage).toBe(50);
+    expect(dashboard.performance.completionRate).toBeCloseTo(33.3333333, 5);
+    expect(dashboard.performance.missingSubmissions).toBe(1);
+    expect(dashboard.performance.lateSubmissions).toBe(1);
+    expect(dashboard.performance.evidence).toEqual({
+      courses: 1,
+      assessments: 3,
+      gradedAssessments: 0,
+      completedAssessments: 1,
+      attendanceRecords: 2,
+    });
 
     // Complete the quiz — it should drop out of upcoming and into recentGrades.
     await request(app)
@@ -158,11 +199,7 @@ describe('GET /dashboard/me', () => {
       .set('Cookie', studentCookies)
       .send({ responses: [{ questionId, answer: 1 }] });
 
-    // Submit + AI-grade + approve the assignment — same transition.
-    await request(app)
-      .post(`/api/v1/courses/${course.id}/assignments/${assignmentId}/submissions`)
-      .set('Cookie', studentCookies)
-      .send({ content: 'Photosynthesis converts light into chemical energy.' });
+    // AI-grade + approve Essay 1 (already submitted above).
     const submissionsRes = await request(app)
       .get(`/api/v1/courses/${course.id}/assignments/${assignmentId}/submissions`)
       .set('Cookie', teacherCookies);
@@ -186,7 +223,8 @@ describe('GET /dashboard/me', () => {
 
     dashboard = (await request(app).get('/api/v1/dashboard/me').set('Cookie', studentCookies)).body
       .data;
-    expect(dashboard.upcoming).toHaveLength(0);
+    expect(dashboard.upcoming).toHaveLength(1); // Essay 2 still unsubmitted (past due)
+    expect(dashboard.upcoming[0].title).toBe('Essay 2');
     expect(dashboard.recentGrades).toHaveLength(2);
     const quizGrade = dashboard.recentGrades.find((g: { type: string }) => g.type === 'quiz');
     expect(quizGrade.score).toBe(1);
@@ -196,6 +234,18 @@ describe('GET /dashboard/me', () => {
     );
     expect(assignmentGrade.score).toBe(8);
     expect(assignmentGrade.maxScore).toBe(10);
-    expect(dashboard.unreadNotificationCount).toBe(3); // + assignment_graded
+    expect(dashboard.unreadNotificationCount).toBe(4); // + assignment_graded
+    expect(dashboard.performance.averageGrade).toBeCloseTo(81.8181818, 5);
+    expect(dashboard.performance.attendancePercentage).toBe(50);
+    expect(dashboard.performance.completionRate).toBeCloseTo(66.6666667, 5);
+    expect(dashboard.performance.missingSubmissions).toBe(1);
+    expect(dashboard.performance.lateSubmissions).toBe(1);
+    expect(dashboard.performance.evidence).toEqual({
+      courses: 1,
+      assessments: 3,
+      gradedAssessments: 2,
+      completedAssessments: 2,
+      attendanceRecords: 2,
+    });
   });
 });

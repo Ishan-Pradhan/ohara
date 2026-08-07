@@ -1,12 +1,19 @@
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, ClipboardList, FileQuestion } from 'lucide-react';
+import { Award, BarChart3, BookOpen, ClipboardList, FileQuestion } from 'lucide-react';
 
 import { useStudentDashboard } from '../../features/dashboard/useDashboard.js';
-import type { UpcomingItem, RecentGradeItem } from '../../features/dashboard/dashboard.schema.js';
+import type {
+  UpcomingItem,
+  RecentGradeItem,
+  PerformanceCourse,
+  PerformanceSnapshot,
+} from '../../features/dashboard/dashboard.schema.js';
+
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { TodayIntelligencePanel } from './TodayIntelligencePanel.js';
 
 const itemLink = (item: { type: 'assignment' | 'quiz'; courseId: string; id: string }) =>
   `/student/courses/${item.courseId}/${item.type === 'assignment' ? 'assignments' : 'quizzes'}/${item.id}`;
@@ -58,14 +65,87 @@ const RecentGradeRow = ({ item }: { item: RecentGradeItem }) => {
   );
 };
 
+const formatPercent = (value: number | null) => (value === null ? '—' : `${value.toFixed(1)}%`);
+
+const PerformanceStat = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-card border border-border bg-surface px-3 py-2">
+    <p className="text-xs text-subtle">{label}</p>
+    <p className="mt-1 text-sm font-semibold text-fg">{value}</p>
+  </div>
+);
+
+const PerformanceCourseRow = ({ course }: { course: PerformanceCourse }) => (
+  <div className="flex items-center justify-between gap-3 rounded-control bg-surface-hover px-3 py-2">
+    <div className="min-w-0">
+      <p className="truncate text-sm font-medium text-fg">{course.courseTitle}</p>
+      <p className="text-xs text-muted">
+        {course.evidence.assessments} assessments · {course.evidence.attendanceRecords} attendance records
+      </p>
+    </div>
+    <div className="flex shrink-0 items-center gap-2">
+      <Badge variant="primary">{formatPercent(course.averageGrade)}</Badge>
+      <Badge variant="neutral">{formatPercent(course.attendancePercentage)}</Badge>
+    </div>
+  </div>
+);
+
+const PerformanceCard = ({ performance }: { performance: PerformanceSnapshot }) => {
+  if (performance.status === 'insufficient_data') {
+    return (
+      <Card padding="sm">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-fg">Performance snapshot</h2>
+        <EmptyState
+          icon={BarChart3}
+          title="Not enough evidence yet"
+          description="Once you have grades, quiz attempts, or attendance, this snapshot will show how you're doing."
+        />
+      </Card>
+    );
+  }
+
+  const visibleCourses = performance.courses.slice(0, 3);
+
+  return (
+    <Card padding="sm">
+      <h2 className="mb-3 px-1 text-sm font-semibold text-fg">Performance snapshot</h2>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <PerformanceStat label="Average" value={formatPercent(performance.averageGrade)} />
+        <PerformanceStat label="Attendance" value={formatPercent(performance.attendancePercentage)} />
+        <PerformanceStat label="Completion" value={formatPercent(performance.completionRate)} />
+        <PerformanceStat
+          label="Missing / late"
+          value={`${performance.missingSubmissions} missing · ${performance.lateSubmissions} late`}
+        />
+      </div>
+
+      <p className="mt-3 px-1 text-xs text-muted">
+        Based on {performance.evidence.courses} courses, {performance.evidence.assessments} assessments, and{' '}
+        {performance.evidence.attendanceRecords} attendance records.
+      </p>
+
+      {visibleCourses.length > 0 ? (
+        <div className="mt-4 flex flex-col gap-2">
+          {visibleCourses.map((course) => (
+            <PerformanceCourseRow key={course.courseId} course={course} />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+};
+
 export const StudentDashboardWidgets = () => {
   const { data, isLoading } = useStudentDashboard(true);
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-48 w-full" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
       </div>
     );
   }
@@ -76,6 +156,10 @@ export const StudentDashboardWidgets = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      <TodayIntelligencePanel />
+
+      <PerformanceCard performance={data.performance} />
+
       {data.courses.length > 0 ? (
         <Card padding="sm">
           <h2 className="mb-2 px-1 text-sm font-semibold text-fg">My Courses</h2>
