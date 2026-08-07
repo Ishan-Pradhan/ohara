@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Layers,
+  LineChart,
   LogOut,
   Settings,
   UserCog,
@@ -84,7 +85,10 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Learning',
-    items: [{ to: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['student'] }],
+    items: [
+      { to: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['student'] },
+      { to: '/student/progress', label: 'My Progress', icon: LineChart, roles: ['student'] },
+    ],
   },
   {
     items: [

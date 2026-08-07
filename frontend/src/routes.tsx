@@ -37,6 +37,7 @@ import { StudentCoursePage } from './pages/student/StudentCoursePage.js';
 import { StudentAssignmentDetailPage } from './pages/student/StudentAssignmentDetailPage.js';
 import { QuizTakePage } from './pages/student/QuizTakePage.js';
 import { StudentLessonPage } from './pages/student/StudentLessonPage.js';
+import { StudentProgressPage } from './pages/student/StudentProgressPage.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { GuestOnlyRoute } from './components/GuestOnlyRoute.js';
 
@@ -155,6 +156,7 @@ export const router = createBrowserRouter([
   teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
   teacherRoute('/teacher/section', <MySectionPage />),
   studentRoute('/student/courses', <StudentCoursesPage />),
+  studentRoute('/student/progress', <StudentProgressPage />),
   studentRoute('/student/courses/:courseId', <StudentCoursePage />),
   studentRoute('/student/courses/:courseId/assignments/:assignmentId', <StudentAssignmentDetailPage />),
   studentRoute('/student/courses/:courseId/quizzes/:quizId', <QuizTakePage />),
