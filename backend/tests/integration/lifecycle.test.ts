@@ -894,6 +894,93 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(res.body.message).not.toMatch(/must be unique/i);
   });
 
+  it('rejects promoting into a target section whose academic year the student already passed through earlier in their history, with 400', async () => {
+    // Real-world trigger (see justishan35's actual promotion failure): a
+    // student is promoted from class A -> class B -> and the target section
+    // for class C reuses class A's academic year (e.g. the next real term's
+    // academic year row hasn't been created yet, or was created with the
+    // wrong `term`). The current membership's academic year differs from the
+    // target, so the same-year guard above doesn't catch it, but
+    // class_memberships still has UNIQUE(studentId, academicYearId) against
+    // the student's full history, not just their current row.
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const classC = await createClass({ programId: program.id, orderIndex: 3 });
+    const yearA = await createAcademicYear();
+    const yearB = await createAcademicYear();
+    const sectionA = await createSection({ classId: classA.id, academicYearId: yearA.id });
+    const sectionB = await createSection({ classId: classB.id, academicYearId: yearB.id });
+    const reusedSectionC = await createSection({
+      classId: classC.id,
+      academicYearId: yearA.id,
+      name: 'B',
+    });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batch.id });
+
+    const promoteToB = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: sectionB.id });
+    expect(promoteToB.status).toBe(201);
+
+    const promoteToC = await request(app)
+      .post(`/api/v1/admin/class-memberships/${promoteToB.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: reusedSectionC.id });
+
+    expect(promoteToC.status).toBe(400);
+    expect(promoteToC.body.message).not.toMatch(/must be unique/i);
+  });
+
+  it('rejects promoting into a target section that is already at capacity, with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const oldYear = await createAcademicYear();
+    const newYear = await createAcademicYear({ name: 'next' });
+    const sectionA1 = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A1' });
+    const sectionA2 = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A2' });
+    const fullTargetSection = await createSection({
+      classId: classB.id,
+      academicYearId: newYear.id,
+      capacity: 1,
+    });
+    const batch = await createBatch({ programId: program.id });
+
+    const studentAlreadyThere = await createStudentUser();
+    const placeAlreadyThereRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: studentAlreadyThere.id, sectionId: sectionA1.id, batchId: batch.id });
+    await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeAlreadyThereRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: fullTargetSection.id });
+
+    const studentBeingPromoted = await createStudentUser();
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: studentBeingPromoted.id, sectionId: sectionA2.id, batchId: batch.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: fullTargetSection.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/at capacity/i);
+  });
+
   it('rejects promoting into a target section from a different program with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();

@@ -78,8 +78,12 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
     register: field,
     handleSubmit,
     reset: resetForm,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CourseFormInput>({ resolver: zodResolver(courseFormSchema) });
+
+  const courseType = watch('courseType');
 
   const openCreate = () => {
     setEditing(null);
@@ -278,7 +282,13 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
                   id="courseType"
                   options={courseTypeOptions}
                   value={selectField.value}
-                  onValueChange={selectField.onChange}
+                  onValueChange={(value) => {
+                    selectField.onChange(value);
+                    // Capacity is meaningless for compulsory courses — every
+                    // placed student is auto-enrolled, so it's never checked.
+                    // Clear it rather than let a stale value linger unseen.
+                    if (value === 'compulsory') setValue('capacity', undefined);
+                  }}
                   invalid={Boolean(errors.courseType)}
                   placeholder="Select a type"
                 />
@@ -286,18 +296,20 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
             />
           </Field>
 
-          <Field
-            label="Capacity"
-            htmlFor="capacity"
-            error={errors.capacity?.message}
-            hint="Optional — leave blank for no limit"
-          >
-            <Input
-              id="capacity"
-              type="number"
-              {...field('capacity', { valueAsNumber: true })}
-            />
-          </Field>
+          {courseType === 'elective' ? (
+            <Field
+              label="Capacity"
+              htmlFor="capacity"
+              error={errors.capacity?.message}
+              hint="Optional — leave blank for no limit"
+            >
+              <Input
+                id="capacity"
+                type="number"
+                {...field('capacity', { valueAsNumber: true })}
+              />
+            </Field>
+          ) : null}
 
           <div className="mt-2 flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={closeDialog}>

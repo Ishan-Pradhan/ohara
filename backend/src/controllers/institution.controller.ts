@@ -18,6 +18,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { deleteBlockersRepository } from '../repositories/deleteBlockers.repository.js';
 import { assertDeletable } from '../utils/deleteBlockers.utils.js';
+import { deriveClassTerm } from '../utils/academicTerm.utils.js';
 
 // ── PROGRAMS ────────────────────────────────────────────────────────────────
 
@@ -262,14 +263,28 @@ export const createSection = asyncHandler(
     const { classId, academicYearId, name, classTeacherId, capacity } =
       req.validated?.body as SectionCreationAttributes;
 
-    const cls = await classRepository.findById(classId);
-    if (!cls) {
+    const cls = await classRepository.findByIdWithProgram(classId);
+    if (!cls || !cls.program) {
       throw new ApiError(404, 'Class not found');
     }
 
     const year = await academicYearRepository.findById(academicYearId);
     if (!year) {
       throw new ApiError(404, 'Academic year not found');
+    }
+
+    // The "show all years" override lets an admin pick any academic year,
+    // including one on the wrong odd/even cycle for this class — that's how
+    // a real admin ended up with a "Semester 1" section under an even-term
+    // year. Reject it here rather than let it silently corrupt promotion
+    // eligibility later (promotion checks the *target section's* academic
+    // year, not the class itself).
+    const requiredTerm = deriveClassTerm(cls.program.institutionType, cls.orderIndex);
+    if (year.term !== requiredTerm) {
+      throw new ApiError(
+        400,
+        `${cls.name} requires a '${requiredTerm}'-term academic year, but '${year.name}' is '${year.term}'.`,
+      );
     }
 
     if (classTeacherId) {
@@ -366,6 +381,14 @@ export const createCourse = asyncHandler(
       throw new ApiError(404, 'Class not found');
     }
 
+    // Capacity only means something for electives — a compulsory course
+    // auto-enrolls every student placed in the class, so a capacity value on
+    // one would sit in the data looking meaningful while never actually
+    // being checked anywhere.
+    if (courseType === 'compulsory' && capacity != null) {
+      throw new ApiError(400, 'Capacity only applies to elective courses');
+    }
+
     const course = await courseRepository.create({
       classId,
       title,
@@ -425,6 +448,19 @@ export const updateCourse = asyncHandler(
     const body = req.validated?.body as Partial<
       Pick<CourseCreationAttributes, 'title' | 'code' | 'description' | 'capacity'>
     >;
+
+    // courseType can't be changed after creation, so it's whatever the
+    // existing course already has — same "meaningless for compulsory" rule
+    // as createCourse.
+    if (body.capacity != null) {
+      const existing = await courseRepository.findById(id);
+      if (!existing) {
+        throw new ApiError(404, 'Course not found');
+      }
+      if (existing.courseType === 'compulsory') {
+        throw new ApiError(400, 'Capacity only applies to elective courses');
+      }
+    }
 
     const course = await courseRepository.update(id, body);
     if (!course) {

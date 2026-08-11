@@ -183,6 +183,29 @@ describe('POST /admin/class-memberships', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects placement into a section that is already at capacity', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
+    const section = await createSection({ classId: cls.id, capacity: 1 });
+    const batch = await createBatch({ programId: program.id });
+    const firstStudent = await createStudentUser();
+    const secondStudent = await createStudentUser();
+
+    const firstRes = await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: firstStudent.id, sectionId: section.id, batchId: batch.id });
+    expect(firstRes.status).toBe(201);
+
+    const secondRes = await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: secondStudent.id, sectionId: section.id, batchId: batch.id });
+    expect(secondRes.status).toBe(400);
+    expect(secondRes.body.message).toMatch(/at capacity/i);
+  });
 });
 
 describe('GET /admin/class-memberships', () => {

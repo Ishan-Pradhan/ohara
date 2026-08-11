@@ -46,6 +46,13 @@ export const createClassMembership = asyncHandler(
       throw new ApiError(500, 'Section references a missing class');
     }
 
+    if (section.capacity !== null) {
+      const counts = await classMembershipRepository.countBySections([sectionId]);
+      if ((counts[sectionId] ?? 0) >= section.capacity) {
+        throw new ApiError(400, `Section '${section.name}' is at capacity (${section.capacity}).`);
+      }
+    }
+
     const batch = await batchRepository.findById(batchId);
     if (!batch) {
       throw new ApiError(404, 'Batch not found');
@@ -187,6 +194,16 @@ export const transferClassMembership = asyncHandler(
       );
     }
 
+    if (targetSectionId !== membership.sectionId && targetSection.capacity !== null) {
+      const counts = await classMembershipRepository.countBySections([targetSectionId]);
+      if ((counts[targetSectionId] ?? 0) >= targetSection.capacity) {
+        throw new ApiError(
+          400,
+          `Target section '${targetSection.name}' is at capacity (${targetSection.capacity}).`,
+        );
+      }
+    }
+
     // Existence just confirmed above in the same request — safe to assert non-null.
     const updated = await classMembershipRepository.updateSection(id, targetSectionId);
 
@@ -230,6 +247,16 @@ export const reassignClassMembership = asyncHandler(
     }
     if (targetBatch.programId !== targetClass.programId) {
       throw new ApiError(400, 'Target batch must belong to the same program as the target section');
+    }
+
+    if (targetSectionId !== membership.sectionId && targetSection.capacity !== null) {
+      const counts = await classMembershipRepository.countBySections([targetSectionId]);
+      if ((counts[targetSectionId] ?? 0) >= targetSection.capacity) {
+        throw new ApiError(
+          400,
+          `Target section '${targetSection.name}' is at capacity (${targetSection.capacity}).`,
+        );
+      }
     }
 
     const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
@@ -326,6 +353,33 @@ export const applyOutcome = async (
       'Target section is in the same academic year/term as the current placement — promotion ' +
         'must move into a different term. Create (or pick) a section under a different academic ' +
         'year before promoting.',
+    );
+  }
+
+  // A student can hold only one membership per academic year (DB-enforced). This most often
+  // trips when the next real-world term's academic year hasn't been created yet (or was created
+  // with the wrong `term`) and the picker falls back to a term-year the student already passed
+  // through earlier in their own history — surface that clearly instead of a raw DB 500.
+  const priorInTargetYear = await classMembershipRepository.findAll({
+    studentId: membership.studentId,
+    academicYearId: targetSection.academicYearId,
+  });
+  if (targetSection.capacity !== null) {
+    const counts = await classMembershipRepository.countBySections([targetSectionId]);
+    if ((counts[targetSectionId] ?? 0) >= targetSection.capacity) {
+      throw new ApiError(
+        400,
+        `Target section '${targetSection.name}' is at capacity (${targetSection.capacity}).`,
+      );
+    }
+  }
+
+  if (priorInTargetYear.length > 0) {
+    throw new ApiError(
+      400,
+      'This student already has a placement record in that academic year, from earlier in ' +
+        "their history. Create the next academic year for this term (e.g. next year's odd/even " +
+        'term) and a section under it, then promote into that instead.',
     );
   }
 

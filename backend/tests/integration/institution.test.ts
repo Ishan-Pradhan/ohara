@@ -790,6 +790,21 @@ describe('POST /admin/sections', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects an odd-numbered college class against an even-term academic year with 400 (the "show all years" footgun)', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'college' });
+    const semester1 = await createClass({ programId: program.id, orderIndex: 1 });
+    const evenYear = await createAcademicYear({ term: 'even' });
+
+    const res = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: semester1.id, academicYearId: evenYear.id, name: 'A' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/requires a 'odd'-term academic year/);
+  });
 });
 
 describe('GET /admin/sections', () => {
@@ -1009,6 +1024,30 @@ describe('POST /admin/courses', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects a capacity value on a compulsory course with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const res = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101', courseType: 'compulsory', capacity: 30 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/only applies to elective/i);
+  });
+
+  it('accepts a capacity value on an elective course', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const res = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Art', code: 'ART-101', courseType: 'elective', capacity: 30 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.capacity).toBe(30);
+  });
 });
 
 describe('GET /admin/courses', () => {
@@ -1103,6 +1142,23 @@ describe('PATCH /admin/courses/:id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ title: 'Physics I', code: 'PHYS-101A' });
+  });
+
+  it('rejects setting a capacity value on an existing compulsory course with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const created = await request(app)
+      .post(COURSES)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, title: 'Physics', code: 'PHYS-101', courseType: 'compulsory' });
+
+    const res = await request(app)
+      .patch(`${COURSES}/${created.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ capacity: 30 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/only applies to elective/i);
   });
 
   it('rejects a duplicate code with 400', async () => {
