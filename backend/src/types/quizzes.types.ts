@@ -22,6 +22,9 @@ export type QuizCreationAttributes = Optional<
   'id' | 'status' | 'createdAt' | 'updatedAt'
 >;
 
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+export type CognitiveLevel = 'remember' | 'understand' | 'apply' | 'analyze' | 'evaluate' | 'create';
+
 export interface QuestionAttributes {
   id: string;
   quizId: string;
@@ -31,11 +34,13 @@ export interface QuestionAttributes {
   answer: McqAnswer | null;
   points: number;
   orderIndex: number;
+  difficulty: QuestionDifficulty | null;
+  cognitiveLevel: CognitiveLevel | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type QuestionCreationAttributes = Optional<
   QuestionAttributes,
-  'id' | 'options' | 'answer' | 'points' | 'createdAt' | 'updatedAt'
+  'id' | 'options' | 'answer' | 'points' | 'createdAt' | 'updatedAt' | 'difficulty' | 'cognitiveLevel'
 >;

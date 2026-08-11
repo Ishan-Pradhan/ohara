@@ -12,7 +12,7 @@ import {
 } from 'sequelize-typescript';
 
 import { QUESTION_TYPES } from '../constants/index.js';
-import type { QuestionType, McqAnswer } from '../types/quizzes.types.js';
+import type { QuestionType, McqAnswer, QuestionDifficulty, CognitiveLevel } from '../types/quizzes.types.js';
 import { Quiz } from './quizzes.model.js';
 
 @Table({ tableName: 'Questions', timestamps: true })
@@ -54,4 +54,10 @@ export class Question extends Model {
   @AllowNull(false)
   @Column(DataType.INTEGER)
   declare orderIndex: number;
+
+  @Column(DataType.ENUM('easy', 'medium', 'hard'))
+  declare difficulty: QuestionDifficulty | null;
+
+  @Column(DataType.ENUM('remember', 'understand', 'apply', 'analyze', 'evaluate', 'create'))
+  declare cognitiveLevel: CognitiveLevel | null;
 }

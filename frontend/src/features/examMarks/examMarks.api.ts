@@ -57,10 +57,11 @@ export const fetchBulkExamMarks = async (
   classId: string,
   batchId: string,
   examTermId: string,
+  sectionId?: string,
 ): Promise<BulkExamMarksData> => {
-  const res = await api.get('/courses/exam-marks/bulk', {
-    params: { classId, batchId, examTermId },
-  });
+  const params: Record<string, string> = { classId, batchId, examTermId };
+  if (sectionId) params.sectionId = sectionId;
+  const res = await api.get('/courses/exam-marks/bulk', { params });
   return res.data.data;
 };
 

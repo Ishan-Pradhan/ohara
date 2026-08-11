@@ -13,6 +13,8 @@ export const serializeQuestion = (q: Question, revealAnswers: boolean) => ({
   correctIndex: revealAnswers ? (q.answer?.correctIndex ?? null) : null,
   points: q.points,
   orderIndex: q.orderIndex,
+  difficulty: q.difficulty ?? null,
+  cognitiveLevel: q.cognitiveLevel ?? null,
 });
 
 export const serializeQuiz = (quiz: Quiz, revealAnswers: boolean) => ({

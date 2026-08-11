@@ -22,17 +22,31 @@ export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response
     .map((a) => a.course)
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
-  // Small N (a teacher's own course list), so a per-course class/program
+  // Small N (a teacher's own course list), so a per-course class/program/batch
   // lookup is simpler than adding a bulk-join method for a one-place need.
   const courses = await Promise.all(
     rawCourses.map(async (course) => {
       const cls = await classRepository.findById(course.classId);
       const program = cls ? await programRepository.findById(cls.programId) : null;
+
+      // Find which batch(es) the enrolled students belong to for this course
+      const enrollments = await enrollmentRepository.findByCourseWithStudents(course.id);
+      const batchNames = new Set<string>();
+      const sectionNames = new Set<string>();
+      for (const enrollment of enrollments) {
+        if (!enrollment.studentId) continue;
+        const membership = await classMembershipRepository.findCurrent(enrollment.studentId);
+        if (membership?.batch?.name) batchNames.add(membership.batch.name);
+        if (membership?.section?.name) sectionNames.add(membership.section.name);
+      }
+
       return {
         ...serializeCourse(course),
         classId: cls?.id ?? null,
         className: cls?.name ?? null,
         programName: program?.name ?? null,
+        batchName: batchNames.size === 1 ? [...batchNames][0] : null,
+        sectionName: sectionNames.size === 1 ? [...sectionNames][0] : null,
       };
     }),
   );

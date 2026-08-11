@@ -1,6 +1,7 @@
 import { BarChart3 } from 'lucide-react';
 
 import { useMyGrades } from '../../features/gradebook/useGradebook.js';
+import { useGradeTrends } from '../../features/trends/useTrends.js';
 import type { GradebookEntry } from '../../features/gradebook/gradebook.schema.js';
 import { useAssignments } from '../../features/assignments/useAssignments.js';
 import { useQuizzes } from '../../features/quizzes/useQuizzes.js';
@@ -8,6 +9,7 @@ import { Badge } from '../../components/ui/Badge.js';
 import { Card } from '../../components/ui/Card.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { GradeTrendChart } from '../../components/charts/GradeTrendChart.js';
 
 interface StudentGradesSectionProps {
   courseId: string;
@@ -23,6 +25,7 @@ const statusLabel: Record<GradebookEntry['status'], string> = {
 
 export const StudentGradesSection = ({ courseId }: StudentGradesSectionProps) => {
   const { data: row, isLoading } = useMyGrades(courseId);
+  const { data: gradeTrends } = useGradeTrends(courseId);
   // The gradebook row itself only carries assessmentId/type — join titles
   // client-side from the same lists the Assignments/Quizzes tabs already use.
   const { data: assignments } = useAssignments(courseId);
@@ -53,6 +56,8 @@ export const StudentGradesSection = ({ courseId }: StudentGradesSectionProps) =>
 
   return (
     <div className="flex flex-col gap-4">
+      {gradeTrends && gradeTrends.length > 0 && <GradeTrendChart data={gradeTrends} />}
+
       <Card padding="sm" className="flex items-center justify-between">
         <span className="text-sm font-medium text-fg">Overall average</span>
         <span className="text-lg font-semibold text-fg">

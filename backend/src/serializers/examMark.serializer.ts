@@ -45,6 +45,9 @@ export interface ReportCardSemesterSection {
   classId: string;
   className: string;
   orderIndex: number;
+  batchName: string | null;
+  sectionName: string | null;
+  academicYearName: string | null;
   examTerms: ReportCardExamTermHeader[];
   courses: ReportCardCourseRow[];
   totalObtained: number;
@@ -64,7 +67,10 @@ const letterGrade = (percentage: number | null): string => {
 
 /** Groups a student's exam marks by Semester/Class, with a per-semester and
  * an overall cumulative percentage/grade. */
-export const buildReportCard = (marks: ExamMark[]) => {
+export const buildReportCard = (
+  marks: ExamMark[],
+  semesterMeta?: Map<string, { batchName: string | null; sectionName: string | null; academicYearName: string | null }>,
+) => {
   const semestersMap = new Map<string, {
     classId: string;
     className: string;
@@ -153,10 +159,14 @@ export const buildReportCard = (marks: ExamMark[]) => {
       semMax += courseTotalMax;
     }
 
+    const meta = semesterMeta?.get(sem.classId);
     semesters.push({
       classId: sem.classId,
       className: sem.className,
       orderIndex: sem.orderIndex,
+      batchName: meta?.batchName ?? null,
+      sectionName: meta?.sectionName ?? null,
+      academicYearName: meta?.academicYearName ?? null,
       examTerms,
       courses,
       totalObtained: semObtained,

@@ -6,6 +6,7 @@ const teacherOnly = { description: 'Caller is not an admin or a teacher assigned
 
 export const getAtRiskDashboardSchema = {
   params: z.object({ courseId: z.uuid() }),
+  query: z.object({ sectionId: z.uuid().optional() }),
 };
 
 export const explainAtRiskSchema = {

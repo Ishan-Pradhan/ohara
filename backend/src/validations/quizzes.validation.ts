@@ -15,12 +15,26 @@ export const generateQuizSchema = {
     .object({
       title: z.string().min(1, 'Title is required'),
       lessonId: z.uuid().optional(),
+      lessonIds: z.array(z.uuid()).min(1).optional(),
       topic: z.string().min(1).optional(),
       numQuestions: z.coerce.number().int().min(1).max(20).default(5),
       types: z.array(z.enum(['mcq', 'short_answer'])).min(1).default(['mcq', 'short_answer']),
+      difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).optional().default('mixed'),
+      cognitiveDistribution: z
+        .object({
+          remember: z.number().int().min(0).optional().default(0),
+          understand: z.number().int().min(0).optional().default(0),
+          apply: z.number().int().min(0).optional().default(0),
+          analyze: z.number().int().min(0).optional().default(0),
+          evaluate: z.number().int().min(0).optional().default(0),
+          create: z.number().int().min(0).optional().default(0),
+        })
+        .optional(),
+      pointsPerQuestion: z.number().int().min(1).max(100).optional().default(1),
+      learningObjectives: z.array(z.string().min(1)).min(1).optional(),
     })
-    .refine((v) => !!v.lessonId || !!v.topic, {
-      message: 'Provide either lessonId (to ground the quiz in a lesson) or a topic',
+    .refine((v) => !!v.lessonId || !!v.lessonIds || !!v.topic, {
+      message: 'Provide lessonId/lessonIds or a topic',
       path: ['topic'],
     }),
 };
@@ -96,12 +110,16 @@ const generatedMcqSchema = z.object({
   options: z.array(z.string().min(1)).min(2),
   correctIndex: z.number().int().min(0),
   points: z.number().int().positive().optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  cognitiveLevel: z.enum(['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create']).optional(),
 });
 
 const generatedShortAnswerSchema = z.object({
   type: z.literal('short_answer'),
   prompt: z.string().min(1),
   points: z.number().int().positive().optional(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  cognitiveLevel: z.enum(['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create']).optional(),
 });
 
 export const generatedQuizSchema = z.object({
@@ -121,6 +139,8 @@ export const questionSchema = registry.register(
     correctIndex: z.number().nullable().optional(),
     points: z.number(),
     orderIndex: z.number(),
+    difficulty: z.enum(['easy', 'medium', 'hard']).nullable(),
+    cognitiveLevel: z.enum(['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create']).nullable(),
   }),
 );
 
@@ -150,9 +170,23 @@ registry.registerPath({
           schema: z.object({
             title: z.string(),
             lessonId: z.uuid().optional(),
+            lessonIds: z.array(z.uuid()).optional(),
             topic: z.string().optional(),
             numQuestions: z.number().default(5),
             types: z.array(z.enum(['mcq', 'short_answer'])).default(['mcq', 'short_answer']),
+            difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).optional().default('mixed'),
+            cognitiveDistribution: z
+              .object({
+                remember: z.number().int().min(0).optional().default(0),
+                understand: z.number().int().min(0).optional().default(0),
+                apply: z.number().int().min(0).optional().default(0),
+                analyze: z.number().int().min(0).optional().default(0),
+                evaluate: z.number().int().min(0).optional().default(0),
+                create: z.number().int().min(0).optional().default(0),
+              })
+              .optional(),
+            pointsPerQuestion: z.number().int().min(1).max(100).optional().default(1),
+            learningObjectives: z.array(z.string()).optional(),
           }),
         },
       },

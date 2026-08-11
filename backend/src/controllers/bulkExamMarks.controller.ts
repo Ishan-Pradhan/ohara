@@ -11,10 +11,11 @@ import { ApiError } from '../utils/ApiError.js';
 
 export const getBulkExamMarks = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, batchId, examTermId } = req.validated?.query as {
+    const { classId, batchId, examTermId, sectionId } = req.validated?.query as {
       classId: string;
       batchId: string;
       examTermId: string;
+      sectionId?: string;
     };
 
     const term = await ExamTerm.findByPk(examTermId);
@@ -22,13 +23,17 @@ export const getBulkExamMarks = asyncHandler(
       throw new ApiError(404, 'Exam term not found');
     }
 
-    // 1. Get all students in that class (semester) and batch
+    // 1. Get all students in that class (semester), batch, and optionally section
+    const where: Record<string, string> = { batchId };
+    const sectionWhere: Record<string, string> = { classId };
+    if (sectionId) sectionWhere.id = sectionId;
+
     const placements = await ClassMembership.findAll({
-      where: { batchId },
+      where,
       include: [
         {
           association: 'section',
-          where: { classId },
+          where: sectionWhere,
           required: true,
         },
         {

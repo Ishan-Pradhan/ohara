@@ -1,11 +1,10 @@
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Layers, MessageCircle } from 'lucide-react';
+import { BarChart3, CalendarCheck, ChevronRight, ClipboardList, HelpCircle, Layers, LayoutGrid, MessageCircle } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import { useStudentPlacement } from '../../features/placement/usePlacement.js';
 import { useOutline } from '../../features/tutor/useTutor.js';
 import { AppShell } from '../../components/layout/AppShell.js';
-import { PageHeader } from '../../components/layout/PageHeader.js';
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
@@ -14,6 +13,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Ta
 import { TutorPanel } from './TutorPanel.js';
 import { StudentAssignmentsSection } from './StudentAssignmentsSection.js';
 import { StudentQuizzesSection } from './StudentQuizzesSection.js';
+import { StudentGradesSection } from './StudentGradesSection.js';
+import { StudentAttendanceSection } from './StudentAttendanceSection.js';
+import { StudentProjectsSection } from './StudentProjectsSection.js';
+import { CourseHeader } from './CourseHeader.js';
 
 export const StudentCoursePage = () => {
   const { courseId = '' } = useParams();
@@ -21,26 +24,16 @@ export const StudentCoursePage = () => {
   const studentId = currentUser?.id ?? '';
   const { data: placement } = useStudentPlacement(studentId);
   const course = placement?.courses.find((c) => c.id === courseId);
-  // No point requesting an outline the course isn't published enough to have
-  // — it would just 404. course.isPublished is already known from placement.
   const { data: modules, isLoading } = useOutline(course?.isPublished ? courseId : '');
 
   return (
     <AppShell>
-      <Link
-        to="/student/courses"
-        className="mb-1 flex items-center gap-1 text-sm text-muted hover:text-fg"
-      >
-        <ChevronLeft className="size-3.5" aria-hidden />
-        My Courses
-      </Link>
-
-      <PageHeader
+      <CourseHeader
+        courseId={courseId}
         title={course?.title ?? 'Course'}
-        description={course?.code}
-        actions={
-          course && !course.isPublished ? <Badge variant="warning">Not published yet</Badge> : undefined
-        }
+        code={course?.code ?? ''}
+        isPublished={course?.isPublished ?? false}
+        teachers={course?.teachers ?? []}
       />
 
       <Tabs defaultValue="learn">
@@ -56,6 +49,18 @@ export const StudentCoursePage = () => {
           <TabsTrigger value="quizzes">
             <HelpCircle className="size-4" aria-hidden />
             Quizzes
+          </TabsTrigger>
+          <TabsTrigger value="grades">
+            <BarChart3 className="size-4" aria-hidden />
+            Grades
+          </TabsTrigger>
+          <TabsTrigger value="attendance">
+            <CalendarCheck className="size-4" aria-hidden />
+            Attendance
+          </TabsTrigger>
+          <TabsTrigger value="projects">
+            <LayoutGrid className="size-4" aria-hidden />
+            Projects
           </TabsTrigger>
         </TabsList>
 
@@ -121,6 +126,18 @@ export const StudentCoursePage = () => {
 
         <TabsContent value="quizzes">
           <StudentQuizzesSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="grades">
+          <StudentGradesSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="attendance">
+          <StudentAttendanceSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="projects">
+          <StudentProjectsSection courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>

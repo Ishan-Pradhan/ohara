@@ -9,6 +9,7 @@ export const getBulkExamMarksSchema = {
     classId: z.uuid(),
     batchId: z.uuid(),
     examTermId: z.uuid(),
+    sectionId: z.uuid().optional(),
   }),
 };
 

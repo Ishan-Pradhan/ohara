@@ -16,6 +16,7 @@ import {
   quizGenerationUserPrompt,
   quizGenerationCorrectivePrompt,
 } from '../prompts/quizGeneration.prompt.js';
+import type { QuizGenerationOptions } from '../prompts/quizGeneration.prompt.js';
 import { generatedQuizSchema } from '../validations/quizzes.validation.js';
 import { QUIZ_STATUS } from '../constants/index.js';
 import type { Quiz } from '../models/quizzes.model.js';
@@ -44,8 +45,11 @@ const tryParseQuiz = (raw: string) => {
 
 /** Same bounded call-parse-retry shape as courseContent.controller.ts and
  * submissions.controller.ts's AI grading. */
-const generateQuestions = async (sourceText: string, numQuestions: number, types: string[]) => {
-  const systemPrompt = quizGenerationSystemPrompt(numQuestions, types);
+const generateQuestions = async (
+  sourceText: string,
+  opts: QuizGenerationOptions,
+) => {
+  const systemPrompt = quizGenerationSystemPrompt(opts);
   const userPrompt = quizGenerationUserPrompt(sourceText);
   const raw = await generateJson(systemPrompt, userPrompt);
 
@@ -63,28 +67,49 @@ const generateQuestions = async (sourceText: string, numQuestions: number, types
 export const generateQuiz = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const { title, lessonId, topic, numQuestions, types } = req.validated?.body as {
+    const {
+      title, lessonId, lessonIds, topic, numQuestions, types,
+      difficulty, cognitiveDistribution, pointsPerQuestion, learningObjectives,
+    } = req.validated?.body as {
       title: string;
       lessonId?: string;
+      lessonIds?: string[];
       topic?: string;
       numQuestions: number;
       types: string[];
+      difficulty?: string;
+      cognitiveDistribution?: Record<string, number>;
+      pointsPerQuestion?: number;
+      learningObjectives?: string[];
     };
 
+    // Resolve source text from lesson(s) or topic
+    const allLessonIds = lessonIds ?? (lessonId ? [lessonId] : []);
     let sourceText = topic ?? '';
-    if (lessonId) {
-      const lesson = await lessonRepository.findById(lessonId);
-      if (!lesson) {
-        throw new ApiError(400, 'Lesson not found');
+    if (allLessonIds.length > 0) {
+      const contents: string[] = [];
+      for (const lid of allLessonIds) {
+        const lesson = await lessonRepository.findById(lid);
+        if (!lesson) {
+          throw new ApiError(400, `Lesson ${lid} not found`);
+        }
+        const module = await moduleRepository.findById(lesson.moduleId);
+        if (!module || module.courseId !== courseId) {
+          throw new ApiError(400, `Lesson ${lid} does not belong to this course`);
+        }
+        contents.push(lesson.content);
       }
-      const module = await moduleRepository.findById(lesson.moduleId);
-      if (!module || module.courseId !== courseId) {
-        throw new ApiError(400, 'Lesson does not belong to this course');
-      }
-      sourceText = lesson.content;
+      sourceText = contents.join('\n\n---\n\n');
     }
 
-    const generated = await generateQuestions(sourceText, numQuestions, types);
+    const generated = await generateQuestions(sourceText, {
+      numQuestions,
+      allowedTypes: types,
+      difficulty,
+      cognitiveDistribution,
+      pointsPerQuestion,
+      learningObjectives,
+    });
 
     const quiz = await sequelize.transaction(async (transaction) => {
       const createdQuiz = await quizRepository.create({ courseId, title });
@@ -98,8 +123,10 @@ export const generateQuiz = asyncHandler(
               prompt: q.prompt,
               options: q.type === 'mcq' ? q.options : null,
               answer: q.type === 'mcq' ? { correctIndex: q.correctIndex } : null,
-              points: q.points ?? 1,
+              points: q.points ?? pointsPerQuestion ?? 1,
               orderIndex: index,
+              difficulty: q.difficulty ?? null,
+              cognitiveLevel: q.cognitiveLevel ?? null,
             },
             transaction,
           ),

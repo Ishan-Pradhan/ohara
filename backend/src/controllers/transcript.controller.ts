@@ -8,6 +8,9 @@ import { enrollmentRepository } from '../repositories/enrollments.repository.js'
 import { examMarkRepository } from '../repositories/examMarks.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
 import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
+import { sectionRepository } from '../repositories/sections.repository.js';
+import { academicYearRepository } from '../repositories/academicYears.repository.js';
+import { batchRepository } from '../repositories/batches.repository.js';
 import { buildReportCard } from '../serializers/examMark.serializer.js';
 import { generateReportCardPdf } from '../services/reportCardPdf.service.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -51,7 +54,35 @@ const loadTranscript = async (studentId: string, caller: User) => {
     marks = marks.filter((m) => taughtCourseIds.has(m.courseId));
   }
 
-  const { semesters, overallPercentage, overallGrade } = buildReportCard(marks);
+  // Build per-semester metadata from the student's historical memberships
+  const semesterMeta = new Map<string, { batchName: string | null; sectionName: string | null; academicYearName: string | null }>();
+  const classIds = new Set(marks.map((m) => m.course?.classId).filter((id): id is string => Boolean(id)));
+  const memberships = await classMembershipRepository.findAll({ studentId });
+
+  for (const classId of classIds) {
+    // Find the membership whose section's class matches this semester
+    for (const m of memberships) {
+      if (!m.sectionId) continue;
+      const section = await sectionRepository.findById(m.sectionId);
+      if (section?.classId !== classId) continue;
+
+      const batch = m.batchId
+        ? await batchRepository.findAll().then((batches) => batches.find((b) => b.id === m.batchId))
+        : null;
+      const academicYear = m.academicYearId
+        ? await academicYearRepository.findAll().then((years) => years.find((y) => y.id === m.academicYearId))
+        : null;
+
+      semesterMeta.set(classId, {
+        batchName: batch?.name ?? null,
+        sectionName: section?.name ?? null,
+        academicYearName: academicYear?.name ?? null,
+      });
+      break;
+    }
+  }
+
+  const { semesters, overallPercentage, overallGrade } = buildReportCard(marks, semesterMeta);
 
   return {
     student,

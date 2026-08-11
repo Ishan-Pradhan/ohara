@@ -9,6 +9,8 @@ export const questionSchema = z.object({
   correctIndex: z.number().nullable().optional(),
   points: z.number(),
   orderIndex: z.number(),
+  difficulty: z.enum(['easy', 'medium', 'hard']).nullable().optional(),
+  cognitiveLevel: z.enum(['remember', 'understand', 'apply', 'analyze', 'evaluate', 'create']).nullable().optional(),
 });
 
 export const quizSchema = z.object({
@@ -23,9 +25,23 @@ export const quizSchema = z.object({
 export const generateQuizSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   lessonId: z.string().optional(),
+  lessonIds: z.array(z.string()).min(1).optional(),
   topic: z.string().optional(),
   numQuestions: z.number().int().min(1).max(20),
   types: z.array(z.enum(['mcq', 'short_answer'])).min(1),
+  difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).optional(),
+  cognitiveDistribution: z
+    .object({
+      remember: z.number().int().min(0).optional(),
+      understand: z.number().int().min(0).optional(),
+      apply: z.number().int().min(0).optional(),
+      analyze: z.number().int().min(0).optional(),
+      evaluate: z.number().int().min(0).optional(),
+      create: z.number().int().min(0).optional(),
+    })
+    .optional(),
+  pointsPerQuestion: z.number().int().min(1).max(100).optional(),
+  learningObjectives: z.array(z.string().min(1)).min(1).optional(),
 });
 
 export const createQuizSchema = z.object({
