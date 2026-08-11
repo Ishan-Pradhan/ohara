@@ -317,6 +317,21 @@ export const getStudentStudyPlan = asyncHandler(
     if (!studentId) throw new ApiError(401, 'Unauthorized');
 
     const plan = await studyPlanRepository.findActive(studentId);
+
+    // The only other staleness trigger is quiz/grade events within the plan's
+    // own week (markPlanStaleIfCurrentWeek) — a plan nobody touched since a
+    // past week (most obviously, a past semester: promotion always crosses
+    // at least one week boundary) would otherwise stay "active" and get
+    // served indefinitely, showing tasks for courses the student isn't even
+    // enrolled in anymore. Check on every read instead of relying on an event
+    // to catch it.
+    if (plan && !plan.isStale && !studyPlanRepository.isCurrentWeekPlan(plan)) {
+      await studyPlanRepository.markStale(
+        plan,
+        'This plan is from a previous week — regenerate it for an up-to-date plan.',
+      );
+    }
+
     return ok(res, plan ? serializeStudyPlan(plan) : null, 'Study plan retrieved');
   },
 );

@@ -182,6 +182,34 @@ describe('GET /dashboard/me/study-plan', () => {
     expect(res.body.data.content.days[0].tasks[0].title).toBe('Review Chapter 1');
   });
 
+  it('marks a plan from a past week (e.g. a previous semester) stale on read, instead of serving it silently', async () => {
+    // Regression: a plan nobody touched since a past week (most obviously, a
+    // past semester the student was later promoted out of) stayed
+    // status:'active' forever with no check that it's still relevant —
+    // the only other staleness trigger only fires for the *current* week.
+    const { studyPlanRepository } = await import('../../src/repositories/studyPlan.repository.js');
+    const student = await createStudentUser({ email: `stale-${Date.now()}@example.com` });
+    const studentCookies = await signInAs(student.email, 'student');
+
+    const oldWeekStart = '2025-01-06'; // a Monday, long in the past
+    const oldPlanContent = buildValidPlanContent(oldWeekStart);
+    await studyPlanRepository.createAndSupersedePrevious(student.id, oldWeekStart, oldPlanContent);
+
+    const res = await request(app)
+      .get('/api/v1/dashboard/me/study-plan')
+      .set('Cookie', studentCookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.isStale).toBe(true);
+    expect(res.body.data.staleReason).toMatch(/previous week/i);
+
+    // Persisted, not just returned once — a second read stays stale too.
+    const second = await request(app)
+      .get('/api/v1/dashboard/me/study-plan')
+      .set('Cookie', studentCookies);
+    expect(second.body.data.isStale).toBe(true);
+  });
+
   it('returns 401 for unauthenticated requests', async () => {
     const res = await request(app).get('/api/v1/dashboard/me/study-plan');
     expect(res.status).toBe(401);

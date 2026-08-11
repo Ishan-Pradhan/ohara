@@ -54,13 +54,18 @@ export const studyPlanRepository = {
   isCurrentWeekPlan: (plan: StudyPlan): boolean =>
     plan.weekStart === currentWeekMonday(),
 
-  /** Mark the plan as stale with a human-readable reason. No-op if already stale. */
+  /** Mark the plan as stale with a human-readable reason. No-op if already stale.
+   * Also updates the passed instance in place so a caller still holding it
+   * (e.g. about to serialize it in the same request) sees the fresh state
+   * without a re-fetch. */
   markStale: async (plan: StudyPlan, reason: string): Promise<void> => {
     if (plan.isStale) return;
     await StudyPlan.update(
       { isStale: true, staleReason: reason },
       { where: { id: plan.id } },
     );
+    plan.isStale = true;
+    plan.staleReason = reason;
   },
 
   /**
