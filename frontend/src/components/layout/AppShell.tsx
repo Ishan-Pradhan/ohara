@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
@@ -12,9 +12,12 @@ import {
   Layers,
   LineChart,
   LogOut,
+  Menu,
   Settings,
+  User,
   UserCog,
   Users,
+  X,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
@@ -88,6 +91,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['student'] },
       { to: '/student/progress', label: 'My Progress', icon: LineChart, roles: ['student'] },
+      { to: '/student/profile', label: 'My Profile', icon: User, roles: ['student'] },
     ],
   },
   {
@@ -101,6 +105,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const { data: user } = useCurrentUser();
   const { data: institution } = useInstitutionProfile();
   const { mutate: signOut } = useLogout();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -113,14 +118,41 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 md:flex">
-        <div className="mb-8 px-2">
-          <span className="font-display text-xl italic text-primary">Ohara</span>
-          {institution ? (
-            <p className="mt-0.5 truncate text-xs font-medium text-subtle">{institution.name}</p>
-          ) : null}
+      {/* Mobile backdrop */}
+      {mobileOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setMobileOpen(false); }}
+          role="button"
+          tabIndex={-1}
+          aria-label="Close menu"
+        />
+      ) : null}
+
+      {/* Sidebar — mobile slide-out + desktop static */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-surface px-4 py-6 transition-transform duration-200 md:static md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <div className="mb-8 flex items-center justify-between px-2">
+          <div>
+            <span className="font-display text-xl italic text-primary">Ohara</span>
+            {institution ? (
+              <p className="mt-0.5 truncate text-xs font-medium text-subtle">{institution.name}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="rounded-control p-1.5 text-muted hover:bg-surface-hover hover:text-fg md:hidden"
+            onClick={() => setMobileOpen(false)}
+          >
+            <X className="size-5" aria-hidden />
+          </button>
         </div>
-        <nav className="flex flex-col gap-5">
+        <nav className="flex flex-col gap-5 overflow-y-auto">
           {visibleGroups.map((group, index) => (
             <div key={group.label ?? index} className="flex flex-col gap-1">
               {group.label ? (
@@ -133,6 +165,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                   key={to}
                   to={to}
                   end={end}
+                  onClick={() => setMobileOpen(false)}
                   className={({ isActive }) =>
                     cn(
                       'flex items-center gap-2.5 rounded-control px-3 py-2 text-sm font-medium transition-colors',
@@ -153,8 +186,16 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-surface px-4 md:px-8">
-          <span className="font-display text-lg italic text-primary md:hidden">Ohara</span>
-          <span className="hidden md:block" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="rounded-control p-1.5 text-muted hover:bg-surface-hover hover:text-fg md:hidden"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="size-5" aria-hidden />
+            </button>
+            <span className="font-display text-lg italic text-primary md:hidden">Ohara</span>
+          </div>
 
           {user ? (
             <div className="flex items-center gap-1.5">

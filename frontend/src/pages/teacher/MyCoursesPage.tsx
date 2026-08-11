@@ -54,10 +54,10 @@ export const MyCoursesPage = () => {
                   Roster
                 </Link>
                 <Link
-                  to={`/admin/courses/${course.id}`}
+                  to={`/teacher/courses/${course.id}`}
                   className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-3 py-1.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
                 >
-                  Content
+                  Manage
                 </Link>
               </div>
             </Card>

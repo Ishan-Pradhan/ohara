@@ -69,12 +69,14 @@ export const Dialog = ({
   </RadixDialog.Root>
 );
 
-/** For a plain yes/no confirmation, no form body needed. */
+/** For a plain yes/no confirmation, no form body needed. `children` renders
+ * inside the dialog above the footer (e.g. a failure/blocker breakdown). */
 interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
@@ -87,6 +89,7 @@ export const ConfirmDialog = ({
   onOpenChange,
   title,
   description,
+  children,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   destructive = false,
@@ -124,6 +127,8 @@ export const ConfirmDialog = ({
           </button>
         </>
       }
-    />
+    >
+      {children}
+    </Dialog>
   );
 };

@@ -84,3 +84,12 @@
   --color-warning: oklch(75% 0.13 70);
   --color-warning-soft: oklch(30% 0.06 70);
 }
+
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

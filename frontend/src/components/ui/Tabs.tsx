@@ -6,7 +6,7 @@ import { cn } from '../../lib/cn.js';
 export const Tabs = RadixTabs.Root;
 
 export const TabsList = ({ children }: { children: ReactNode }) => (
-  <RadixTabs.List className="inline-flex gap-1 rounded-control bg-surface-hover p-1">
+  <RadixTabs.List className="inline-flex gap-1 overflow-x-auto rounded-control bg-surface-hover p-1 scrollbar-none">
     {children}
   </RadixTabs.List>
 );
