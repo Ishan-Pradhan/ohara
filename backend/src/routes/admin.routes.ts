@@ -5,11 +5,15 @@ import {
   getAllUsers,
   getUserStats,
   archiveUser,
+  restoreUser,
   hardDeleteUser,
   inviteUsersBatch,
   setDateOfBirth,
 } from '../controllers/admin.controller.js';
 import { listStudentFlags, resolveStudentFlag } from '../controllers/studentFlags.controller.js';
+import { getInstitutionPerformance } from '../controllers/institutionPerformance.controller.js';
+import { adminCopilotQuery } from '../controllers/adminCopilot.controller.js';
+import { getInstitutionWeekly } from '../controllers/institutionWeekly.controller.js';
 import { requireRole, verifyJWT } from '../middlewares/auth.middleware.js';
 import { USER_ROLES } from '../constants/index.js';
 import { validate } from '../middlewares/validate.middleware.js';
@@ -17,6 +21,7 @@ import {
   getAllUsersSchema,
   toggleBlockUserSchema,
   archiveUserSchema,
+  restoreUserSchema,
   hardDeleteUserSchema,
   createStaffSchema,
   inviteUsersBatchSchema,
@@ -26,6 +31,9 @@ import {
   listStudentFlagsSchema,
   resolveFlagSchema,
 } from '../validations/teacher.validation.js';
+import { getInstitutionPerformanceSchema } from '../validations/institutionPerformance.validation.js';
+import { adminCopilotQuerySchema } from '../validations/adminCopilot.validation.js';
+import { getInstitutionWeeklySchema } from '../validations/institutionWeekly.validation.js';
 
 const router = Router();
 
@@ -56,6 +64,33 @@ router
 router.route('/stats').get(verifyJWT, requireRole(USER_ROLES.ADMIN), getUserStats);
 
 router
+  .route('/institution-performance')
+  .get(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(getInstitutionPerformanceSchema),
+    getInstitutionPerformance,
+  );
+
+router
+  .route('/copilot/query')
+  .post(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(adminCopilotQuerySchema),
+    adminCopilotQuery,
+  );
+
+router
+  .route('/weekly-intelligence')
+  .get(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(getInstitutionWeeklySchema),
+    getInstitutionWeekly,
+  );
+
+router
   .route('/toggle-block/:id')
   .patch(
     verifyJWT,
@@ -71,6 +106,15 @@ router
     requireRole(USER_ROLES.ADMIN),
     validate(archiveUserSchema),
     archiveUser,
+  );
+
+router
+  .route('/users/:id/restore')
+  .patch(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(restoreUserSchema),
+    restoreUser,
   );
 
 router

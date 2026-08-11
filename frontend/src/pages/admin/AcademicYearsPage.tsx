@@ -29,6 +29,7 @@ import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../components/ui/Dialog.js';
 import { Alert } from '../../components/ui/Alert.js';
+import { BlockersList } from '../../components/ui/BlockersList.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +49,7 @@ export const AcademicYearsPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AcademicYear | null>(null);
   const [deleting, setDeleting] = useState<AcademicYear | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const { data: years, isLoading } = useAcademicYears();
   const createAcademicYear = useCreateAcademicYear();
   const updateAcademicYear = useUpdateAcademicYear();
@@ -99,13 +101,14 @@ export const AcademicYearsPage = () => {
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await deleteAcademicYear.mutateAsync(deleting.id);
       toast.success(`${deleting.name} deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -262,14 +265,21 @@ export const AcademicYearsPage = () => {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this academic year?"
         description={`${deleting?.name} will be permanently removed. This can't be undone, and fails if it still has sections.`}
         confirmLabel="Delete"
         destructive
         loading={deleteAcademicYear.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
     </AppShell>
   );
 };

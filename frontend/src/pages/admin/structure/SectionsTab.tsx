@@ -40,6 +40,7 @@ import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
+import { BlockersList } from '../../../components/ui/BlockersList.js';
 import { Alert } from '../../../components/ui/Alert.js';
 import {
   DropdownMenu,
@@ -76,6 +77,7 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Section | null>(null);
   const [deleting, setDeleting] = useState<Section | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const [promoting, setPromoting] = useState<Section | null>(null);
 
   // This class only ever runs in years matching its own term (annual for
@@ -108,7 +110,10 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
 
   const teacherName = (id: string | null) => teachers?.find((t) => t.id === id)?.name ?? null;
   const teacherOptions = (teachers ?? []).map((t) => ({ value: t.id, label: t.name }));
-  const yearOptions = relevantYears.map((y) => ({ value: y.id, label: y.name }));
+  const yearOptions = relevantYears.map((y) => ({
+    value: y.id,
+    label: `${y.name} (${y.term === 'odd' ? 'Odd' : y.term === 'even' ? 'Even' : 'Annual'})`,
+  }));
 
   // Promotion always moves a section's students into the same program's next
   // class (by orderIndex), regardless of which academic year that class's
@@ -172,13 +177,14 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await deleteSection.mutateAsync(deleting.id);
       toast.success(`Section ${deleting.name} deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -361,14 +367,21 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this section?"
         description={`Section ${deleting?.name} will be permanently removed. This can't be undone, and fails if students are placed in it.`}
         confirmLabel="Delete"
         destructive
         loading={deleteSection.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
 
       <BulkPromoteDialog
         section={promoting}

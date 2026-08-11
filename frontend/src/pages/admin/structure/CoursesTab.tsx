@@ -20,6 +20,7 @@ import { Input } from '../../../components/ui/Input.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
+import { BlockersList } from '../../../components/ui/BlockersList.js';
 import { Alert } from '../../../components/ui/Alert.js';
 import { Select } from '../../../components/ui/Select.js';
 import { Badge } from '../../../components/ui/Badge.js';
@@ -67,6 +68,7 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState<Course | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const [teachersFor, setTeachersFor] = useState<{ id: string; title: string } | null>(null);
 
   const courses = (allCourses ?? []).filter((c) => c.classId === classId);
@@ -124,13 +126,14 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await deleteCourse.mutateAsync(deleting.id);
       toast.success(`${deleting.title} deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -309,14 +312,21 @@ export const CoursesTab = ({ classId }: CoursesTabProps) => {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this course?"
         description={`${deleting?.title} will be permanently removed. This can't be undone, and fails if it has teachers or enrollments.`}
         confirmLabel="Delete"
         destructive
         loading={deleteCourse.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
 
       {teachersFor ? (
         <CourseTeachersDialog

@@ -25,6 +25,14 @@ export const useArchiveUser = () => {
   });
 };
 
+export const useRestoreUser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.patch(`/admin/users/${id}/restore`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+};
+
 export const useCreateStaff = () => {
   const qc = useQueryClient();
   return useMutation({

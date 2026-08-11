@@ -45,6 +45,7 @@ import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
+import { BlockersList } from '../../../components/ui/BlockersList.js';
 import { Alert } from '../../../components/ui/Alert.js';
 import {
   DropdownMenu,
@@ -61,6 +62,7 @@ export const ClassesExplorerPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Class | null>(null);
   const [deleting, setDeleting] = useState<Class | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
 
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
@@ -144,13 +146,14 @@ export const ClassesExplorerPage = () => {
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await deleteClass.mutateAsync(deleting.id);
       toast.success(`${deleting.name} deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -159,7 +162,10 @@ export const ClassesExplorerPage = () => {
   const isPending = editing ? updateClass.isPending : createClass.isPending;
   const isLoading = programsLoading || classesLoading;
 
-  const yearOptions = (years ?? []).map((y) => ({ value: y.id, label: y.name }));
+  const yearOptions = (years ?? []).map((y) => ({
+    value: y.id,
+    label: `${y.name} (${y.term === 'odd' ? 'Odd semester' : y.term === 'even' ? 'Even semester' : 'Annual'})`,
+  }));
   const yearName = (yearId: string) => years?.find((y) => y.id === yearId)?.name ?? '…';
 
   const openCreateBatch = () => {
@@ -197,13 +203,14 @@ export const ClassesExplorerPage = () => {
 
   const confirmDeleteBatch = async () => {
     if (!deletingBatch) return;
+    setDeleteError(null);
     try {
       await deleteBatch.mutateAsync(deletingBatch.id);
       toast.success(`${deletingBatch.name} deleted`);
       setDeletingBatch(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -403,14 +410,21 @@ export const ClassesExplorerPage = () => {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this class?"
         description={`${deleting?.name} will be permanently removed. This can't be undone, and fails if it still has sections or courses.`}
         confirmLabel="Delete"
         destructive
         loading={deleteClass.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
 
       <Dialog
         open={batchDialogOpen}
@@ -460,14 +474,21 @@ export const ClassesExplorerPage = () => {
 
       <ConfirmDialog
         open={Boolean(deletingBatch)}
-        onOpenChange={(open) => !open && setDeletingBatch(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingBatch(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this batch?"
         description={`${deletingBatch?.name} will be permanently removed. This can't be undone, and fails if students are placed in it.`}
         confirmLabel="Delete"
         destructive
         loading={deleteBatch.isPending}
         onConfirm={confirmDeleteBatch}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
     </AppShell>
   );
 };

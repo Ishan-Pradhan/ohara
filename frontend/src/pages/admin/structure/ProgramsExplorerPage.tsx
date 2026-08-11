@@ -30,6 +30,7 @@ import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
+import { BlockersList } from '../../../components/ui/BlockersList.js';
 import { Alert } from '../../../components/ui/Alert.js';
 import {
   DropdownMenu,
@@ -51,6 +52,7 @@ export const ProgramsExplorerPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Program | null>(null);
   const [deleting, setDeleting] = useState<Program | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const { data: programs, isLoading } = usePrograms();
   const { data: classes } = useClasses();
   const createProgram = useCreateProgram();
@@ -105,13 +107,14 @@ export const ProgramsExplorerPage = () => {
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await deleteProgram.mutateAsync(deleting.id);
       toast.success(`${deleting.name} deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -154,6 +157,9 @@ export const ProgramsExplorerPage = () => {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold text-fg">{program.name}</p>
+                  {program.abbreviation && (
+                    <p className="text-xs text-muted mt-0.5">{program.abbreviation}</p>
+                  )}
                   <Badge variant="primary" className="mt-1.5">
                     {typeLabels[program.institutionType]}
                   </Badge>
@@ -202,6 +208,20 @@ export const ProgramsExplorerPage = () => {
 
           <Field label="Name" htmlFor="name" error={errors.name?.message}>
             <Input id="name" placeholder="e.g. Upper School" {...field('name')} />
+          </Field>
+
+          <Field
+            label="Abbreviation"
+            htmlFor="abbreviation"
+            error={errors.abbreviation?.message}
+            hint="Optional — short form like BIM, BCSIT"
+          >
+            <Input
+              id="abbreviation"
+              placeholder="e.g. BIM"
+              maxLength={10}
+              {...field('abbreviation')}
+            />
           </Field>
 
           <Field
@@ -260,14 +280,21 @@ export const ProgramsExplorerPage = () => {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Delete this program?"
         description={`${deleting?.name} will be permanently removed. This can't be undone, and fails if it still has classes.`}
         confirmLabel="Delete"
         destructive
         loading={deleteProgram.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
     </AppShell>
   );
 };

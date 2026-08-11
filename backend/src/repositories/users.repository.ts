@@ -74,7 +74,7 @@ export const userRepository = {
   findAllWithDateOfBirth: async (): Promise<User[]> => {
     return await User.findAll({
       where: { dateOfBirth: { [Op.ne]: null } },
-      attributes: ['id', 'name', 'dateOfBirth'],
+      attributes: ['id', 'name', 'email', 'dateOfBirth', 'role', 'avatarUrl'],
     });
   },
 
@@ -147,6 +147,20 @@ export const userRepository = {
     if (!user) return null;
     user.status = USER_STATUS.ARCHIVED;
     user.deletedAt = new Date();
+    user.refreshToken = null;
+    await user.save();
+    return user;
+  },
+
+  /** Reverse of `archive`: returns an archived/inactive student to `active`,
+   * clears the soft-delete stamp, and revokes stale refresh tokens so the
+   * restored session starts clean. Graduated students are untouched — that
+   * outcome records academic history and is not reversible through this path. */
+  restore: async (id: string): Promise<User | null> => {
+    const user = await User.findByPk(id);
+    if (!user) return null;
+    user.status = USER_STATUS.ACTIVE;
+    user.deletedAt = null;
     user.refreshToken = null;
     await user.save();
     return user;

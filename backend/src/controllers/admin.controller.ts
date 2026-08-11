@@ -18,6 +18,8 @@ import { TWENTY_FOUR_HOURS_IN_MS } from '../constants/index.js';
 import { generateToken, hashPassword } from '../utils/security.utils.js';
 import { getGravatar } from '../utils/gravatar.utils.js';
 import { sendStaffInviteEmail } from '../services/email.service.js';
+import { deleteBlockersRepository } from '../repositories/deleteBlockers.repository.js';
+import { assertDeletable } from '../utils/deleteBlockers.utils.js';
 import { logger } from '../utils/logger.js';
 
 //    GET ALL USERS (ADMIN ONLY)
@@ -217,6 +219,36 @@ export const archiveUser = asyncHandler(
   },
 );
 
+// RESTORE USER (UN-ARCHIVE)
+// Reverses archiveUser: an archived/inactive student is returned to active
+// (login access restored, deleted_at cleared). Graduated stays graduated.
+export const restoreUser = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const existing = await userRepository.findById(id);
+    if (!existing) {
+      throw new ApiError(404, 'User not found');
+    }
+    if (existing.role !== 'student') {
+      throw new ApiError(400, 'Only student accounts can be restored through this endpoint');
+    }
+    if (existing.status === 'graduated') {
+      throw new ApiError(
+        400,
+        'This student is graduated — restoring an archived student is supported, but graduation is an academic record that cannot be reversed',
+      );
+    }
+
+    const user = await userRepository.restore(id);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+
+    return ok(res, serializeUser(user), 'User restored successfully');
+  },
+);
+
 // SET DATE OF BIRTH (feeds the admin birthday calendar)
 export const setDateOfBirth = asyncHandler(
   async (req: AuthRequest, res: Response) => {
@@ -250,6 +282,9 @@ export const hardDeleteUser = asyncHandler(
     if (user.role !== 'student') {
       throw new ApiError(400, 'Only student accounts can be hard-deleted through this endpoint');
     }
+
+    const blockers = await deleteBlockersRepository.studentBlockers(id);
+    assertDeletable('student', blockers);
 
     await userRepository.hardDelete(id);
 

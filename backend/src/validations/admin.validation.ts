@@ -22,6 +22,10 @@ export const archiveUserSchema = {
   params: z.object({ id: uuid }),
 };
 
+export const restoreUserSchema = {
+  params: z.object({ id: uuid }),
+};
+
 export const setDateOfBirthSchema = {
   params: z.object({ id: uuid }),
   body: z.object({ dateOfBirth: z.iso.date() }),
@@ -196,6 +200,24 @@ registry.registerPath({
         'User archived (soft removal — access revoked, academic record preserved)',
       content: { 'application/json': { schema: envelope(userPublicSchema) } },
     },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'User not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/users/{id}/restore',
+  tags: ['Admin'],
+  request: { params: restoreUserSchema.params },
+  responses: {
+    200: {
+      description:
+        'User restored (un-archived) — an archived/inactive student is returned to active with login access',
+      content: { 'application/json': { schema: envelope(userPublicSchema) } },
+    },
+    400: { description: 'User is not a student, or is graduated (not reversible)' },
     401: unauthenticated,
     403: forbidden,
     404: { description: 'User not found' },

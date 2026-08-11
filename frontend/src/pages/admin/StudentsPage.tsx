@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Archive, GraduationCap, Mail, MoreVertical, Search, Trash2, UserPlus } from 'lucide-react';
+import { Archive, GraduationCap, Mail, MoreVertical, RotateCcw, Search, Trash2, UserPlus } from 'lucide-react';
 
-import { useArchiveUser, useHardDeleteUser, useUsers } from '../../features/users/useUsers.js';
+import { useArchiveUser, useHardDeleteUser, useRestoreUser, useUsers } from '../../features/users/useUsers.js';
 import type { AdminUser } from '../../features/users/users.schema.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
@@ -14,6 +14,7 @@ import { Avatar } from '../../components/ui/Avatar.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { BlockersList } from '../../components/ui/BlockersList.js';
 import { ConfirmDialog } from '../../components/ui/Dialog.js';
 import {
   DropdownMenu,
@@ -41,11 +42,14 @@ const statusVariant: Record<AdminUser['status'], 'success' | 'neutral' | 'accent
 export const StudentsPage = () => {
   const [search, setSearch] = useState('');
   const [archiving, setArchiving] = useState<AdminUser | null>(null);
+  const [restoring, setRestoring] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
+  const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const { data, isLoading } = useUsers({ role: 'student', search: search || undefined, limit: 50 });
   const archiveUser = useArchiveUser();
+  const restoreUser = useRestoreUser();
   const hardDeleteUser = useHardDeleteUser();
 
   const students = data?.items ?? [];
@@ -57,15 +61,23 @@ export const StudentsPage = () => {
     setArchiving(null);
   };
 
+  const confirmRestore = async () => {
+    if (!restoring) return;
+    await restoreUser.mutateAsync(restoring.id);
+    toast.success(`${restoring.name} restored`);
+    setRestoring(null);
+  };
+
   const confirmDelete = async () => {
     if (!deleting) return;
+    setDeleteError(null);
     try {
       await hardDeleteUser.mutateAsync(deleting.id);
       toast.success(`${deleting.name} permanently deleted`);
       setDeleting(null);
     } catch (caught) {
       if (caught instanceof ApiError) {
-        toast.error(caught.message);
+        setDeleteError(caught);
       }
     }
   };
@@ -168,7 +180,19 @@ export const StudentsPage = () => {
                         <Archive className="size-4" aria-hidden />
                         Archive
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setDeleting(student)} destructive>
+                      {student.status === 'archived' || student.status === 'inactive' ? (
+                        <DropdownMenuItem onSelect={() => setRestoring(student)}>
+                          <RotateCcw className="size-4" aria-hidden />
+                          Restore
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setDeleting(student);
+                          setDeleteError(null);
+                        }}
+                        destructive
+                      >
                         <Trash2 className="size-4" aria-hidden />
                         Delete permanently
                       </DropdownMenuItem>
@@ -185,22 +209,39 @@ export const StudentsPage = () => {
         open={Boolean(archiving)}
         onOpenChange={(open) => !open && setArchiving(null)}
         title="Archive this student?"
-        description={`${archiving?.name} will lose access immediately. Their academic record is preserved and this can be reviewed later.`}
+        description={`${archiving?.name} will lose access immediately. Their academic record is preserved and can be restored later.`}
         confirmLabel="Archive"
         loading={archiveUser.isPending}
         onConfirm={confirmArchive}
       />
 
       <ConfirmDialog
+        open={Boolean(restoring)}
+        onOpenChange={(open) => !open && setRestoring(null)}
+        title="Restore this student?"
+        description={`${restoring?.name} will regain access as an active student. Graduated students can't be restored this way.`}
+        confirmLabel="Restore"
+        loading={restoreUser.isPending}
+        onConfirm={confirmRestore}
+      />
+
+      <ConfirmDialog
         open={Boolean(deleting)}
-        onOpenChange={(open) => !open && setDeleting(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+            setDeleteError(null);
+          }
+        }}
         title="Permanently delete this student?"
-        description={`This removes ${deleting?.name} entirely and cannot be undone. If they have any placement or enrollment history, this will be rejected — archive instead.`}
+        description={`This removes ${deleting?.name} entirely and cannot be undone. Hard deletion is only available for students with no academic record (e.g. an invited account that was never placed). For students with placement history, use Archive instead.`}
         confirmLabel="Delete permanently"
         destructive
         loading={hardDeleteUser.isPending}
         onConfirm={confirmDelete}
-      />
+      >
+        {deleteError ? <BlockersList blockers={deleteError.blockers} /> : null}
+      </ConfirmDialog>
 
       <InviteStudentsDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </AppShell>
