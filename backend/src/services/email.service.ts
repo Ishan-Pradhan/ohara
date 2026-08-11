@@ -134,6 +134,50 @@ const verifyEmailTemplate = (verifyLink: string) => `
     </div>
   `;
 
+// send a birthday wish email
+export const sendBirthdayWishEmail = async (
+  to: string,
+  recipientName: string,
+  senderName: string,
+  institutionName: string,
+  message: string,
+) => {
+  const from = env.EMAIL_FROM;
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Happy Birthday, ${recipientName}!`,
+    html: birthdayWishTemplate(recipientName, senderName, institutionName, message),
+  });
+};
+
+const birthdayWishTemplate = (
+  recipientName: string,
+  senderName: string,
+  institutionName: string,
+  message: string,
+) => `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #2aaad5;">Happy Birthday, ${recipientName}!</h2>
+
+      <p>On behalf of everyone at <strong>${institutionName}</strong>, we wish you a wonderful birthday!</p>
+
+      <div style="background: #f8f9fa; border-left: 4px solid #2aaad5; padding: 16px; margin: 16px 0; border-radius: 4px;">
+        <p style="margin: 0; font-style: italic;">${message}</p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; color: #666;">— ${senderName}</p>
+      </div>
+
+      <p>We hope you have a great day and an amazing year ahead.</p>
+
+      <hr style="margin: 24px 0;" />
+
+      <p style="font-size: 12px; color: #777;">
+        This birthday wish was sent from ${institutionName} on Ohara.
+      </p>
+    </div>
+  `;
+
 const resetPasswordTemplate = (resetLink: string) => `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
       
