@@ -29,3 +29,5 @@ export type CreateEventInput =
   | { title: string; description?: string | null; type: EventType; startAt: string; endAt?: string | null; allDay: boolean; audience: 'institution_type'; institutionType: InstitutionType }
   | { title: string; description?: string | null; type: EventType; startAt: string; endAt?: string | null; allDay: boolean; audience: 'program'; programId: string }
   | { title: string; description?: string | null; type: EventType; startAt: string; endAt?: string | null; allDay: boolean; audience: 'class'; classId: string };
+
+export type UpdateEventInput = CreateEventInput;

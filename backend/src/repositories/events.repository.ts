@@ -37,6 +37,12 @@ export const eventRepository = {
     return deleted > 0;
   },
 
+  update: async (id: string, data: Partial<EventCreationAttributes>): Promise<Event> => {
+    const event = await Event.findByPk(id);
+    if (!event) throw new Error('Event not found');
+    return await event.update(data);
+  },
+
   /** Admin sees every event in range — no scope filter. */
   findAllInRange: async (from: Date, to: Date): Promise<Event[]> => {
     return await Event.findAll({ where: rangeOverlap(from, to), order: [['startAt', 'ASC']] });

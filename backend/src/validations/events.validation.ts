@@ -33,6 +33,20 @@ export const deleteEventSchema = {
   params: z.object({ id: z.uuid() }),
 };
 
+export const updateEventSchema = {
+  params: z.object({ id: z.uuid() }),
+  body: z.discriminatedUnion('audience', [
+    z.object({ ...base, audience: z.literal('global') }),
+    z.object({
+      ...base,
+      audience: z.literal('institution_type'),
+      institutionType: z.enum(['school', 'college', 'university']),
+    }),
+    z.object({ ...base, audience: z.literal('program'), programId: z.uuid() }),
+    z.object({ ...base, audience: z.literal('class'), classId: z.uuid() }),
+  ]),
+};
+
 // ── Response schema ─────────────────────────────────────────────────────────
 
 const eventSchema = registry.register(
@@ -89,6 +103,25 @@ registry.registerPath({
   request: { params: deleteEventSchema.params },
   responses: {
     200: { description: 'Event deleted' },
+    401: unauthenticated,
+    403: { description: 'Not the creator of this event, and not an admin' },
+    404: { description: 'Event not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/events/{id}',
+  tags: ['Events'],
+  request: {
+    params: updateEventSchema.params,
+    body: { content: { 'application/json': { schema: updateEventSchema.body } } },
+  },
+  responses: {
+    200: {
+      description: 'Event updated',
+      content: { 'application/json': { schema: envelope(eventSchema) } },
+    },
     401: unauthenticated,
     403: { description: 'Not the creator of this event, and not an admin' },
     404: { description: 'Event not found' },

@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 import { useCurrentUser } from '../features/auth/useAuth.js';
-import { useMyEvents, useDeleteEvent } from '../features/events/useEvents.js';
+import { useMyEvents } from '../features/events/useEvents.js';
 import type { Event as CalendarEvent } from '../features/events/events.schema.js';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PageHeader } from '../components/layout/PageHeader.js';
@@ -14,7 +14,6 @@ import { Card } from '../components/ui/Card.js';
 import { Button } from '../components/ui/Button.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { CreateEventDialog } from './CreateEventDialog.js';
-import { BirthdayManager } from './BirthdayManager.js';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -40,8 +39,8 @@ const typeColor: Record<string, string> = {
 export const CalendarPage = () => {
   const { data: user } = useCurrentUser();
   const { data: events, isLoading } = useMyEvents(RANGE_FROM, RANGE_TO);
-  const deleteEvent = useDeleteEvent();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [view, setView] = useState<View>('month');
   const [date, setDate] = useState(new Date());
 
@@ -61,9 +60,8 @@ export const CalendarPage = () => {
   const onSelectEvent = (event: CalendarEvent & { start: Date; end: Date }) => {
     if (event.type === 'birthday') return;
     if (!user || (user.id !== event.createdBy && user.role !== 'admin')) return;
-    if (window.confirm(`Delete "${event.title}"?`)) {
-      deleteEvent.mutate(event.id);
-    }
+    setEditingEvent(event);
+    setDialogOpen(true);
   };
 
   return (
@@ -73,15 +71,13 @@ export const CalendarPage = () => {
         description="School events, holidays, and exams — scoped to your program, semester, or the whole institution."
         actions={
           canCreate ? (
-            <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Button size="sm" onClick={() => { setEditingEvent(null); setDialogOpen(true); }}>
               <Plus className="size-4" aria-hidden />
               Add event
             </Button>
           ) : undefined
         }
       />
-
-      {isAdmin ? <BirthdayManager /> : null}
 
       <Card padding="sm">
         {isLoading ? (
@@ -115,7 +111,7 @@ export const CalendarPage = () => {
         )}
       </Card>
 
-      <CreateEventDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CreateEventDialog open={dialogOpen} onOpenChange={setDialogOpen} editingEvent={editingEvent} />
     </AppShell>
   );
 };

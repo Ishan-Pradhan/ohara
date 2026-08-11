@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { fetchMyEvents, createEvent, deleteEvent, setDateOfBirth } from './events.api.js';
-import type { CreateEventInput } from './events.schema.js';
+import { fetchMyEvents, createEvent, deleteEvent, updateEvent, setDateOfBirth } from './events.api.js';
+import type { CreateEventInput, UpdateEventInput } from './events.schema.js';
 
 export const myEventsKey = (from: Date, to: Date) =>
   ['myEvents', from.toISOString().slice(0, 10), to.toISOString().slice(0, 10)] as const;
@@ -24,6 +24,14 @@ export const useDeleteEvent = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteEvent(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['myEvents'] }),
+  });
+};
+
+export const useUpdateEvent = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateEventInput }) => updateEvent(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['myEvents'] }),
   });
 };

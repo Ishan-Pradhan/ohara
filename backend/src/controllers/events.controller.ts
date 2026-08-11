@@ -186,3 +186,38 @@ export const deleteEvent = asyncHandler(
     return ok(res, null, 'Event deleted');
   },
 );
+
+export const updateEvent = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new ApiError(401, 'Unauthorized');
+    }
+    const { id } = req.validated?.params as { id: string };
+    const body = req.validated?.body as CreateEventBody;
+
+    const event = await eventRepository.findById(id);
+    if (!event) {
+      throw new ApiError(404, 'Event not found');
+    }
+    if (user.role !== USER_ROLES.ADMIN && event.createdBy !== user.id) {
+      throw new ApiError(403, 'Not the creator of this event');
+    }
+
+    await assertCanCreateEvent(user.id, user.role, body);
+
+    const updated = await eventRepository.update(id, {
+      title: body.title,
+      description: body.description ?? null,
+      type: body.type,
+      startAt: new Date(body.startAt),
+      endAt: body.endAt ? new Date(body.endAt) : null,
+      allDay: body.allDay,
+      audience: body.audience,
+      institutionType: body.institutionType ?? null,
+      programId: body.programId ?? null,
+      classId: body.classId ?? null,
+    });
+    return ok(res, serializeEvent(updated), 'Event updated');
+  },
+);

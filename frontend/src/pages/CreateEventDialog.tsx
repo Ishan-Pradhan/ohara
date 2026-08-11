@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { useCurrentUser } from '../features/auth/useAuth.js';
 import { useMyCourses } from '../features/teacher/useTeacher.js';
 import { usePrograms, useClasses } from '../features/institution/useInstitution.js';
-import { useCreateEvent } from '../features/events/useEvents.js';
-import type { EventAudience, EventType, InstitutionType } from '../features/events/events.schema.js';
+import { useCreateEvent, useUpdateEvent, useDeleteEvent } from '../features/events/useEvents.js';
+import type { Event as CalendarEvent, EventAudience, EventType, InstitutionType } from '../features/events/events.schema.js';
 import { toast } from '../lib/toast.js';
 import { Dialog } from '../components/ui/Dialog.js';
 import { Button } from '../components/ui/Button.js';
@@ -17,6 +17,7 @@ import { Checkbox } from '../components/ui/Checkbox.js';
 interface CreateEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editingEvent?: CalendarEvent | null;
 }
 
 const typeOptions: { value: EventType; label: string }[] = [
@@ -31,7 +32,7 @@ const institutionTypeOptions: { value: InstitutionType; label: string }[] = [
   { value: 'university', label: 'University' },
 ];
 
-export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps) => {
+export const CreateEventDialog = ({ open, onOpenChange, editingEvent }: CreateEventDialogProps) => {
   const { data: user } = useCurrentUser();
   const isAdmin = user?.role === 'admin';
 
@@ -40,6 +41,8 @@ export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps
   const { data: classes } = useClasses();
 
   const createEvent = useCreateEvent();
+  const updateEvent = useUpdateEvent();
+  const deleteEvent = useDeleteEvent();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -52,6 +55,33 @@ export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps
   const [programId, setProgramId] = useState('');
   const [classId, setClassId] = useState('');
 
+  const isEdit = Boolean(editingEvent);
+
+  useEffect(() => {
+    if (editingEvent && open) {
+      setTitle(editingEvent.title);
+      setDescription(editingEvent.description ?? '');
+      setType(editingEvent.type === 'birthday' ? 'event' : editingEvent.type);
+      setStartAt(editingEvent.startAt.slice(0, 16));
+      setEndAt(editingEvent.endAt?.slice(0, 16) ?? '');
+      setAllDay(editingEvent.allDay);
+      setAudience(editingEvent.audience);
+      setInstitutionType(editingEvent.institutionType ?? 'school');
+      setProgramId(editingEvent.programId ?? '');
+      setClassId(editingEvent.classId ?? '');
+    } else if (!open) {
+      setTitle('');
+      setDescription('');
+      setType('event');
+      setStartAt('');
+      setEndAt('');
+      setAllDay(false);
+      setAudience(isAdmin ? 'global' : 'class');
+      setProgramId('');
+      setClassId('');
+    }
+  }, [editingEvent, open, isAdmin]);
+
   // A teacher's own classes, deduped, derived from the courses they teach.
   const myClasses = Array.from(
     new Map(
@@ -60,18 +90,6 @@ export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps
         .map((c) => [c.classId as string, { id: c.classId as string, name: c.className ?? 'Class' }]),
     ).values(),
   );
-
-  const reset = () => {
-    setTitle('');
-    setDescription('');
-    setType('event');
-    setStartAt('');
-    setEndAt('');
-    setAllDay(false);
-    setAudience(isAdmin ? 'global' : 'class');
-    setProgramId('');
-    setClassId('');
-  };
 
   const onSubmit = async () => {
     if (!title || !startAt) {
@@ -97,25 +115,32 @@ export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps
     };
 
     try {
+      let input;
       if (audience === 'global') {
-        await createEvent.mutateAsync({ ...common, audience: 'global' });
+        input = { ...common, audience: 'global' as const };
       } else if (audience === 'institution_type') {
-        await createEvent.mutateAsync({ ...common, audience: 'institution_type', institutionType });
+        input = { ...common, audience: 'institution_type' as const, institutionType };
       } else if (audience === 'program') {
-        await createEvent.mutateAsync({ ...common, audience: 'program', programId });
+        input = { ...common, audience: 'program' as const, programId };
       } else {
-        await createEvent.mutateAsync({ ...common, audience: 'class', classId });
+        input = { ...common, audience: 'class' as const, classId };
       }
-      toast.success('Event created');
-      reset();
+
+      if (isEdit && editingEvent) {
+        await updateEvent.mutateAsync({ id: editingEvent.id, input });
+        toast.success('Event updated');
+      } else {
+        await createEvent.mutateAsync(input);
+        toast.success('Event created');
+      }
       onOpenChange(false);
     } catch {
-      toast.error('Could not create the event');
+      toast.error(isEdit ? 'Could not update the event' : 'Could not create the event');
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="New calendar entry">
+    <Dialog open={open} onOpenChange={onOpenChange} title={isEdit ? 'Edit calendar entry' : 'New calendar entry'}>
       <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
         <Field label="Title" htmlFor="event-title">
           <Input id="event-title" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -204,13 +229,33 @@ export const CreateEventDialog = ({ open, onOpenChange }: CreateEventDialogProps
           </Field>
         )}
 
-        <div className="mt-2 flex justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="button" loading={createEvent.isPending} onClick={onSubmit}>
-            Create
-          </Button>
+        <div className="mt-2 flex justify-between gap-3">
+          <div>
+            {isEdit && editingEvent ? (
+              <Button
+                type="button"
+                variant="destructive"
+                loading={deleteEvent.isPending}
+                onClick={async () => {
+                  if (window.confirm(`Delete "${editingEvent.title}"?`)) {
+                    await deleteEvent.mutateAsync(editingEvent.id);
+                    toast.success('Event deleted');
+                    onOpenChange(false);
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex gap-3">
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="button" loading={createEvent.isPending || updateEvent.isPending} onClick={onSubmit}>
+              {isEdit ? 'Save changes' : 'Create'}
+            </Button>
+          </div>
         </div>
       </div>
     </Dialog>
