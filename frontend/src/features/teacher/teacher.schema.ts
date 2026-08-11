@@ -8,6 +8,8 @@ export const teacherCourseSchema = courseSchema.extend({
   classId: z.string().nullable(),
   className: z.string().nullable(),
   programName: z.string().nullable(),
+  batchName: z.string().nullable(),
+  sectionName: z.string().nullable(),
 });
 
 export const teacherSectionSchema = sectionSchema.extend({
