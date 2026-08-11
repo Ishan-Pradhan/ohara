@@ -41,4 +41,9 @@ export class AttendanceRecord extends Model {
   @AllowNull(false)
   @Column(DataType.ENUM('present', 'absent', 'late'))
   declare status: AttendanceStatus;
+
+  /** Reason for absence or late arrival, e.g. "sick", "family emergency". */
+  @Default(null)
+  @Column(DataType.STRING(255))
+  declare reason: string | null;
 }

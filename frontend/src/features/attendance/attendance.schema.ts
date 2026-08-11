@@ -6,6 +6,7 @@ export const attendanceRecordSchema = z.object({
   studentId: z.string(),
   studentName: z.string(),
   status: attendanceStatusSchema,
+  reason: z.string().nullable(),
 });
 
 export const attendanceSessionSchema = z.object({
@@ -49,7 +50,7 @@ export const attendanceSummaryRowSchema = z.object({
 export const createAttendanceSessionSchema = z.object({
   sectionId: z.string().min(1, 'Section is required'),
   sessionDate: z.string().min(1, 'Date is required'),
-  records: z.array(z.object({ studentId: z.string(), status: attendanceStatusSchema })).min(1),
+  records: z.array(z.object({ studentId: z.string(), status: attendanceStatusSchema, reason: z.string().optional() })).min(1),
 });
 
 export type AttendanceStatus = z.infer<typeof attendanceStatusSchema>;

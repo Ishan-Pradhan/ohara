@@ -17,8 +17,9 @@ import {
   type AttendanceStatus,
 } from './attendance.schema.js';
 
-export const fetchAttendanceSessions = async (courseId: string): Promise<AttendanceSessionSummary[]> => {
-  const res = await api.get(`/courses/${courseId}/attendance/sessions`);
+export const fetchAttendanceSessions = async (courseId: string, sectionId?: string): Promise<AttendanceSessionSummary[]> => {
+  const params = sectionId ? { sectionId } : undefined;
+  const res = await api.get(`/courses/${courseId}/attendance/sessions`, { params });
   return z.array(attendanceSessionSummarySchema).parse(res.data.data);
 };
 
@@ -51,7 +52,7 @@ export const createAttendanceSession = async (
 export const updateAttendanceSession = async (
   courseId: string,
   id: string,
-  records: { studentId: string; status: AttendanceStatus }[],
+  records: { studentId: string; status: AttendanceStatus; reason?: string }[],
 ): Promise<AttendanceSession> => {
   const res = await api.patch(`/courses/${courseId}/attendance/sessions/${id}`, { records });
   return attendanceSessionSchema.parse(res.data.data);
@@ -61,8 +62,9 @@ export const deleteAttendanceSession = async (courseId: string, id: string): Pro
   await api.delete(`/courses/${courseId}/attendance/sessions/${id}`);
 };
 
-export const fetchAttendanceSummary = async (courseId: string): Promise<AttendanceSummaryRow[]> => {
-  const res = await api.get(`/courses/${courseId}/attendance/summary`);
+export const fetchAttendanceSummary = async (courseId: string, sectionId?: string): Promise<AttendanceSummaryRow[]> => {
+  const params = sectionId ? { sectionId } : undefined;
+  const res = await api.get(`/courses/${courseId}/attendance/summary`, { params });
   return z.array(attendanceSummaryRowSchema).parse(res.data.data);
 };
 

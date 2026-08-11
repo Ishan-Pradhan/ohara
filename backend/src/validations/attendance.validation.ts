@@ -8,6 +8,7 @@ const teacherOnly = { description: 'Caller is not an admin or a teacher assigned
 const attendanceRecordInputSchema = z.object({
   studentId: z.uuid(),
   status: z.enum(['present', 'absent', 'late']),
+  reason: z.string().max(255).optional(),
 });
 
 export const createAttendanceSessionSchema = {
@@ -30,6 +31,7 @@ export const listAttendanceSectionsSchema = {
 
 export const listAttendanceSessionsSchema = {
   params: z.object({ courseId: z.uuid() }),
+  query: z.object({ sectionId: z.uuid().optional() }).optional(),
 };
 
 export const getAttendanceSessionSchema = {
@@ -47,6 +49,7 @@ export const deleteAttendanceSessionSchema = {
 
 export const getAttendanceSummarySchema = {
   params: z.object({ courseId: z.uuid() }),
+  query: z.object({ sectionId: z.uuid().optional() }).optional(),
 };
 
 export const getMyAttendanceSchema = {
@@ -59,6 +62,7 @@ const attendanceRecordSchema = z.object({
   studentId: z.uuid(),
   studentName: z.string(),
   status: z.enum(['present', 'absent', 'late']),
+  reason: z.string().nullable(),
 });
 
 const attendanceSessionSchema = registry.register(

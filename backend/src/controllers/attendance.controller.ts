@@ -128,7 +128,7 @@ export const createAttendanceSession = asyncHandler(
     const { sectionId, sessionDate, records } = req.validated?.body as {
       sectionId: string;
       sessionDate: string;
-      records: { studentId: string; status: AttendanceStatus }[];
+      records: { studentId: string; status: AttendanceStatus; reason?: string }[];
     };
     const teacherId = req.user?.id;
     if (!teacherId) {
@@ -144,7 +144,7 @@ export const createAttendanceSession = asyncHandler(
       createdBy: teacherId,
     });
     await attendanceRecordRepository.bulkCreate(
-      records.map((r) => ({ sessionId: session.id, studentId: r.studentId, status: r.status })),
+      records.map((r) => ({ sessionId: session.id, studentId: r.studentId, status: r.status, reason: r.reason ?? null })),
     );
 
     const full = await attendanceSessionRepository.findById(session.id);
@@ -158,7 +158,11 @@ export const createAttendanceSession = asyncHandler(
 export const listAttendanceSessions = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const sessions = await attendanceSessionRepository.findAllByCourse(courseId);
+    const { sectionId } = (req.validated?.query as { sectionId?: string }) ?? {};
+    let sessions = await attendanceSessionRepository.findAllByCourse(courseId);
+    if (sectionId) {
+      sessions = sessions.filter((s) => s.sectionId === sectionId);
+    }
     return ok(res, sessions.map(serializeAttendanceSessionSummary), 'Attendance sessions retrieved');
   },
 );
@@ -174,7 +178,7 @@ export const getAttendanceSession = asyncHandler(
 export const updateAttendanceSession = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId, id } = req.validated?.params as { courseId: string; id: string };
-    const { records } = req.validated?.body as { records: { studentId: string; status: AttendanceStatus }[] };
+    const { records } = req.validated?.body as { records: { studentId: string; status: AttendanceStatus; reason?: string }[] };
 
     const existing = await findOwnedSession(courseId, id);
     if (!existing.sectionId) {
@@ -187,7 +191,7 @@ export const updateAttendanceSession = asyncHandler(
 
     await attendanceRecordRepository.deleteBySession(id);
     await attendanceRecordRepository.bulkCreate(
-      records.map((r) => ({ sessionId: id, studentId: r.studentId, status: r.status })),
+      records.map((r) => ({ sessionId: id, studentId: r.studentId, status: r.status, reason: r.reason ?? null })),
     );
 
     const full = await attendanceSessionRepository.findById(id);
@@ -210,7 +214,17 @@ export const deleteAttendanceSession = asyncHandler(
 export const getAttendanceSummary = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const enrollments = await enrollmentRepository.findByCourseWithStudents(courseId);
+    const { sectionId } = (req.validated?.query as { sectionId?: string }) ?? {};
+
+    let enrollments = await enrollmentRepository.findByCourseWithStudents(courseId);
+
+    // If sectionId is provided, filter to only students in that section
+    if (sectionId) {
+      const members = await classMembershipRepository.findBySectionWithStudents(sectionId);
+      const sectionStudentIds = new Set(members.map((m) => m.studentId));
+      enrollments = enrollments.filter((e) => sectionStudentIds.has(e.studentId));
+    }
+
     const byStudent = await attendanceRecordRepository.countByStatusForCourse(courseId);
 
     const summary = enrollments.map((e) => ({

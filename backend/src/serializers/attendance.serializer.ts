@@ -10,6 +10,7 @@ export const serializeAttendanceSession = (session: AttendanceSession) => ({
     studentId: r.studentId,
     studentName: r.student?.name ?? 'Unknown student',
     status: r.status,
+    reason: r.reason ?? null,
   })),
 });
 

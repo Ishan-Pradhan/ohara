@@ -22,11 +22,12 @@ export interface AttendanceRecordAttributes {
   sessionId: string;
   studentId: string;
   status: AttendanceStatus;
+  reason: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type AttendanceRecordCreationAttributes = Optional<
   AttendanceRecordAttributes,
-  'id' | 'createdAt' | 'updatedAt'
+  'id' | 'reason' | 'createdAt' | 'updatedAt'
 >;

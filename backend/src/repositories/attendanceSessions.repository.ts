@@ -13,6 +13,14 @@ export const attendanceSessionRepository = {
     });
   },
 
+  findAllByCourseWithRecords: async (courseId: string): Promise<AttendanceSession[]> => {
+    return await AttendanceSession.findAll({
+      where: { courseId },
+      include: [{ association: 'records' }],
+      order: [['sessionDate', 'ASC']],
+    });
+  },
+
   findById: async (id: string): Promise<AttendanceSession | null> => {
     return await AttendanceSession.findByPk(id, {
       include: [{ association: 'records', include: ['student'] }],

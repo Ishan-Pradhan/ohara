@@ -13,16 +13,18 @@ import {
 } from './attendance.api.js';
 import type { AttendanceStatus, CreateAttendanceSessionInput } from './attendance.schema.js';
 
-export const attendanceSessionsKey = (courseId: string) => ['attendanceSessions', courseId] as const;
+export const attendanceSessionsKey = (courseId: string, sectionId?: string) =>
+  ['attendanceSessions', courseId, sectionId] as const;
 export const attendanceSessionKey = (courseId: string, id: string) =>
   ['attendanceSession', courseId, id] as const;
-export const attendanceSummaryKey = (courseId: string) => ['attendanceSummary', courseId] as const;
+export const attendanceSummaryKey = (courseId: string, sectionId?: string) =>
+  ['attendanceSummary', courseId, sectionId] as const;
 export const myAttendanceKey = (courseId: string) => ['myAttendance', courseId] as const;
 
-export const useAttendanceSessions = (courseId: string) =>
+export const useAttendanceSessions = (courseId: string, sectionId?: string) =>
   useQuery({
-    queryKey: attendanceSessionsKey(courseId),
-    queryFn: () => fetchAttendanceSessions(courseId),
+    queryKey: attendanceSessionsKey(courseId, sectionId),
+    queryFn: () => fetchAttendanceSessions(courseId, sectionId),
     enabled: Boolean(courseId),
   });
 
@@ -52,10 +54,10 @@ export const useAttendanceRoster = (courseId: string, sectionId: string) =>
     enabled: Boolean(courseId) && Boolean(sectionId),
   });
 
-export const useAttendanceSummary = (courseId: string) =>
+export const useAttendanceSummary = (courseId: string, sectionId?: string) =>
   useQuery({
-    queryKey: attendanceSummaryKey(courseId),
-    queryFn: () => fetchAttendanceSummary(courseId),
+    queryKey: attendanceSummaryKey(courseId, sectionId),
+    queryFn: () => fetchAttendanceSummary(courseId, sectionId),
     enabled: Boolean(courseId),
   });
 
@@ -67,8 +69,8 @@ export const useMyAttendance = (courseId: string) =>
   });
 
 const invalidateAttendance = (qc: ReturnType<typeof useQueryClient>, courseId: string) => {
-  void qc.invalidateQueries({ queryKey: attendanceSessionsKey(courseId) });
-  void qc.invalidateQueries({ queryKey: attendanceSummaryKey(courseId) });
+  void qc.invalidateQueries({ queryKey: ['attendanceSessions', courseId] });
+  void qc.invalidateQueries({ queryKey: ['attendanceSummary', courseId] });
 };
 
 export const useCreateAttendanceSession = (courseId: string) => {
