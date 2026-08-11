@@ -112,7 +112,13 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   const teacherOptions = (teachers ?? []).map((t) => ({ value: t.id, label: t.name }));
   const yearOptions = relevantYears.map((y) => ({
     value: y.id,
-    label: `${y.name} (${y.term === 'odd' ? 'Odd' : y.term === 'even' ? 'Even' : 'Annual'})`,
+    // A mismatched-term year only ever shows up via "show all years" (the
+    // legacy-cleanup escape hatch) — the backend now hard-rejects creating a
+    // section under one, so flag it here rather than let it look like a
+    // normal option that just happens to fail on submit.
+    label:
+      `${y.name} (${y.term === 'odd' ? 'Odd' : y.term === 'even' ? 'Even' : 'Annual'})` +
+      (y.term !== classTerm ? ' ⚠ wrong term for this class' : ''),
   }));
 
   // Promotion always moves a section's students into the same program's next
