@@ -16,12 +16,14 @@ import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { userRepository } from '../repositories/users.repository.js';
+import { deleteBlockersRepository } from '../repositories/deleteBlockers.repository.js';
+import { assertDeletable } from '../utils/deleteBlockers.utils.js';
 
 // ── PROGRAMS ────────────────────────────────────────────────────────────────
 
 export const createProgram = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { name, institutionType, description, affiliation } =
+    const { name, institutionType, description, affiliation, abbreviation } =
       req.validated?.body as ProgramCreationAttributes;
 
     const program = await programRepository.create({
@@ -29,6 +31,7 @@ export const createProgram = asyncHandler(
       institutionType,
       description: description ?? null,
       affiliation: affiliation ?? null,
+      abbreviation: abbreviation ?? null,
     });
 
     return ok(res, serializeProgram(program), 'Program created', 201);
@@ -48,7 +51,7 @@ export const updateProgram = asyncHandler(
     const body = req.validated?.body as Partial<
       Pick<
         ProgramCreationAttributes,
-        'name' | 'institutionType' | 'description' | 'affiliation'
+        'name' | 'institutionType' | 'description' | 'affiliation' | 'abbreviation'
       >
     >;
 
@@ -64,6 +67,9 @@ export const updateProgram = asyncHandler(
 export const deleteProgram = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
+
+    const blockers = await deleteBlockersRepository.programBlockers(id);
+    assertDeletable('program', blockers);
 
     const deleted = await programRepository.delete(id);
     if (!deleted) {
@@ -93,8 +99,8 @@ export const createClass = asyncHandler(
 
 export const listClasses = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { programId } = req.validated?.query as { programId?: string };
-    const classes = await classRepository.findAll({ programId });
+    const { programId, batchId } = req.validated?.query as { programId?: string; batchId?: string };
+    const classes = await classRepository.findAll({ programId, batchId });
     return ok(res, classes.map(serializeClass), 'Classes retrieved');
   },
 );
@@ -118,6 +124,9 @@ export const updateClass = asyncHandler(
 export const deleteClass = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
+
+    const blockers = await deleteBlockersRepository.classBlockers(id);
+    assertDeletable('class', blockers);
 
     const deleted = await classRepository.delete(id);
     if (!deleted) {
@@ -176,6 +185,9 @@ export const deleteBatch = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
 
+    const blockers = await deleteBlockersRepository.batchBlockers(id);
+    assertDeletable('batch', blockers);
+
     const deleted = await batchRepository.delete(id);
     if (!deleted) {
       throw new ApiError(404, 'Batch not found');
@@ -230,6 +242,9 @@ export const updateAcademicYear = asyncHandler(
 export const deleteAcademicYear = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
+
+    const blockers = await deleteBlockersRepository.academicYearBlockers(id);
+    assertDeletable('academic year', blockers);
 
     const deleted = await academicYearRepository.delete(id);
     if (!deleted) {
@@ -326,6 +341,9 @@ export const updateSection = asyncHandler(
 export const deleteSection = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
+
+    const blockers = await deleteBlockersRepository.sectionBlockers(id);
+    assertDeletable('section', blockers);
 
     const deleted = await sectionRepository.delete(id);
     if (!deleted) {

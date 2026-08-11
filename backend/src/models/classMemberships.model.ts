@@ -65,6 +65,7 @@ export class ClassMembership extends Model {
       CLASS_MEMBERSHIP_OUTCOMES.PROMOTED,
       CLASS_MEMBERSHIP_OUTCOMES.RETAINED,
       CLASS_MEMBERSHIP_OUTCOMES.GRADUATED,
+      CLASS_MEMBERSHIP_OUTCOMES.TRANSFERRED,
     ),
   )
   declare outcome: ClassMembershipOutcome;

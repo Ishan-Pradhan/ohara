@@ -75,8 +75,8 @@ export const useDeleteProgram = () => {
   });
 };
 
-export const useClasses = () =>
-  useQuery({ queryKey: CLASSES_KEY, queryFn: fetchClasses });
+export const useClasses = (params?: { programId?: string; batchId?: string }) =>
+  useQuery({ queryKey: [...CLASSES_KEY, params], queryFn: () => fetchClasses(params) });
 
 export const useCreateClass = () => {
   const qc = useQueryClient();

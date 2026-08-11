@@ -12,6 +12,7 @@ export const createProgramSchema = {
     institutionType: z.enum(['school', 'college', 'university']),
     description: z.string().optional(),
     affiliation: z.string().optional(),
+    abbreviation: z.string().max(10).optional(),
   }),
 };
 
@@ -23,6 +24,7 @@ export const programSchema = registry.register(
     institutionType: z.enum(['school', 'college', 'university']),
     description: z.string().nullable(),
     affiliation: z.string().nullable(),
+    abbreviation: z.string().nullable(),
     createdAt: z.iso.datetime(),
   }),
 );
@@ -72,6 +74,7 @@ export const updateProgramSchema = {
     institutionType: z.enum(['school', 'college', 'university']).optional(),
     description: z.string().optional(),
     affiliation: z.string().optional(),
+    abbreviation: z.string().max(10).optional(),
   }),
 };
 
@@ -126,6 +129,7 @@ export const createClassSchema = {
 export const listClassesSchema = {
   query: z.object({
     programId: z.uuid().optional(),
+    batchId: z.uuid().optional(),
   }),
 };
 

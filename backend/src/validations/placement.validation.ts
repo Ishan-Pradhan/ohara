@@ -30,7 +30,7 @@ export const classMembershipSchema = registry.register(
     batchId: z.uuid(),
     sectionId: z.uuid(),
     academicYearId: z.uuid(),
-    outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated']),
+    outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated', 'transferred']),
     promotedToId: z.uuid().nullable(),
     createdAt: z.iso.datetime(),
   }),
@@ -152,6 +152,18 @@ export const transferClassMembershipSchema = {
   body: z.object({ targetSectionId: z.uuid() }),
 };
 
+/** Full reassign — the student can be moved to any section (any program,
+ * class, and academic year/term) and any batch of that new program. The old
+ * placement is closed out with outcome 'transferred' and its active course
+ * enrollments completed; the new class's compulsory courses are auto-enrolled. */
+export const reassignClassMembershipSchema = {
+  params: membershipIdParams.params,
+  body: z.object({
+    targetSectionId: z.uuid(),
+    targetBatchId: z.uuid(),
+  }),
+};
+
 registry.registerPath({
   method: 'post',
   path: '/admin/class-memberships/{id}/transfer',
@@ -173,6 +185,32 @@ registry.registerPath({
     401: unauthenticated,
     403: forbidden,
     404: { description: 'Class membership or target section not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/class-memberships/{id}/reassign',
+  tags: ['Placement'],
+  request: {
+    params: reassignClassMembershipSchema.params,
+    body: {
+      content: { 'application/json': { schema: reassignClassMembershipSchema.body } },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        'Student reassigned to the target section and batch, anywhere in the institution. The superseded membership is closed out with outcome `transferred`, old active course enrollments are completed, and the target class\u2019s compulsory courses are auto-enrolled.',
+      content: { 'application/json': { schema: envelope(classMembershipSchema) } },
+    },
+    400: {
+      description:
+        'Validation failed, student is not active, membership already advanced, or target batch belongs to a different program than the target section',
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Class membership, target section, or target batch not found' },
   },
 });
 

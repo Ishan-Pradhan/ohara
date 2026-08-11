@@ -1,4 +1,6 @@
+import { Op } from 'sequelize';
 import { Class } from '../models/classes.model.js';
+import { ClassMembership } from '../models/classMemberships.model.js';
 import type { ClassCreationAttributes } from '../types/institution.types.js';
 
 type ClassUpdateAttributes = Partial<
@@ -10,8 +12,25 @@ export const classRepository = {
     return await Class.create(data);
   },
 
-  findAll: async (options?: { programId?: string }): Promise<Class[]> => {
-    const where = options?.programId ? { programId: options.programId } : {};
+  findAll: async (options?: { programId?: string; batchId?: string }): Promise<Class[]> => {
+    const where: Record<string, unknown> = {};
+    if (options?.programId) where.programId = options.programId;
+
+    // When batchId is provided, filter to only classes that have sections
+    // with ClassMembership records for that batch. If no matches, fall back
+    // to all classes for the program (batch may not have placements yet).
+    if (options?.batchId) {
+      const memberships = await ClassMembership.findAll({
+        where: { batchId: options.batchId },
+        attributes: ['sectionId'],
+        include: [{ association: 'section', attributes: ['classId'], required: true }],
+      });
+      const classIds = [...new Set(memberships.map((m) => m.section?.classId).filter(Boolean))] as string[];
+      if (classIds.length > 0) {
+        where.id = { [Op.in]: classIds };
+      }
+    }
+
     return await Class.findAll({ where, order: [['orderIndex', 'ASC']] });
   },
 

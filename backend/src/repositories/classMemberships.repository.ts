@@ -161,6 +161,74 @@ export const classMembershipRepository = {
     });
   },
 
+  /**
+   * Reassigns a student's current placement to an arbitrary section + batch —
+   * any program, class, or term (the correction tool for a mis-placement).
+   *
+   * - **Same academic year/term:** the UNIQUE(studentId, academicYearId) index
+   *   forbids a second row, so the existing membership is moved in place and
+   *   its active enrollments are resynced to the target class's courses
+   *   (old year's enrollments completed, target class's compulsory courses
+   *   auto-enrolled).
+   * - **Different term:** mirrors `promote` — a new membership is opened,
+   *   the old one is closed out with outcome `transferred` (readable history
+   *   in the promotion chain), and its enrollments completed.
+   */
+  reassign: async (
+    oldMembershipId: string,
+    newData: ClassMembershipCreationAttributes,
+    autoEnrollCourseIds: string[] = [],
+  ): Promise<ClassMembership> => {
+    return await sequelize.transaction(async (transaction) => {
+      const oldMembership = await ClassMembership.findByPk(oldMembershipId, { transaction });
+      if (!oldMembership) {
+        throw new Error('Class membership disappeared mid-transaction');
+      }
+
+      if (oldMembership.academicYearId === newData.academicYearId) {
+        oldMembership.sectionId = newData.sectionId;
+        oldMembership.batchId = newData.batchId;
+        await oldMembership.save({ transaction });
+
+        await enrollmentRepository.bulkComplete(
+          oldMembership.studentId,
+          oldMembership.academicYearId,
+          transaction,
+        );
+        if (autoEnrollCourseIds.length > 0) {
+          const enrollments = autoEnrollCourseIds.map((courseId) => ({
+            studentId: oldMembership.studentId,
+            courseId,
+            academicYearId: oldMembership.academicYearId,
+          }));
+          await enrollmentRepository.bulkCreate(enrollments, transaction, true);
+        }
+
+        return oldMembership;
+      }
+
+      const newMembership = await ClassMembership.create(newData, { transaction });
+      if (autoEnrollCourseIds.length > 0) {
+        const enrollments = autoEnrollCourseIds.map((courseId) => ({
+          studentId: newData.studentId,
+          courseId,
+          academicYearId: newData.academicYearId,
+        }));
+        await enrollmentRepository.bulkCreate(enrollments, transaction);
+      }
+      await enrollmentRepository.bulkComplete(
+        oldMembership.studentId,
+        oldMembership.academicYearId,
+        transaction,
+      );
+      oldMembership.outcome = CLASS_MEMBERSHIP_OUTCOMES.TRANSFERRED;
+      oldMembership.promotedToId = newMembership.id;
+      await oldMembership.save({ transaction });
+
+      return newMembership;
+    });
+  },
+
   /** Powers a section's roster view (class teacher/admin) — active (`enrolled`)
    * memberships only, each row's `student` included. */
   findBySectionWithStudents: async (sectionId: string): Promise<ClassMembership[]> => {

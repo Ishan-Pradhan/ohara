@@ -4,7 +4,7 @@ import type { ProgramCreationAttributes } from '../types/institution.types.js';
 type ProgramUpdateAttributes = Partial<
   Pick<
     ProgramCreationAttributes,
-    'name' | 'institutionType' | 'description' | 'affiliation'
+    'name' | 'institutionType' | 'description' | 'affiliation' | 'abbreviation'
   >
 >;
 

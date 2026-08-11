@@ -10,6 +10,7 @@ export const createProgramSchema = z.object({
   institutionType: z.enum(institutionTypes),
   description: z.string().optional(),
   affiliation: z.string().optional(),
+  abbreviation: z.string().max(10).optional(),
 });
 
 export const programSchema = z.object({
@@ -18,6 +19,7 @@ export const programSchema = z.object({
   institutionType: z.enum(institutionTypes),
   description: z.string().nullable(),
   affiliation: z.string().nullable(),
+  abbreviation: z.string().nullable(),
   createdAt: z.string(),
 });
 

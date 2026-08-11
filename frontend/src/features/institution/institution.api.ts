@@ -50,8 +50,8 @@ export const deleteProgram = async (id: string): Promise<void> => {
   await api.delete(`/admin/programs/${id}`);
 };
 
-export const fetchClasses = async (): Promise<Class[]> => {
-  const res = await api.get('/admin/classes');
+export const fetchClasses = async (params?: { programId?: string; batchId?: string }): Promise<Class[]> => {
+  const res = await api.get('/admin/classes', { params });
   return z.array(classSchema).parse(res.data.data);
 };
 

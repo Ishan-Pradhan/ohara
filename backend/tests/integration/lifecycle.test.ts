@@ -113,6 +113,85 @@ describe('PATCH /admin/users/:id/archive', () => {
   });
 });
 
+describe('PATCH /admin/users/:id/restore', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const student = await createStudentUser();
+    const res = await request(app).patch(`/api/v1/admin/users/${student.id}/restore`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const student = await createStudentUser();
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/restore`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent user with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch('/api/v1/admin/users/00000000-0000-0000-0000-000000000000/restore')
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('restores an archived student to active and clears deleted_at', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const student = await createStudentUser();
+    await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/archive`)
+      .set('Cookie', cookies);
+
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/restore`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('active');
+
+    const restored = await User.unscoped().findByPk(student.id);
+    expect(restored?.status).toBe('active');
+    expect(restored?.deletedAt).toBeNull();
+  });
+
+  it('restores an inactive student to active', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const student = await createStudentUser();
+    await User.update({ status: 'inactive' }, { where: { id: student.id } });
+
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/restore`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('active');
+  });
+
+  it('rejects restoring a graduated student with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const student = await createStudentUser();
+    await User.update({ status: 'graduated' }, { where: { id: student.id } });
+
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${student.id}/restore`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/graduated/i);
+  });
+
+  it('rejects restoring a non-student account with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+    const res = await request(app)
+      .patch(`/api/v1/admin/users/${teacher.id}/restore`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('DELETE /admin/users/:id', () => {
   it('rejects a request without confirmHardDelete with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
@@ -147,7 +226,7 @@ describe('DELETE /admin/users/:id', () => {
     expect(check).toBeNull();
   });
 
-  it('rejects hard-deleting a student with existing class memberships with 409', async () => {
+  it('rejects hard-deleting a student with existing class memberships with 409 and names the blockers', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
     const section = await createSection({ classId: cls.id });
@@ -164,6 +243,8 @@ describe('DELETE /admin/users/:id', () => {
       .send({ confirmHardDelete: true });
 
     expect(res.status).toBe(409);
+    expect(res.body.errors.map((b: { entity: string }) => b.entity)).toContain('placement');
+    expect(res.body.message).toMatch(/1 class placement/);
   });
 
   it('rejects hard-deleting a non-student account with 400', async () => {
@@ -361,6 +442,192 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
       .set('Cookie', cookies)
       .send({ targetSectionId: sectionB.id });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /admin/class-memberships/:id/reassign', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const res = await request(app)
+      .post('/api/v1/admin/class-memberships/00000000-0000-0000-0000-000000000000/reassign')
+      .send({ targetSectionId: '00000000-0000-0000-0000-000000000000', targetBatchId: '00000000-0000-0000-0000-000000000000' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const res = await request(app)
+      .post('/api/v1/admin/class-memberships/00000000-0000-0000-0000-000000000000/reassign')
+      .set('Cookie', cookies)
+      .send({ targetSectionId: '00000000-0000-0000-0000-000000000000', targetBatchId: '00000000-0000-0000-0000-000000000000' });
+    expect(res.status).toBe(403);
+  });
+
+  it('reassigns a student across program, class, term, and batch, preserving history as transferred', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+
+    // Old program/class/term/batch — placement auto-enrolls the compulsory course.
+    const oldProgram = await createProgram();
+    const oldClass = await createClass({ programId: oldProgram.id, orderIndex: 1 });
+    const oldYear = await createAcademicYear();
+    const oldBatch = await createBatch({ programId: oldProgram.id, startAcademicYearId: oldYear.id });
+    const oldCourse = await createCourse({ classId: oldClass.id });
+    const oldSection = await createSection({ classId: oldClass.id, academicYearId: oldYear.id, name: 'A' });
+    const student = await createStudentUser();
+    await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: oldSection.id, batchId: oldBatch.id });
+
+    const beforeRes = await request(app)
+      .get('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .query({ studentId: student.id });
+    const oldMembershipId = beforeRes.body.data[0].id as string;
+
+    // New program/class/term/batch.
+    const newProgram = await createProgram();
+    const newClass = await createClass({ programId: newProgram.id, orderIndex: 1 });
+    const newYear = await createAcademicYear();
+    const newBatch = await createBatch({ programId: newProgram.id, startAcademicYearId: newYear.id });
+    const newCourse = await createCourse({ classId: newClass.id });
+    const newSection = await createSection({ classId: newClass.id, academicYearId: newYear.id, name: 'B' });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${oldMembershipId}/reassign`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: newSection.id, targetBatchId: newBatch.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.sectionId).toBe(newSection.id);
+    expect(res.body.data.academicYearId).toBe(newYear.id);
+    expect(res.body.data.batchId).toBe(newBatch.id);
+
+    const afterRes = await request(app)
+      .get('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .query({ studentId: student.id });
+    const oldMembership = afterRes.body.data.find(
+      (m: { id: string }) => m.id === oldMembershipId,
+    );
+    expect(oldMembership.outcome).toBe('transferred');
+    expect(oldMembership.promotedToId).toBe(res.body.data.id);
+
+    // Enrollments resynced: old course completed, new course auto-enrolled active.
+    const enrollmentsRes = await request(app)
+      .get('/api/v1/admin/enrollments')
+      .set('Cookie', cookies)
+      .query({ studentId: student.id });
+    const oldEnroll = enrollmentsRes.body.data.find(
+      (e: { courseId: string }) => e.courseId === oldCourse.id,
+    );
+    const newEnroll = enrollmentsRes.body.data.find(
+      (e: { courseId: string }) => e.courseId === newCourse.id,
+    );
+    expect(oldEnroll.status).toBe('completed');
+    expect(newEnroll.status).toBe('active');
+  });
+
+  it('reassigns within the same academic year in place, keeping a single membership row', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const year = await createAcademicYear();
+    const cls = await createClass();
+    const sectionA = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
+    const sectionB = await createSection({ classId: cls.id, academicYearId: year.id, name: 'B' });
+    const batchA = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'A' });
+    const batchB = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'B' });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batchA.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/reassign`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: sectionB.id, targetBatchId: batchB.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.id).toBe(placeRes.body.data.id);
+    expect(res.body.data.sectionId).toBe(sectionB.id);
+    expect(res.body.data.batchId).toBe(batchB.id);
+    expect(res.body.data.outcome).toBe('enrolled');
+  });
+
+  it('rejects a target batch that belongs to a different program than the target section', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const sectionA = await createSection({ classId: cls.id, name: 'A' });
+    const batchA = await createBatch({ programId: cls.programId });
+    const otherProgram = await createProgram();
+    const wrongBatch = await createBatch({ programId: otherProgram.id });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batchA.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/reassign`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: sectionA.id, targetBatchId: wrongBatch.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/same program as the target section/);
+  });
+
+  it('rejects a non-existent target batch with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const sectionA = await createSection({ classId: cls.id, name: 'A' });
+    const batchA = await createBatch({ programId: cls.programId });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batchA.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/reassign`)
+      .set('Cookie', cookies)
+      .send({
+        targetSectionId: sectionA.id,
+        targetBatchId: '00000000-0000-0000-0000-000000000000',
+      });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects reassigning a membership that has already been advanced with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const oldYear = await createAcademicYear();
+    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A' });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
+
+    const newYear = await createAcademicYear({ isCurrent: true });
+    const newSection = await createSection({ classId: classB.id, academicYearId: newYear.id, name: 'B' });
+    await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: newSection.id });
+
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/reassign`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: oldSection.id, targetBatchId: batch.id });
 
     expect(res.status).toBe(400);
   });

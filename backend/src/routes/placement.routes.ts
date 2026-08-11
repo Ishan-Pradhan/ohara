@@ -8,6 +8,7 @@ import {
   createEnrollmentSchema,
   listEnrollmentsSchema,
   transferClassMembershipSchema,
+  reassignClassMembershipSchema,
   setClassMembershipOutcomeSchema,
   getSectionRosterSchema,
   bulkPromoteSectionSchema,
@@ -18,6 +19,7 @@ import {
   createEnrollment,
   listEnrollments,
   transferClassMembership,
+  reassignClassMembership,
   setClassMembershipOutcome,
   getSectionRoster,
   bulkPromoteSection,
@@ -41,6 +43,10 @@ router
 router
   .route('/class-memberships/:id/transfer')
   .post(validate(transferClassMembershipSchema), transferClassMembership);
+
+router
+  .route('/class-memberships/:id/reassign')
+  .post(validate(reassignClassMembershipSchema), reassignClassMembership);
 
 router
   .route('/class-memberships/:id/outcome')

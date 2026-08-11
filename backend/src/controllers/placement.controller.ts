@@ -194,6 +194,64 @@ export const transferClassMembership = asyncHandler(
   },
 );
 
+export const reassignClassMembership = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const { targetSectionId, targetBatchId } = req.validated?.body as {
+      targetSectionId: string;
+      targetBatchId: string;
+    };
+
+    const membership = await classMembershipRepository.findById(id);
+    if (!membership) {
+      throw new ApiError(404, 'Class membership not found');
+    }
+
+    const student = await userRepository.findById(membership.studentId);
+    if (!student || student.status !== 'active') {
+      throw new ApiError(400, 'This student is not active and cannot be transferred');
+    }
+    if (membership.promotedToId !== null) {
+      throw new ApiError(400, "Only a student's current placement can be transferred");
+    }
+
+    const targetSection = await sectionRepository.findById(targetSectionId);
+    if (!targetSection) {
+      throw new ApiError(404, 'Target section not found');
+    }
+    const targetClass = await classRepository.findById(targetSection.classId);
+    if (!targetClass) {
+      throw new ApiError(500, 'Target section references a missing class');
+    }
+
+    const targetBatch = await batchRepository.findById(targetBatchId);
+    if (!targetBatch) {
+      throw new ApiError(404, 'Target batch not found');
+    }
+    if (targetBatch.programId !== targetClass.programId) {
+      throw new ApiError(400, 'Target batch must belong to the same program as the target section');
+    }
+
+    const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
+    const autoEnrollCourseIds = classCourses
+      .filter((course) => course.courseType === 'compulsory')
+      .map((course) => course.id);
+
+    const updated = await classMembershipRepository.reassign(
+      id,
+      {
+        studentId: membership.studentId,
+        batchId: targetBatchId,
+        sectionId: targetSectionId,
+        academicYearId: targetSection.academicYearId,
+      },
+      autoEnrollCourseIds,
+    );
+
+    return ok(res, serializeClassMembership(updated), 'Student reassigned');
+  },
+);
+
 // ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
 
 /**

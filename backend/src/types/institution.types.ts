@@ -12,13 +12,14 @@ export interface ProgramAttributes {
   institutionType: InstitutionType;
   description: string | null;
   affiliation: string | null;
+  abbreviation: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export type ProgramCreationAttributes = Optional<
   ProgramAttributes,
-  'id' | 'description' | 'affiliation' | 'createdAt' | 'updatedAt'
+  'id' | 'description' | 'affiliation' | 'abbreviation' | 'createdAt' | 'updatedAt'
 >;
 
 export interface BatchAttributes {

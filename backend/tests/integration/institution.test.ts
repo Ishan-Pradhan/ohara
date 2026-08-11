@@ -83,6 +83,24 @@ describe('POST /admin/programs', () => {
       description: 'STEM programs',
     });
   });
+
+  it('persists and returns the abbreviation', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .post(PROGRAMS)
+      .set('Cookie', cookies)
+      .send({
+        name: 'Bachelor of Information Management',
+        institutionType: 'college',
+        abbreviation: 'BIM',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.abbreviation).toBe('BIM');
+
+    const list = await request(app).get(PROGRAMS).set('Cookie', cookies);
+    expect(list.body.data[0].abbreviation).toBe('BIM');
+  });
 });
 
 describe('GET /admin/programs', () => {
@@ -125,6 +143,22 @@ describe('PATCH /admin/programs/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe('Engineering & Applied Science');
   });
+
+  it('updates the abbreviation', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const created = await request(app)
+      .post(PROGRAMS)
+      .set('Cookie', cookies)
+      .send({ name: 'Engineering', institutionType: 'college', abbreviation: 'ENG' });
+
+    const res = await request(app)
+      .patch(`${PROGRAMS}/${created.body.data.id}`)
+      .set('Cookie', cookies)
+      .send({ abbreviation: 'ENGG' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.abbreviation).toBe('ENGG');
+  });
 });
 
 describe('DELETE /admin/programs/:id', () => {
@@ -152,7 +186,7 @@ describe('DELETE /admin/programs/:id', () => {
     expect(list.body.data).toHaveLength(0);
   });
 
-  it('rejects deleting a program that still has classes with 409', async () => {
+  it('rejects deleting a program that still has classes with 409 and names the blockers', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     await createClassHelper({ programId: program.id });
@@ -161,6 +195,10 @@ describe('DELETE /admin/programs/:id', () => {
       .delete(`${PROGRAMS}/${program.id}`)
       .set('Cookie', cookies);
     expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/1 class/);
+    expect(res.body.errors).toEqual([
+      expect.objectContaining({ entity: 'class', count: 1, label: 'classes' }),
+    ]);
   });
 });
 
@@ -631,7 +669,7 @@ describe('DELETE /admin/academic-years/:id', () => {
     expect(res.status).toBe(200);
   });
 
-  it('rejects deleting an academic year that still has sections with 409', async () => {
+  it('rejects deleting an academic year that still has sections with 409 and names the blockers', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const { createAcademicYear: createYearHelper, createSection: createSectionHelper } =
       await import('../helpers/institution.js');
@@ -642,6 +680,35 @@ describe('DELETE /admin/academic-years/:id', () => {
       .delete(`${YEARS}/${year.id}`)
       .set('Cookie', cookies);
     expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/1 section/);
+    expect(res.body.errors).toEqual([
+      expect.objectContaining({ entity: 'section', count: 1, label: 'sections' }),
+    ]);
+  });
+
+  it('reports a full blocker breakdown when an academic year is referenced by sections, batches, placements, and enrollments', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const { createClass, createAcademicYear, createBatch, createSection, createStudentUser, createCourse } =
+      await import('../helpers/institution.js');
+    const year = await createAcademicYear();
+    const cls = await createClass();
+    const batch = await createBatch({ programId: cls.programId, startAcademicYearId: year.id });
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const _course = await createCourse({ classId: cls.id });
+    const student = await createStudentUser();
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
+
+    const res = await request(app)
+      .delete(`${YEARS}/${year.id}`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(409);
+    const entities = res.body.errors.map((b: { entity: string }) => b.entity).sort();
+    expect(entities).toEqual(['batch', 'enrollment', 'placement', 'section']);
+    expect(res.body.message).toMatch(/1 section, 1 batch, 1 student placement, 1 course enrollment/);
   });
 });
 

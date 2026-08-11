@@ -46,6 +46,11 @@ export class Program extends Model {
   @Column(DataType.STRING)
   declare affiliation: string | null;
 
+  /** Short form / abbreviation, e.g. "BIM", "BCSIT". */
+  @Default(null)
+  @Column(DataType.STRING(10))
+  declare abbreviation: string | null;
+
   @HasMany(() => Class)
   declare classes?: Class[];
 }
