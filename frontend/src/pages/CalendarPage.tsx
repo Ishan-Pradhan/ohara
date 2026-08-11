@@ -1,19 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, addMonths, subMonths } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { Plus } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import '../styles/calendar.css';
 
 import { useCurrentUser } from '../features/auth/useAuth.js';
 import { useMyEvents } from '../features/events/useEvents.js';
-import type { Event as CalendarEvent } from '../features/events/events.schema.js';
+import type { Event as CalendarEvent, EventType } from '../features/events/events.schema.js';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PageHeader } from '../components/layout/PageHeader.js';
 import { Card } from '../components/ui/Card.js';
 import { Button } from '../components/ui/Button.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { CreateEventDialog } from './CreateEventDialog.js';
+import { CalendarToolbar } from './CalendarToolbar.js';
 
 const localizer = dateFnsLocalizer({
   format,
@@ -29,12 +31,43 @@ const localizer = dateFnsLocalizer({
 const RANGE_FROM = subMonths(new Date(), 2);
 const RANGE_TO = addMonths(new Date(), 6);
 
-const typeColor: Record<string, string> = {
-  event: 'var(--color-primary)',
-  holiday: 'var(--color-success)',
-  exam: 'var(--color-danger)',
-  birthday: 'var(--color-accent)',
+// Soft-tint pairs (background + foreground), one per event type — the same
+// semantic colours Badge.tsx already uses for these variants, so an "Exam"
+// pill on the calendar reads as the same colour as an "Exam" badge anywhere
+// else in the app.
+const eventStyle: Record<EventType, { soft: string; fg: string; border: string; dot: string }> = {
+  event: {
+    soft: 'var(--color-primary-soft)',
+    fg: 'var(--color-primary)',
+    border: 'color-mix(in oklch, var(--color-primary) 30%, transparent)',
+    dot: 'var(--color-primary)',
+  },
+  holiday: {
+    soft: 'var(--color-success-soft)',
+    fg: 'var(--color-success)',
+    border: 'color-mix(in oklch, var(--color-success) 30%, transparent)',
+    dot: 'var(--color-success)',
+  },
+  exam: {
+    soft: 'var(--color-danger-soft)',
+    fg: 'var(--color-danger)',
+    border: 'color-mix(in oklch, var(--color-danger) 30%, transparent)',
+    dot: 'var(--color-danger)',
+  },
+  birthday: {
+    soft: 'var(--color-accent-soft)',
+    fg: 'var(--color-accent-fg)',
+    border: 'color-mix(in oklch, var(--color-accent) 30%, transparent)',
+    dot: 'var(--color-accent)',
+  },
 };
+
+const legendItems: { type: EventType; label: string }[] = [
+  { type: 'event', label: 'Event' },
+  { type: 'holiday', label: 'Holiday' },
+  { type: 'exam', label: 'Exam' },
+  { type: 'birthday', label: 'Birthday' },
+];
 
 export const CalendarPage = () => {
   const { data: user } = useCurrentUser();
@@ -78,12 +111,26 @@ export const CalendarPage = () => {
         }
       />
 
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+        {legendItems.map((item) => (
+          <div key={item.type} className="flex items-center gap-1.5 text-xs font-medium text-muted">
+            <span
+              className="size-2 rounded-full"
+              style={{ backgroundColor: eventStyle[item.type].dot }}
+              aria-hidden
+            />
+            {item.label}
+          </div>
+        ))}
+      </div>
+
       <Card padding="sm">
         {isLoading ? (
-          <Skeleton className="h-[600px] w-full" />
+          <Skeleton className="h-[700px] w-full" />
         ) : (
           <div className="ohara-calendar">
             <Calendar
+              key={`${view}-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
               localizer={localizer}
               events={calendarEvents}
               startAccessor="start"
@@ -98,13 +145,17 @@ export const CalendarPage = () => {
               views={['month', 'week', 'day', 'agenda']}
               popup
               onSelectEvent={onSelectEvent}
-              eventPropGetter={(event) => ({
-                style: {
-                  backgroundColor: typeColor[event.type] ?? typeColor.event,
-                  borderRadius: '6px',
-                  border: 'none',
-                },
-              })}
+              components={{ toolbar: CalendarToolbar }}
+              eventPropGetter={(event) => {
+                const style = eventStyle[event.type as EventType] ?? eventStyle.event;
+                return {
+                  style: {
+                    '--ohara-event-soft': style.soft,
+                    '--ohara-event-fg': style.fg,
+                    '--ohara-event-border': style.border,
+                  } as CSSProperties,
+                };
+              }}
             />
           </div>
         )}

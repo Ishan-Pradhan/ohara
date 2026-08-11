@@ -1,0 +1,253 @@
+/*
+ * Reskin on top of react-big-calendar's structural CSS (still imported for
+ * grid/flex layout) — every colour, radius, and font here is one of the
+ * app's own tokens from theme.css, nothing invented. Scoped under
+ * .ohara-calendar so it never leaks into anything else using RBC's classes.
+ */
+
+.ohara-calendar {
+  --rbc-line: color-mix(in oklch, var(--color-border) 100%, transparent);
+  font-family: var(--font-sans);
+  color: var(--color-fg);
+}
+
+/* ── Structural chrome ─────────────────────────────────────────────── */
+
+.ohara-calendar .rbc-month-view,
+.ohara-calendar .rbc-time-view {
+  border: 1px solid var(--rbc-line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.ohara-calendar .rbc-month-row + .rbc-month-row,
+.ohara-calendar .rbc-day-bg + .rbc-day-bg,
+.ohara-calendar .rbc-header + .rbc-header,
+.ohara-calendar .rbc-time-content > * + * > *,
+.ohara-calendar .rbc-time-header-content,
+.ohara-calendar .rbc-timeslot-group,
+.ohara-calendar .rbc-time-header.rbc-overflowing,
+.ohara-calendar .rbc-time-content,
+.ohara-calendar .rbc-time-gutter .rbc-timeslot-group {
+  border-color: var(--rbc-line);
+}
+
+.ohara-calendar .rbc-month-header {
+  border-bottom: 1px solid var(--rbc-line);
+}
+
+.ohara-calendar .rbc-header {
+  padding: 0.65rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-subtle);
+  background: var(--color-surface-hover);
+  border-bottom: none;
+}
+
+.ohara-calendar .rbc-header + .rbc-header {
+  border-left: 1px solid var(--rbc-line);
+}
+
+/* ── Day cells ─────────────────────────────────────────────────────── */
+
+.ohara-calendar .rbc-off-range-bg {
+  background: color-mix(in oklch, var(--color-surface-hover) 65%, transparent);
+}
+
+.ohara-calendar .rbc-off-range {
+  color: var(--color-subtle);
+}
+
+.ohara-calendar .rbc-today {
+  background: var(--color-primary-soft);
+}
+
+.ohara-calendar .rbc-date-cell {
+  padding: 0.4rem 0.5rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  text-align: right;
+}
+
+.ohara-calendar .rbc-date-cell.rbc-now {
+  color: var(--color-primary-fg);
+}
+
+.ohara-calendar .rbc-date-cell .rbc-button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-pill);
+  transition: background-color 150ms var(--ease-out);
+}
+
+.ohara-calendar .rbc-date-cell.rbc-now .rbc-button-link {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  font-weight: 600;
+}
+
+.ohara-calendar .rbc-day-bg + .rbc-day-bg,
+.ohara-calendar .rbc-row-bg + .rbc-row-bg {
+  border-left: 1px solid var(--rbc-line);
+}
+
+.ohara-calendar .rbc-selected-cell {
+  background: var(--color-surface-hover);
+}
+
+/* ── Events ────────────────────────────────────────────────────────── */
+
+.ohara-calendar .rbc-event,
+.ohara-calendar .rbc-background-event {
+  background: var(--ohara-event-soft, var(--color-primary-soft));
+  color: var(--ohara-event-fg, var(--color-primary));
+  border: 1px solid var(--ohara-event-border, transparent);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  box-shadow: none;
+  transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+
+.ohara-calendar .rbc-event:hover,
+.ohara-calendar .rbc-event:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px -2px color-mix(in oklch, var(--ohara-event-fg, var(--color-primary)) 35%, transparent);
+}
+
+.ohara-calendar .rbc-event.rbc-selected {
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--ohara-event-fg, var(--color-primary));
+}
+
+.ohara-calendar .rbc-event-label {
+  display: none;
+}
+
+.ohara-calendar .rbc-event-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ohara-calendar .rbc-show-more {
+  color: var(--color-primary);
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.25rem;
+}
+
+.ohara-calendar .rbc-show-more:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+/* ── Time grid (week / day) ───────────────────────────────────────── */
+
+.ohara-calendar .rbc-time-gutter .rbc-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-subtle);
+}
+
+.ohara-calendar .rbc-current-time-indicator {
+  background: var(--color-danger);
+  height: 2px;
+}
+
+.ohara-calendar .rbc-time-slot {
+  color: var(--color-subtle);
+}
+
+.ohara-calendar .rbc-day-slot .rbc-events-container {
+  margin-right: 4px;
+}
+
+/* ── Agenda view — reads like the app's own tables ───────────────── */
+
+.ohara-calendar .rbc-agenda-view table.rbc-agenda-table {
+  border: none;
+  font-size: 0.875rem;
+}
+
+.ohara-calendar .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  padding: 0.75rem 1rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-subtle);
+  background: var(--color-surface-hover);
+  border-bottom: 1px solid var(--rbc-line);
+}
+
+.ohara-calendar .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--rbc-line);
+}
+
+.ohara-calendar .rbc-agenda-view table.rbc-agenda-table tbody > tr:hover {
+  background: var(--color-surface-hover);
+}
+
+.ohara-calendar .rbc-agenda-date-cell,
+.ohara-calendar .rbc-agenda-time-cell {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.ohara-calendar .rbc-agenda-event-cell {
+  color: var(--color-fg);
+}
+
+/* ── Popup overlay ("+2 more") ────────────────────────────────────── */
+
+.ohara-calendar .rbc-overlay {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 32px -8px rgb(0 0 0 / 0.18);
+  padding: 0.5rem;
+}
+
+.ohara-calendar .rbc-overlay-header {
+  padding: 0.35rem 0.5rem 0.6rem;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--color-fg);
+}
+
+/* ── Motion (respects reduced-motion) ─────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .ohara-calendar .rbc-month-view,
+  .ohara-calendar .rbc-time-view,
+  .ohara-calendar .rbc-agenda-view {
+    animation: ohara-calendar-fade-in 220ms var(--ease-out);
+  }
+}
+
+@keyframes ohara-calendar-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

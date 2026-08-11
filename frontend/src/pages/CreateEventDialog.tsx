@@ -6,6 +6,7 @@ import { usePrograms, useClasses } from '../features/institution/useInstitution.
 import { useCreateEvent, useUpdateEvent, useDeleteEvent } from '../features/events/useEvents.js';
 import type { Event as CalendarEvent, EventAudience, EventType, InstitutionType } from '../features/events/events.schema.js';
 import { toast } from '../lib/toast.js';
+import { cn } from '../lib/cn.js';
 import { Dialog } from '../components/ui/Dialog.js';
 import { Button } from '../components/ui/Button.js';
 import { Field } from '../components/ui/Field.js';
@@ -20,10 +21,13 @@ interface CreateEventDialogProps {
   editingEvent?: CalendarEvent | null;
 }
 
-const typeOptions: { value: EventType; label: string }[] = [
-  { value: 'event', label: 'Event' },
-  { value: 'holiday', label: 'Holiday' },
-  { value: 'exam', label: 'Exam' },
+// Same dot colour + soft-tint pairing as the calendar's own legend and event
+// pills (CalendarPage.tsx) — picking a type here should look like the exact
+// thing it becomes on the calendar.
+const typeOptions: { value: EventType; label: string; dot: string; ring: string }[] = [
+  { value: 'event', label: 'Event', dot: 'var(--color-primary)', ring: 'ring-primary/40' },
+  { value: 'holiday', label: 'Holiday', dot: 'var(--color-success)', ring: 'ring-success/40' },
+  { value: 'exam', label: 'Exam', dot: 'var(--color-danger)', ring: 'ring-danger/40' },
 ];
 
 const institutionTypeOptions: { value: InstitutionType; label: string }[] = [
@@ -149,7 +153,27 @@ export const CreateEventDialog = ({ open, onOpenChange, editingEvent }: CreateEv
           <Textarea id="event-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
         <Field label="Type" htmlFor="event-type">
-          <Select id="event-type" value={type} onValueChange={(v) => setType(v as EventType)} options={typeOptions} />
+          <div id="event-type" role="radiogroup" className="flex flex-wrap gap-2">
+            {typeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={type === option.value}
+                onClick={() => setType(option.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-sm font-medium transition-colors',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                  type === option.value
+                    ? cn('border-transparent bg-surface-hover text-fg ring-2', option.ring)
+                    : 'border-border text-muted hover:border-border-strong hover:text-fg',
+                )}
+              >
+                <span className="size-2 rounded-full" style={{ backgroundColor: option.dot }} aria-hidden />
+                {option.label}
+              </button>
+            ))}
+          </div>
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
