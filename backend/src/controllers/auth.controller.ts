@@ -12,6 +12,7 @@ import {
 import { userRepository } from '../repositories/users.repository.js';
 import { verificationRepository } from '../repositories/verification.repository.js';
 import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
+import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
 import {
   sendPasswordResetEmail,
   sendVerificationEmail,
@@ -39,7 +40,7 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 // REGISTER
 export const registerUser = asyncHandler(
   async (req: Request, res: Response) => {
-    const { name, email, password } = req.validated?.body as RegisterUserTypes;
+    const { name, email, password, dateOfBirth } = req.validated?.body as RegisterUserTypes;
 
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
@@ -83,6 +84,10 @@ export const registerUser = asyncHandler(
       avatarUrl: getGravatar(email),
       role,
     });
+
+    if (role === USER_ROLES.STUDENT && dateOfBirth) {
+      await studentProfileRepository.upsert(newUser.id, { dateOfBirth });
+    }
 
     const verificationToken = generateToken();
     const expiresAt = new Date(Date.now() + TWENTY_FOUR_HOURS_IN_MS);

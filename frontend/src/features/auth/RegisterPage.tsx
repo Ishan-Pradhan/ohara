@@ -99,6 +99,10 @@ export const RegisterPage = () => {
           />
         </Field>
 
+        <Field label="Date of birth (optional)" htmlFor="dateOfBirth">
+          <Input id="dateOfBirth" type="date" {...field('dateOfBirth')} />
+        </Field>
+
         <Button type="submit" loading={isPending}>
           Create account
         </Button>
