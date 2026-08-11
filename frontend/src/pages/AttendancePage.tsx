@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { CalendarCheck } from 'lucide-react';
 
 import { useCurrentUser } from '../features/auth/useAuth.js';
-import { useAccessibleCourses } from '../features/courses/useAccessibleCourses.js';
 import { useMyCourses } from '../features/teacher/useTeacher.js';
 import {
   usePrograms,
@@ -18,7 +17,7 @@ import { Select } from '../components/ui/Select.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { AttendanceSection } from './admin/course-content/AttendanceSection.js';
-import { StudentAttendanceSection } from './student/StudentAttendanceSection.js';
+import { AllSubjectsAttendance } from './student/AllSubjectsAttendance.js';
 
 export const AttendancePage = () => {
   const { data: user } = useCurrentUser();
@@ -195,29 +194,14 @@ const TeacherAttendanceView = () => {
   );
 };
 
-/** Student view: course switcher */
+/** Student view: every subject this semester, together — not one course at a time. */
 const StudentAttendanceView = () => {
-  const { courses, isLoading } = useAccessibleCourses();
-  const [courseId, setCourseId] = useState('');
-
-  useEffect(() => {
-    if (!courseId && courses.length > 0) setCourseId(courses[0]!.id);
-  }, [courses, courseId]);
+  const { data: user } = useCurrentUser();
 
   return (
     <AppShell>
-      <PageHeader title="Attendance" description="Sessions and percentage, by course." />
-
-      {isLoading ? (
-        <Skeleton className="h-64 w-full" />
-      ) : courses.length === 0 ? (
-        <EmptyState icon={CalendarCheck} title="No courses yet" description="Attendance will appear here once you have a course." />
-      ) : (
-        <div className="flex flex-col gap-4">
-          <CourseSwitcher courses={courses} selectedCourseId={courseId} onSelect={setCourseId} />
-          {courseId ? <StudentAttendanceSection courseId={courseId} /> : null}
-        </div>
-      )}
+      <PageHeader title="Attendance" description="Every subject this semester, side by side." />
+      {user ? <AllSubjectsAttendance studentId={user.id} /> : <Skeleton className="h-64 w-full" />}
     </AppShell>
   );
 };

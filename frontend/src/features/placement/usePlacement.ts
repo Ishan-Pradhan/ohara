@@ -8,6 +8,7 @@ import {
   enrollInElective,
   fetchClassMemberships,
   fetchSectionRoster,
+  fetchStudentAttendance,
   fetchStudentElectives,
   fetchStudentPlacement,
   setClassMembershipOutcome,
@@ -36,6 +37,18 @@ export const useClassMemberships = (studentId: string) =>
     queryKey: classMembershipsKey(studentId),
     queryFn: () => fetchClassMemberships(studentId),
     enabled: Boolean(studentId),
+  });
+
+export const studentAttendanceKey = (studentId: string) =>
+  ['placement', 'attendance', studentId] as const;
+
+/** All of the student's current-semester courses' attendance, together. */
+export const useStudentAttendance = (studentId: string) =>
+  useQuery({
+    queryKey: studentAttendanceKey(studentId),
+    queryFn: () => fetchStudentAttendance(studentId),
+    enabled: Boolean(studentId),
+    retry: false,
   });
 
 const invalidateStudent = (qc: ReturnType<typeof useQueryClient>, studentId: string) => {

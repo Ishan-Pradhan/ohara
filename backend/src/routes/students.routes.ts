@@ -4,9 +4,14 @@ import { validate } from '../middlewares/validate.middleware.js';
 import {
   getStudentPlacementSchema,
   getStudentElectivesSchema,
+  getStudentAttendanceSchema,
 } from '../validations/students.validation.js';
 import { getTranscriptSchema, getTranscriptPdfSchema } from '../validations/transcript.validation.js';
-import { getStudentPlacement, getStudentElectives } from '../controllers/students.controller.js';
+import {
+  getStudentPlacement,
+  getStudentElectives,
+  getStudentAttendance,
+} from '../controllers/students.controller.js';
 import { getTranscript, getTranscriptPdf } from '../controllers/transcript.controller.js';
 
 const router = Router();
@@ -16,6 +21,7 @@ router.use(verifyJWT);
 
 router.get('/:studentId/placement', validate(getStudentPlacementSchema), getStudentPlacement);
 router.get('/:studentId/electives', validate(getStudentElectivesSchema), getStudentElectives);
+router.get('/:studentId/attendance', validate(getStudentAttendanceSchema), getStudentAttendance);
 router.get('/:studentId/transcript', validate(getTranscriptSchema), getTranscript);
 router.get('/:studentId/transcript/pdf', validate(getTranscriptPdfSchema), getTranscriptPdf);
 

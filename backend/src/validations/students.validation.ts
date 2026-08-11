@@ -36,6 +36,20 @@ export const getStudentElectivesSchema = {
   params: z.object({ studentId: z.uuid() }),
 };
 
+export const getStudentAttendanceSchema = {
+  params: z.object({ studentId: z.uuid() }),
+};
+
+const courseAttendanceSchema = z.object({
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  total: z.number(),
+  present: z.number(),
+  absent: z.number(),
+  late: z.number(),
+  percentage: z.number().nullable(),
+});
+
 const electiveCourseSchema = z.object({
   id: z.uuid(),
   classId: z.uuid(),
@@ -60,6 +74,23 @@ registry.registerPath({
     401: { description: 'Not authenticated' },
     403: { description: "Not authorized to view another student's electives" },
     404: { description: 'Student is not currently placed' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/students/{studentId}/attendance',
+  tags: ['Placement'],
+  request: { params: getStudentAttendanceSchema.params },
+  responses: {
+    200: {
+      description:
+        "The student's attendance across every course in their current placement, together — not one course at a time",
+      content: { 'application/json': { schema: envelope(z.array(courseAttendanceSchema)) } },
+    },
+    401: { description: 'Not authenticated' },
+    403: { description: "Not authorized to view this student's attendance" },
+    404: { description: 'Student not found, or not currently placed' },
   },
 });
 

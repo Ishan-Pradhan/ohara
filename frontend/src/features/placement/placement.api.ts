@@ -7,6 +7,7 @@ import {
   electiveCourseSchema,
   enrollmentSchema,
   rosterEntrySchema,
+  studentCourseAttendanceSchema,
   studentPlacementSchema,
   type BulkPromoteInput,
   type BulkPromoteResult,
@@ -17,6 +18,7 @@ import {
   type Enrollment,
   type OutcomeInput,
   type RosterEntry,
+  type StudentCourseAttendance,
   type StudentPlacement,
   type TransferInput,
 } from './placement.schema.js';
@@ -57,6 +59,14 @@ export const setClassMembershipOutcome = async (
 export const fetchStudentPlacement = async (studentId: string): Promise<StudentPlacement> => {
   const res = await api.get(`/students/${studentId}/placement`);
   return studentPlacementSchema.parse(res.data.data);
+};
+
+/** Every course in the student's current placement, together — see
+ * students.controller.ts's getStudentAttendance for why this exists
+ * separately from the per-course GET /courses/:courseId/attendance/me. */
+export const fetchStudentAttendance = async (studentId: string): Promise<StudentCourseAttendance[]> => {
+  const res = await api.get(`/students/${studentId}/attendance`);
+  return z.array(studentCourseAttendanceSchema).parse(res.data.data);
 };
 
 // ── BULK PROMOTION ──────────────────────────────────────────────────────────
