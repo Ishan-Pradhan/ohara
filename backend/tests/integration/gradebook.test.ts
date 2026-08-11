@@ -19,6 +19,7 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
+  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -51,6 +52,7 @@ afterAll(async () => {
 
 describe('Gradebook', () => {
   it('aggregates approved assignment grades and quiz attempts into the class matrix and per-student view', async () => {
+    await createAcademicYear({ isCurrent: true });
     const course = await createCourse();
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

@@ -9,17 +9,22 @@ import { quizAttemptRepository } from '../repositories/quizAttempts.repository.j
 import { quizAnswerGradeRepository } from '../repositories/quizAnswerGrades.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { buildGradebook } from '../serializers/gradebook.serializer.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { QUIZ_STATUS, QUESTION_TYPES, GRADE_STATUS } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 
 /** Gathers every input buildGradebook needs, then hands off to that pure
- * function — this is the only place that queries the DB for the gradebook. */
+ * function — this is the only place that queries the DB for the gradebook.
+ * Scoped to the course's current academic year: a Course is reused by every
+ * future batch reaching its Class, so without this a new batch's gradebook
+ * would include the previous batch's assignments/quizzes too. */
 export const loadGradebook = async (courseId: string) => {
+  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
   const [assignments, quizzes, roster] = await Promise.all([
-    assignmentRepository.findAllByCourse(courseId),
-    quizRepository.findAllByCourse(courseId, QUIZ_STATUS.PUBLISHED),
+    assignmentRepository.findAllByCourse(courseId, academicYear.id),
+    quizRepository.findAllByCourse(courseId, academicYear.id, QUIZ_STATUS.PUBLISHED),
     enrollmentRepository.findByCourseWithStudents(courseId),
   ]);
 

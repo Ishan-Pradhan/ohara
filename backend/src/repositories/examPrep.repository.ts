@@ -161,9 +161,10 @@ export const examPrepRepository = {
       }
     }
 
-    // Course-level MCQ correct rate across all course quizzes (same as masteryEvidence.repository)
+    // Course-level MCQ correct rate across all course quizzes (same as masteryEvidence.repository),
+    // scoped to this quiz's own batch/year — a Course is reused by every future batch.
     const allCourseQuizzes = await Quiz.findAll({
-      where: { courseId, status: QUIZ_STATUS.PUBLISHED },
+      where: { courseId, academicYearId: quiz.academicYearId, status: QUIZ_STATUS.PUBLISHED },
       attributes: ['id'],
     });
 
@@ -258,9 +259,11 @@ export const examPrepRepository = {
       }
     }
 
-    // Course-level weak criteria from all approved grades in this course
+    // Course-level weak criteria from all approved grades in this course,
+    // scoped to this assignment's own batch/year — a Course is reused by
+    // every future batch.
     const allAssignments = await Assignment.findAll({
-      where: { courseId },
+      where: { courseId, academicYearId: assignment.academicYearId },
       attributes: ['id'],
     });
 

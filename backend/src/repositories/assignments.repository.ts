@@ -9,9 +9,13 @@ export const assignmentRepository = {
     return await Assignment.create(data);
   },
 
-  findAllByCourse: async (courseId: string): Promise<Assignment[]> => {
+  /** academicYearId is required (not optional) so every call site is forced
+   * to decide which year's assignments it wants — a Course is permanently
+   * attached to its Class and reused by every future batch, so listing
+   * without a year filter would resurface every past batch's assignments. */
+  findAllByCourse: async (courseId: string, academicYearId: string): Promise<Assignment[]> => {
     return await Assignment.findAll({
-      where: { courseId },
+      where: { courseId, academicYearId },
       order: [['dueAt', 'ASC']],
     });
   },

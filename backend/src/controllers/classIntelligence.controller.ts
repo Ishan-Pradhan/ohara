@@ -7,6 +7,7 @@ import { assignmentRepository } from '../repositories/assignments.repository.js'
 import { submissionRepository } from '../repositories/submissions.repository.js';
 import { attendanceRecordRepository } from '../repositories/attendanceRecords.repository.js';
 import { buildAttendancePercentage } from '../serializers/attendance.serializer.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import {
   AT_RISK_MIN_AVERAGE_PERCENT,
   AT_RISK_MIN_ATTENDANCE_PERCENT,
@@ -27,10 +28,11 @@ export interface StudentMetrics {
 
 /** Shared computation reused by class intelligence and at-risk controllers. */
 export const computeCourseMetrics = async (courseId: string): Promise<StudentMetrics[]> => {
+  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
   const [gradebook, roster, assignments, byStudentAttendance] = await Promise.all([
     loadGradebook(courseId),
     enrollmentRepository.findByCourseWithStudents(courseId),
-    assignmentRepository.findAllByCourse(courseId),
+    assignmentRepository.findAllByCourse(courseId, academicYear.id),
     attendanceRecordRepository.countByStatusForCourse(courseId),
   ]);
 
@@ -87,7 +89,8 @@ const computeSubmissionRate = async (
   courseId: string,
   rosterLength: number,
 ): Promise<number | null> => {
-  const assignments = await assignmentRepository.findAllByCourse(courseId);
+  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+  const assignments = await assignmentRepository.findAllByCourse(courseId, academicYear.id);
   const now = new Date();
   const pastDueAssignments = assignments.filter((a) => a.dueAt < now);
   if (pastDueAssignments.length === 0 || rosterLength === 0) return null;

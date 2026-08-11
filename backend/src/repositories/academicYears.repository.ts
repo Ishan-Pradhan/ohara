@@ -35,6 +35,13 @@ export const academicYearRepository = {
     return await AcademicYear.findByPk(id);
   },
 
+  /** The one academic year currently live for a given term (odd/even/annual)
+   * — powers auto-scoping assignments/quizzes to "this course, right now"
+   * without trusting the client to pick the right year. */
+  findCurrentByTerm: async (term: 'odd' | 'even' | 'annual'): Promise<AcademicYear | null> => {
+    return await AcademicYear.findOne({ where: { isCurrent: true, term } });
+  },
+
   /** Same current-year invariant as `create`: flipping `isCurrent` to true
    * unsets whichever row previously held it *for the resulting term*, in
    * one transaction. */

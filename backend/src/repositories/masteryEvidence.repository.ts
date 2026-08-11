@@ -61,13 +61,13 @@ export interface CourseMasteryEvidence {
 export const masteryEvidenceRepository = {
   findForStudent: async (
     studentId: string,
-    enrolledCourses: ReadonlyArray<{ courseId: string; courseTitle: string }>,
+    enrolledCourses: ReadonlyArray<{ courseId: string; courseTitle: string; academicYearId: string }>,
   ): Promise<CourseMasteryEvidence[]> => {
     return Promise.all(
-      enrolledCourses.map(async ({ courseId, courseTitle }) => {
+      enrolledCourses.map(async ({ courseId, courseTitle, academicYearId }) => {
         // ── 1. MCQ correctness ────────────────────────────────────────────────
         const quizzes = await Quiz.findAll({
-          where: { courseId, status: QUIZ_STATUS.PUBLISHED },
+          where: { courseId, academicYearId, status: QUIZ_STATUS.PUBLISHED },
           attributes: ['id'],
         });
 
@@ -138,7 +138,7 @@ export const masteryEvidenceRepository = {
 
         // ── 2. Assignment criterion weakness ──────────────────────────────────
         const assignments = await Assignment.findAll({
-          where: { courseId },
+          where: { courseId, academicYearId },
           attributes: ['id'],
         });
 

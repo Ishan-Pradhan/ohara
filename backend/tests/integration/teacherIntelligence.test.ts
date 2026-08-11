@@ -20,6 +20,7 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
+  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -55,6 +56,7 @@ describe('Teacher Intelligence', () => {
 
   describe('GET /courses/:courseId/class-intelligence', () => {
     it('returns deterministic class summary for a teacher', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -79,6 +81,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('returns 403 for a non-teacher', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
       await createEnrollment({ studentId: student.id, courseId: course.id });
@@ -96,6 +99,7 @@ describe('Teacher Intelligence', () => {
 
   describe('Interventions', () => {
     it('creates, lists, resolves, and deletes an intervention', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -163,6 +167,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('returns 403 for a non-teacher creating interventions', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
       await createEnrollment({ studentId: student.id, courseId: course.id });
@@ -182,6 +187,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('filters interventions by studentId', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -218,6 +224,7 @@ describe('Teacher Intelligence', () => {
 
   describe('POST /courses/:courseId/interventions/generate/:studentId', () => {
     it('generates and persists an AI intervention plan', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -251,6 +258,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('returns 404 for a non-enrolled student', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -270,6 +278,7 @@ describe('Teacher Intelligence', () => {
 
   describe('POST /courses/:courseId/lesson-plan', () => {
     it('generates a structured lesson plan', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -313,6 +322,7 @@ describe('Teacher Intelligence', () => {
 
   describe('Teacher Copilot', () => {
     it('creates a conversation, sends a message, and lists conversations', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -364,6 +374,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('returns 403 when a student tries to access copilot', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
       await createEnrollment({ studentId: student.id, courseId: course.id });
@@ -377,6 +388,7 @@ describe('Teacher Intelligence', () => {
     });
 
     it('deletes a conversation', async () => {
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse();
       const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

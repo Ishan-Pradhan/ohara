@@ -20,6 +20,7 @@ import type { QuizGenerationOptions } from '../prompts/quizGeneration.prompt.js'
 import { generatedQuizSchema } from '../validations/quizzes.validation.js';
 import { QUIZ_STATUS } from '../constants/index.js';
 import type { Quiz } from '../models/quizzes.model.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -111,8 +112,13 @@ export const generateQuiz = asyncHandler(
       learningObjectives,
     });
 
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
     const quiz = await sequelize.transaction(async (transaction) => {
-      const createdQuiz = await quizRepository.create({ courseId, title });
+      const createdQuiz = await quizRepository.create({
+        courseId,
+        academicYearId: academicYear.id,
+        title,
+      });
       const questions = [];
       for (const [index, q] of generated.entries()) {
         questions.push(
@@ -147,7 +153,8 @@ export const createQuiz = asyncHandler(
     const { courseId } = req.validated?.params as { courseId: string };
     const { title } = req.validated?.body as { title: string };
 
-    const quiz = await quizRepository.create({ courseId, title });
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+    const quiz = await quizRepository.create({ courseId, academicYearId: academicYear.id, title });
     quiz.questions = [];
     return ok(res, serializeQuiz(quiz, true), 'Quiz created', 201);
   },
@@ -157,8 +164,10 @@ export const listQuizzes = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
     const isStudent = req.user?.role === 'student';
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
     const quizzes = await quizRepository.findAllByCourse(
       courseId,
+      academicYear.id,
       isStudent ? QUIZ_STATUS.PUBLISHED : undefined,
     );
     return ok(res, quizzes.map((q) => serializeQuiz(q, true)), 'Quizzes retrieved');

@@ -28,6 +28,7 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
+  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -50,8 +51,11 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
 };
 
 /** A course with an assigned teacher and an enrolled student, ready to
- * exercise the assignment/submission/grading loop. */
+ * exercise the assignment/submission/grading loop. Assignment creation
+ * resolves the course's current academic year (default course/class is
+ * school/annual), so one must exist and be marked current. */
 const setupCourseWithTeacherAndStudent = async () => {
+  await createAcademicYear({ isCurrent: true });
   const course = await createCourse();
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -130,6 +134,56 @@ describe('GET /courses/:courseId/assignments', () => {
       .get(`/api/v1/courses/${course.id}/assignments`)
       .set('Cookie', outsiderCookies);
     expect(asOutsider.status).toBe(403);
+  });
+});
+
+describe('Cross-batch assignment isolation', () => {
+  it('does not resurface a previous academic year\'s assignments once a new year becomes current for the same course', async () => {
+    // A Course hangs permanently off a Class, reused by every future batch
+    // that reaches it — this is the regression test for that exact bug.
+    const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
+
+    const lastYearAssignment = await createAssignmentAs(teacherCookies, course.id);
+    expect(lastYearAssignment.status).toBe(201);
+
+    const beforePromotion = await request(app)
+      .get(`/api/v1/courses/${course.id}/assignments`)
+      .set('Cookie', studentCookies);
+    expect(beforePromotion.body.data).toHaveLength(1);
+
+    // A new batch's term becomes current (same term as the course's class —
+    // school/annual by default here — so this is the one academic year an
+    // admin marking a fresh year current would flip).
+    await createAcademicYear({ name: '2026-2027', isCurrent: true });
+
+    const afterPromotion = await request(app)
+      .get(`/api/v1/courses/${course.id}/assignments`)
+      .set('Cookie', studentCookies);
+    expect(afterPromotion.status).toBe(200);
+    expect(afterPromotion.body.data).toHaveLength(0);
+
+    const thisYearAssignment = await createAssignmentAs(teacherCookies, course.id);
+    expect(thisYearAssignment.status).toBe(201);
+    expect(thisYearAssignment.body.data.id).not.toBe(lastYearAssignment.body.data.id);
+
+    const finalList = await request(app)
+      .get(`/api/v1/courses/${course.id}/assignments`)
+      .set('Cookie', studentCookies);
+    expect(finalList.body.data).toHaveLength(1);
+    expect(finalList.body.data[0].id).toBe(thisYearAssignment.body.data.id);
+  });
+
+  it('rejects assignment creation with a clear 400 when no academic year is current for the course\'s term', async () => {
+    const course = await createCourse();
+    const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+    const teacherCookies = await signInAs(teacher.email, 'teacher');
+
+    // No createAcademicYear call at all — nothing is current for this
+    // course's (school/annual) term.
+    const res = await createAssignmentAs(teacherCookies, course.id);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no academic year is currently marked current/i);
   });
 });
 

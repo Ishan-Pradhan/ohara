@@ -22,6 +22,7 @@ const {
   createEnrollment,
   createProgram,
   createClass,
+  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -58,6 +59,7 @@ describe('Institution Intelligence (Group 3)', () => {
     it('returns aggregate institution metrics for admin', async () => {
       const program = await createProgram({ name: 'Engineering' });
       const cls = await createClass({ programId: program.id, name: 'Year 1' });
+      await createAcademicYear({ isCurrent: true });
       const course = await createCourse({ classId: cls.id, title: 'Physics' });
       const teacher = await createTeacherUser({ email: `teacher-perf-${Date.now()}@example.com` });
       await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

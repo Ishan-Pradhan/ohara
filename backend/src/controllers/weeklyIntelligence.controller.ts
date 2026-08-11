@@ -10,6 +10,7 @@ import { quizRepository } from '../repositories/quizzes.repository.js';
 import { quizAttemptRepository } from '../repositories/quizAttempts.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { computeCourseMetrics } from './classIntelligence.controller.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { generateJson } from '../services/llm.service.js';
 import { weeklySummarySystemPrompt, weeklySummaryUserPrompt } from '../prompts/weeklySummary.prompt.js';
 import type { WeeklySummaryContext } from '../prompts/weeklySummary.prompt.js';
@@ -39,6 +40,7 @@ export const getWeeklySummary = asyncHandler(
     if (!course) throw new ApiError(404, 'Course not found');
 
     const { start, end } = getWeekRange();
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
 
     // Enrollment
     const enrollments = await enrollmentRepository.findByCourseWithStudents(courseId);
@@ -68,7 +70,7 @@ export const getWeeklySummary = asyncHandler(
       : null;
 
     // Submissions — fetch all assignments, filter by dueAt in week, count submissions
-    const assignments = await assignmentRepository.findAllByCourse(courseId);
+    const assignments = await assignmentRepository.findAllByCourse(courseId, academicYear.id);
     const weekAssignments = assignments.filter((a) => {
       const d = new Date(a.dueAt);
       return d >= start && d <= end;
@@ -85,7 +87,7 @@ export const getWeeklySummary = asyncHandler(
     }
 
     // Quizzes — fetch all quizzes, filter by createdAt in week, count attempts
-    const quizzes = await quizRepository.findAllByCourse(courseId);
+    const quizzes = await quizRepository.findAllByCourse(courseId, academicYear.id);
     const weekQuizzes = quizzes.filter((q) => {
       const d = new Date(q.createdAt);
       return d >= start && d <= end;

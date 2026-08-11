@@ -66,6 +66,7 @@ export const createAcademicYear = async (
     startDate: string;
     endDate: string;
     isCurrent: boolean;
+    term: 'odd' | 'even' | 'annual';
   }> = {},
 ): Promise<AcademicYear> => {
   return academicYearRepository.create({
@@ -73,6 +74,7 @@ export const createAcademicYear = async (
     startDate: overrides.startDate ?? '2025-06-01',
     endDate: overrides.endDate ?? '2026-05-31',
     isCurrent: overrides.isCurrent ?? false,
+    term: overrides.term ?? 'annual',
   });
 };
 
@@ -95,6 +97,7 @@ export const createSection = async (
     academicYearId: string;
     classTeacherId: string | null;
     name: string;
+    capacity: number | null;
   }> = {},
 ): Promise<Section> => {
   const classId = overrides.classId ?? (await createClass()).id;
@@ -106,6 +109,7 @@ export const createSection = async (
     academicYearId,
     classTeacherId: overrides.classTeacherId ?? null,
     name: overrides.name ?? 'A',
+    capacity: overrides.capacity ?? null,
   });
 };
 

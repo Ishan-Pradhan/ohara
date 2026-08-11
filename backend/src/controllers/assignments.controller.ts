@@ -6,6 +6,7 @@ import { enrollmentRepository } from '../repositories/enrollments.repository.js'
 import { notificationRepository } from '../repositories/notifications.repository.js';
 import { serializeAssignment } from '../serializers/assignments.serializer.js';
 import type { RubricCriterion } from '../types/assignments.types.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -28,8 +29,10 @@ export const createAssignment = asyncHandler(
       dueAt: string;
     };
 
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
     const assignment = await assignmentRepository.create({
       courseId,
+      academicYearId: academicYear.id,
       title,
       prompt,
       rubric,
@@ -54,7 +57,8 @@ export const createAssignment = asyncHandler(
 export const listAssignments = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const assignments = await assignmentRepository.findAllByCourse(courseId);
+    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+    const assignments = await assignmentRepository.findAllByCourse(courseId, academicYear.id);
     return ok(res, assignments.map(serializeAssignment), 'Assignments retrieved');
   },
 );

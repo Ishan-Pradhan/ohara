@@ -68,7 +68,10 @@ export const getStudentDashboard = asyncHandler(
     const [courseAssignments, courseQuizzes, unreadNotificationCount] = await Promise.all([
       Promise.all(
         enrollments.map(async (enrollment) => {
-          const assignments = await assignmentRepository.findAllByCourse(enrollment.courseId);
+          const assignments = await assignmentRepository.findAllByCourse(
+            enrollment.courseId,
+            enrollment.academicYearId,
+          );
           const submissionsByAssignmentId = new Map(
             await Promise.all(
               assignments.map(async (assignment) => {
@@ -90,7 +93,11 @@ export const getStudentDashboard = asyncHandler(
       ),
       Promise.all(
         enrollments.map(async (enrollment) => {
-          const quizzes = await quizRepository.findAllByCourse(enrollment.courseId, QUIZ_STATUS.PUBLISHED);
+          const quizzes = await quizRepository.findAllByCourse(
+            enrollment.courseId,
+            enrollment.academicYearId,
+            QUIZ_STATUS.PUBLISHED,
+          );
           const attemptsByQuizId = new Map(
             await Promise.all(
               quizzes.map(async (q) => {
@@ -159,6 +166,7 @@ export const getStudentConceptInventory = asyncHandler(
     const enrolledCourses = context.enrollments.map((enrollment) => ({
       courseId: enrollment.courseId,
       courseTitle: enrollment.course?.title ?? '',
+      academicYearId: enrollment.academicYearId,
     }));
 
     const courseEvidence = await conceptEvidenceRepository.findForStudent(
@@ -190,6 +198,7 @@ export const getStudentMasteryReport = asyncHandler(
     const enrolledCourses = context.enrollments.map((enrollment) => ({
       courseId: enrollment.courseId,
       courseTitle: enrollment.course?.title ?? '',
+      academicYearId: enrollment.academicYearId,
     }));
 
     // Fetch both evidence sets in parallel — they are independent queries
@@ -220,7 +229,10 @@ export const loadStudentPerformanceContext = async (studentId: string) => {
   const [courseAssignments, courseGradebooks, courseAttendanceRecords] = await Promise.all([
     Promise.all(
       enrollments.map(async (enrollment) => {
-        const assignments = await assignmentRepository.findAllByCourse(enrollment.courseId);
+        const assignments = await assignmentRepository.findAllByCourse(
+          enrollment.courseId,
+          enrollment.academicYearId,
+        );
         const submissionsByAssignmentId = new Map(
           await Promise.all(
             assignments.map(async (assignment) => {
@@ -326,7 +338,10 @@ export const generateStudentStudyPlan = asyncHandler(
       for (const enrollment of context.enrollments) {
         const courseTitle = enrollment.course?.title ?? '';
 
-        const assignments = await assignmentRepository.findAllByCourse(enrollment.courseId);
+        const assignments = await assignmentRepository.findAllByCourse(
+          enrollment.courseId,
+          enrollment.academicYearId,
+        );
         for (const assignment of assignments) {
           const submission = await submissionRepository.findByAssignmentAndStudent(
             assignment.id,
@@ -342,7 +357,11 @@ export const generateStudentStudyPlan = asyncHandler(
           }
         }
 
-        const quizzes = await quizRepository.findAllByCourse(enrollment.courseId, QUIZ_STATUS.PUBLISHED);
+        const quizzes = await quizRepository.findAllByCourse(
+          enrollment.courseId,
+          enrollment.academicYearId,
+          QUIZ_STATUS.PUBLISHED,
+        );
         for (const quiz of quizzes) {
           const attempt = await quizAttemptRepository.findByQuizAndStudent(quiz.id, studentId);
           if (!attempt) {
@@ -364,6 +383,7 @@ export const generateStudentStudyPlan = asyncHandler(
       const enrolledCourses = context.enrollments.map((e) => ({
         courseId: e.courseId,
         courseTitle: e.course?.title ?? '',
+        academicYearId: e.academicYearId,
       }));
       const courseEvidence = await conceptEvidenceRepository.findForStudent(studentId, enrolledCourses);
       const conceptInventory = buildConceptInventory(courseEvidence);

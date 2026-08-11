@@ -11,6 +11,7 @@ import { assignmentRepository } from '../repositories/assignments.repository.js'
 import { submissionRepository } from '../repositories/submissions.repository.js';
 import { quizRepository } from '../repositories/quizzes.repository.js';
 import { quizAttemptRepository } from '../repositories/quizAttempts.repository.js';
+import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { generateText } from '../services/llm.service.js';
 import { teacherCopilotSystemPrompt, buildCopilotDataContext } from '../prompts/teacherCopilot.prompt.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -19,11 +20,12 @@ import { ApiError } from '../utils/ApiError.js';
 
 /** Build the deterministic data context for the copilot. */
 const buildCopilotData = async (courseId: string) => {
+  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
   const [metrics, roster, byStudentAttendance, assignments] = await Promise.all([
     computeCourseMetrics(courseId),
     enrollmentRepository.findByCourseWithStudents(courseId),
     attendanceRecordRepository.countByStatusForCourse(courseId),
-    assignmentRepository.findAllByCourse(courseId),
+    assignmentRepository.findAllByCourse(courseId, academicYear.id),
   ]);
 
   const averages = metrics.filter((m) => m.averageGrade !== null).map((m) => m.averageGrade as number);
@@ -55,7 +57,7 @@ const buildCopilotData = async (courseId: string) => {
   const atRiskCount = metrics.filter((m) => m.isAtRisk).length;
 
   // Recent quiz summaries
-  const quizzes = await quizRepository.findAllByCourse(courseId);
+  const quizzes = await quizRepository.findAllByCourse(courseId, academicYear.id);
   const recentQuizSummaries = quizzes.length > 0
     ? (await Promise.all(
         quizzes.slice(-3).map(async (quiz) => {
