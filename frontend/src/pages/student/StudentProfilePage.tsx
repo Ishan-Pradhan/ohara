@@ -80,10 +80,6 @@ export const StudentProfilePage = () => {
                 <p className="font-medium text-fg capitalize">{user?.role}</p>
               </div>
               <div>
-                <p className="text-xs text-subtle">Status</p>
-                <p className="font-medium text-fg capitalize">{user?.status}</p>
-              </div>
-              <div>
                 <p className="text-xs text-subtle">Account type</p>
                 <p className="font-medium text-fg capitalize">{user?.authProvider}</p>
               </div>
@@ -135,48 +131,56 @@ export const StudentProfilePage = () => {
             ) : (
               <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Student phone" error={errors.studentPhone?.message}>
+                  <Field label="Student phone" htmlFor="studentPhone" error={errors.studentPhone?.message}>
                     <Input
+                      id="studentPhone"
                       {...register('studentPhone')}
                       placeholder="Phone number"
                       disabled={!isEditing}
                     />
                   </Field>
-                  <Field label="Date of birth" error={errors.dateOfBirth?.message}>
+                  <Field label="Date of birth" htmlFor="dateOfBirth" error={errors.dateOfBirth?.message}>
                     <Input
+                      id="dateOfBirth"
                       {...register('dateOfBirth')}
                       type="date"
                       disabled={!isEditing}
                     />
                   </Field>
-                  <Field label="Parent name" error={errors.parentName?.message}>
+                  <Field label="Parent name" htmlFor="parentName" error={errors.parentName?.message}>
                     <Input
+                      id="parentName"
                       {...register('parentName')}
                       placeholder="Parent or guardian name"
                       disabled={!isEditing}
                     />
                   </Field>
-                  <Field label="Parent phone" error={errors.parentPhone?.message}>
+                  <Field label="Parent phone" htmlFor="parentPhone" error={errors.parentPhone?.message}>
                     <Input
+                      id="parentPhone"
                       {...register('parentPhone')}
                       placeholder="Parent phone number"
                       disabled={!isEditing}
                     />
                   </Field>
-                  <Field label="Previous school" error={errors.previousSchool?.message}>
+                  <Field label="Previous school" htmlFor="previousSchool" error={errors.previousSchool?.message}>
                     <Input
+                      id="previousSchool"
                       {...register('previousSchool')}
                       placeholder="Previous school name"
                       disabled={!isEditing}
                     />
                   </Field>
-                  <Field label="Address" error={errors.address?.message} className="sm:col-span-2">
-                    <Input
-                      {...register('address')}
-                      placeholder="Home address"
-                      disabled={!isEditing}
-                    />
-                  </Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Address" htmlFor="address" error={errors.address?.message}>
+                      <Input
+                        id="address"
+                        {...register('address')}
+                        placeholder="Home address"
+                        disabled={!isEditing}
+                      />
+                    </Field>
+                  </div>
                 </div>
               </form>
             )}

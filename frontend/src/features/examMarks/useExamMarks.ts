@@ -81,7 +81,7 @@ export const useSaveBulkExamMarks = (classId: string, batchId: string, examTermI
       marks: { studentId: string; courseId: string; marksObtained: number; maxMarks: number }[];
     }) => saveBulkExamMarks(variables.examTermId, variables.marks),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['bulkExamMarks', classId, batchId, examTermId] });
+      void qc.invalidateQueries({ queryKey: bulkExamMarksKey(classId, batchId, examTermId, sectionId) });
       void qc.invalidateQueries({ queryKey: ['reportCard'] });
     },
   });

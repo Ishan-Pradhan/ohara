@@ -45,7 +45,6 @@ export const CalendarPage = () => {
   const [date, setDate] = useState(new Date());
 
   const canCreate = user?.role === 'admin' || user?.role === 'teacher';
-  const isAdmin = user?.role === 'admin';
 
   const calendarEvents = useMemo(
     () =>

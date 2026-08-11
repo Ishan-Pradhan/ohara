@@ -141,6 +141,9 @@ describe('Exam marks + transcript', () => {
           classId: cls.id,
           className: cls.name,
           orderIndex: cls.orderIndex,
+          academicYearName: year.name,
+          batchName: batch.name,
+          sectionName: section.name,
           examTerms: [
             {
               examTermId,

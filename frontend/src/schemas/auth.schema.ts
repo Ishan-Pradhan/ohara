@@ -41,6 +41,7 @@ export const currentUserSchema = z.object({
   isVerified: z.boolean(),
   isBlocked: z.boolean(),
   authProvider: z.enum(['local', 'google', 'github']),
+  createdAt: z.string(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

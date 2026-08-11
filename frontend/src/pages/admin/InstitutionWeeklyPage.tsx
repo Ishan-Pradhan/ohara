@@ -1,4 +1,4 @@
-import { Users, FileText } from 'lucide-react';
+import { Users, FileText, Calendar } from 'lucide-react';
 import { useInstitutionWeekly } from '../../features/institution/useInstitutionWeekly.js';
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';

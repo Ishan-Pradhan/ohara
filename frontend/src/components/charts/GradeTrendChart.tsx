@@ -14,11 +14,6 @@ const formatDate = (dateStr: string) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
-const formatTooltipDate = (dateStr: string) => {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
 export const GradeTrendChart = ({ data }: GradeTrendChartProps) => {
   if (data.length === 0) {
     return (
@@ -60,7 +55,7 @@ export const GradeTrendChart = ({ data }: GradeTrendChartProps) => {
     };
   });
 
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number | null; dataKey: string; payload: { dateLabel: string } }>; label?: string }) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ value: number | null; dataKey: string; payload: { dateLabel: string } }>; label?: string }) => {
     if (!active || !payload || payload.length === 0) return null;
     return (
       <div className="rounded-card border border-border bg-surface px-3 py-2 text-xs shadow-md">

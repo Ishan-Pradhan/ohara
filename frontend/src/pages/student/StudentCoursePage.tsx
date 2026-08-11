@@ -29,7 +29,6 @@ export const StudentCoursePage = () => {
   return (
     <AppShell>
       <CourseHeader
-        courseId={courseId}
         title={course?.title ?? 'Course'}
         code={course?.code ?? ''}
         isPublished={course?.isPublished ?? false}

@@ -4,14 +4,13 @@ import { ChevronLeft } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.js';
 
 interface CourseHeaderProps {
-  courseId: string;
   title: string;
   code: string;
   isPublished: boolean;
   teachers: { id: string; name: string }[];
 }
 
-export const CourseHeader = ({ courseId, title, code, isPublished, teachers }: CourseHeaderProps) => (
+export const CourseHeader = ({ title, code, isPublished, teachers }: CourseHeaderProps) => (
   <div className="mb-6">
     <Link
       to="/student/courses"

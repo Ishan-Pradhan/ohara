@@ -182,7 +182,7 @@ describe('Attendance', () => {
       .send({ sectionId: section.id, sessionDate: '2026-08-01', records: [{ studentId: student.id, status: 'present' }] });
     expect(session1.status).toBe(201);
     expect(session1.body.data.records).toEqual([
-      { studentId: student.id, studentName: student.name, status: 'present' },
+      { studentId: student.id, studentName: student.name, status: 'present', reason: null },
     ]);
     expect(session1.body.data.sectionId).toBe(section.id);
 

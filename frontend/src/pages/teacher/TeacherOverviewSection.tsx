@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Users, BookOpen, CalendarCheck, ClipboardList, AlertTriangle, ArrowRight, BarChart3 } from 'lucide-react';
+import { Users, BookOpen, CalendarCheck, ClipboardList, AlertTriangle, BarChart3 } from 'lucide-react';
 
 import { useClassIntelligence } from '../../features/teacherIntelligence/useClassIntelligence.js';
 import { useGradeTrends } from '../../features/trends/useTrends.js';
