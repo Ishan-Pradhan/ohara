@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Award, BarChart3, BookOpen, ClipboardList, FileQuestion } from 'lucide-react';
+import { Award, BarChart3, ClipboardList, FileQuestion } from 'lucide-react';
 
 import { useStudentDashboard } from '../../features/dashboard/useDashboard.js';
+import { useStudentPlacement } from '../../features/placement/usePlacement.js';
+import { useCurrentUser } from '../../features/auth/useAuth.js';
 import type {
   UpcomingItem,
   RecentGradeItem,
@@ -14,6 +16,7 @@ import { Badge } from '../../components/ui/Badge.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { TodayIntelligencePanel } from './TodayIntelligencePanel.js';
+import { CourseCardsGrid } from './CourseCardsGrid.js';
 
 const itemLink = (item: { type: 'assignment' | 'quiz'; courseId: string; id: string }) =>
   `/student/courses/${item.courseId}/${item.type === 'assignment' ? 'assignments' : 'quizzes'}/${item.id}`;
@@ -137,6 +140,8 @@ const PerformanceCard = ({ performance }: { performance: PerformanceSnapshot }) 
 
 export const StudentDashboardWidgets = () => {
   const { data, isLoading } = useStudentDashboard(true);
+  const { data: currentUser } = useCurrentUser();
+  const { data: placement } = useStudentPlacement(currentUser?.id ?? '');
 
   if (isLoading) {
     return (
@@ -160,14 +165,18 @@ export const StudentDashboardWidgets = () => {
 
       <PerformanceCard performance={data.performance} />
 
-      {data.courses.length > 0 ? (
+      {placement && placement.courses.length > 0 ? (
+        <CourseCardsGrid
+          courses={placement.courses}
+          performanceCourses={data.performance.courses}
+        />
+      ) : data.courses.length > 0 ? (
         <Card padding="sm">
           <h2 className="mb-2 px-1 text-sm font-semibold text-fg">My Courses</h2>
           <div className="flex flex-wrap gap-2">
             {data.courses.map((course) => (
               <Link key={course.id} to={`/student/courses/${course.id}`}>
                 <Badge variant="primary" className="gap-1.5 px-3 py-1.5">
-                  <BookOpen className="size-3.5" aria-hidden />
                   {course.title}
                 </Badge>
               </Link>

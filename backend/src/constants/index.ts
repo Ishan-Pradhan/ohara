@@ -33,6 +33,7 @@ export const CLASS_MEMBERSHIP_OUTCOMES = {
   PROMOTED: 'promoted',
   RETAINED: 'retained',
   GRADUATED: 'graduated',
+  TRANSFERRED: 'transferred',
 } as const;
 
 export const ENROLLMENT_STATUSES = {

@@ -40,6 +40,15 @@ import notificationsRoutes from './routes/notifications.routes.js';
 import eventsRoutes from './routes/events.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import healthRoutes from './routes/health.routes.js';
+import classIntelligenceRoutes from './routes/classIntelligence.routes.js';
+import interventionRoutes from './routes/intervention.routes.js';
+import teacherCopilotRoutes from './routes/teacherCopilot.routes.js';
+import lessonPlannerRoutes from './routes/lessonPlanner.routes.js';
+import weeklyIntelligenceRoutes from './routes/weeklyIntelligence.routes.js';
+import gradeTrendsRoutes from './routes/gradeTrends.routes.js';
+import attendanceTrendsRoutes from './routes/attendanceTrends.routes.js';
+import studentProfileRoutes from './routes/studentProfile.routes.js';
+import birthdayRoutes from './routes/birthdays.routes.js';
 
 export const app = express();
 
@@ -64,10 +73,12 @@ app.use(limiter);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/admin', birthdayRoutes);
 app.use('/api/v1/admin', institutionRoutes);
 app.use('/api/v1/admin', placementRoutes);
 app.use('/api/v1/admin', admissionRoutes);
 app.use('/api/v1/students', studentsRoutes);
+app.use('/api/v1/students', studentProfileRoutes);
 app.use('/api/v1/courses', documentsRoutes);
 app.use('/api/v1/courses', courseContentRoutes);
 app.use('/api/v1/courses', tutorRoutes);
@@ -78,6 +89,13 @@ app.use('/api/v1/courses', attendanceRoutes);
 app.use('/api/v1/courses', kanbanRoutes);
 app.use('/api/v1/courses', atRiskRoutes);
 app.use('/api/v1/courses', examMarksRoutes);
+app.use('/api/v1/courses', classIntelligenceRoutes);
+app.use('/api/v1/courses', interventionRoutes);
+app.use('/api/v1/courses', teacherCopilotRoutes);
+app.use('/api/v1/courses', lessonPlannerRoutes);
+app.use('/api/v1/courses', weeklyIntelligenceRoutes);
+app.use('/api/v1/courses', gradeTrendsRoutes);
+app.use('/api/v1/courses', attendanceTrendsRoutes);
 // electivesRoutes applies a blanket router.use(verifyJWT, requireRole(STUDENT))
 // to everything mounted here — every other /api/v1/courses router (teacher/
 // admin routes included) must be registered above this line, or their

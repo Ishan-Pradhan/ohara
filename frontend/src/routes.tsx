@@ -29,7 +29,9 @@ import { AdmitStudentPage } from './pages/admin/AdmitStudentPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
 import { StaffPage } from './pages/admin/StaffPage.js';
 import { SettingsPage } from './pages/admin/SettingsPage.js';
+import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage.js';
 import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
+import { TeacherCoursePage } from './pages/teacher/TeacherCoursePage.js';
 import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
 import { MySectionPage } from './pages/teacher/MySectionPage.js';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage.js';
@@ -38,6 +40,7 @@ import { StudentAssignmentDetailPage } from './pages/student/StudentAssignmentDe
 import { QuizTakePage } from './pages/student/QuizTakePage.js';
 import { StudentLessonPage } from './pages/student/StudentLessonPage.js';
 import { StudentProgressPage } from './pages/student/StudentProgressPage.js';
+import { StudentProfilePage } from './pages/student/StudentProfilePage.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { GuestOnlyRoute } from './components/GuestOnlyRoute.js';
 
@@ -152,11 +155,14 @@ export const router = createBrowserRouter([
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
   adminRoute('/admin/staff', <StaffPage />),
   adminRoute('/admin/settings', <SettingsPage />),
+  adminRoute('/admin/analytics', <AdminAnalyticsPage />),
   teacherRoute('/teacher/courses', <MyCoursesPage />),
+  teacherRoute('/teacher/courses/:courseId', <TeacherCoursePage />),
   teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
   teacherRoute('/teacher/section', <MySectionPage />),
   studentRoute('/student/courses', <StudentCoursesPage />),
   studentRoute('/student/progress', <StudentProgressPage />),
+  studentRoute('/student/profile', <StudentProfilePage />),
   studentRoute('/student/courses/:courseId', <StudentCoursePage />),
   studentRoute('/student/courses/:courseId/assignments/:assignmentId', <StudentAssignmentDetailPage />),
   studentRoute('/student/courses/:courseId/quizzes/:quizId', <QuizTakePage />),
