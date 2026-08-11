@@ -18,6 +18,7 @@ import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { ConfirmDialog } from '../../../components/ui/Dialog.js';
+import { Table, TableHead, TableBody, TableRow, TableHeadCell, TableCell } from '../../../components/ui/Table.js';
 import { AttendanceTrendChart } from '../../../components/charts/AttendanceTrendChart.js';
 import { TakeAttendanceDialog } from './TakeAttendanceDialog.js';
 
@@ -40,6 +41,13 @@ const pctColor = (pct: number | null) => {
   if (pct >= 60) return 'text-accent-fg';
   return 'text-danger';
 };
+
+const StatTile = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-card border border-border bg-surface px-3 py-2">
+    <p className="text-xs text-subtle">{label}</p>
+    <p className="mt-1 text-sm font-semibold text-fg">{value}</p>
+  </div>
+);
 
 export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSectionSelector }: AttendanceSectionProps) => {
   const { data: sectionOptions, isLoading: sectionOptionsLoading } = useAttendanceSections(courseId);
@@ -137,6 +145,13 @@ export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSect
     new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime(),
   );
 
+  const attendedPercentages = (summary ?? []).map((r) => r.percentage).filter((p): p is number => p !== null);
+  const classAverage =
+    attendedPercentages.length > 0
+      ? attendedPercentages.reduce((a, b) => a + b, 0) / attendedPercentages.length
+      : null;
+  const atRiskCount = (summary ?? []).filter((r) => r.percentage !== null && r.percentage < 75).length;
+
   if (sectionOptionsLoading || sessionsLoading || summaryLoading) {
     return (
       <div className="flex flex-col gap-4">
@@ -195,8 +210,15 @@ export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSect
           description="Attendance can be taken once students are enrolled in this course."
         />
       ) : (
-        <Card padding="none">
-          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Class average" value={classAverage === null ? '—' : `${classAverage.toFixed(1)}%`} />
+            <StatTile label="Sessions taken" value={String(sortedSessions.length)} />
+            <StatTile label="Students" value={String(summary.length)} />
+            <StatTile label="Below 75%" value={String(atRiskCount)} />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-subtle">
               {selectedSectionId ? `Attendance — Section ${sectionName(selectedSectionId)}` : 'Attendance by student (whole course)'}
             </h3>
@@ -211,54 +233,52 @@ export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSect
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-hover">
-                  <th className="px-4 py-2.5">
-                    <SortHeader label="Student" field="name" />
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <SortHeader label="Present" field="present" />
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <SortHeader label="Late" field="late" />
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <SortHeader label="Absent" field="absent" />
-                  </th>
-                  <th className="px-4 py-2.5">
-                    <SortHeader label=" %" field="percentage" />
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {pageRows.map((row) => (
-                  <tr key={row.studentId} className="transition-colors hover:bg-surface-hover/60">
-                    <td className="px-4 py-2.5 font-medium text-fg">{row.studentName}</td>
-                    <td className="px-4 py-2.5 text-fg">{row.present}</td>
-                    <td className="px-4 py-2.5 text-fg">{row.late}</td>
-                    <td className="px-4 py-2.5 text-fg">{row.absent}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`font-semibold ${pctColor(row.percentage)}`}>
-                        {row.percentage === null ? '—' : `${row.percentage.toFixed(0)}%`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {pageRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted">
-                      No students match "{search}"
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHeadCell>
+                  <SortHeader label="Student" field="name" />
+                </TableHeadCell>
+                <TableHeadCell>
+                  <SortHeader label="Present" field="present" />
+                </TableHeadCell>
+                <TableHeadCell>
+                  <SortHeader label="Late" field="late" />
+                </TableHeadCell>
+                <TableHeadCell>
+                  <SortHeader label="Absent" field="absent" />
+                </TableHeadCell>
+                <TableHeadCell>
+                  <SortHeader label="%" field="percentage" />
+                </TableHeadCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pageRows.map((row) => (
+                <TableRow key={row.studentId}>
+                  <TableCell className="font-medium">{row.studentName}</TableCell>
+                  <TableCell>{row.present}</TableCell>
+                  <TableCell>{row.late}</TableCell>
+                  <TableCell>{row.absent}</TableCell>
+                  <TableCell>
+                    <span className={`font-semibold ${pctColor(row.percentage)}`}>
+                      {row.percentage === null ? '—' : `${row.percentage.toFixed(0)}%`}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {pageRows.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted">
+                    No students match "{search}"
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
 
           {filteredAndSorted.length > PAGE_SIZE ? (
-            <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
+            <div className="flex items-center justify-between">
               <span className="text-xs text-muted">
                 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredAndSorted.length)} of{' '}
                 {filteredAndSorted.length}
@@ -283,7 +303,7 @@ export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSect
               </div>
             </div>
           ) : null}
-        </Card>
+        </>
       )}
 
       {!sessions || sessions.length === 0 ? (

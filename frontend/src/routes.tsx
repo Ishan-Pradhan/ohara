@@ -32,6 +32,7 @@ import { SettingsPage } from './pages/admin/SettingsPage.js';
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage.js';
 import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
 import { TeacherCoursePage } from './pages/teacher/TeacherCoursePage.js';
+import { TeacherCourseRedirect } from './pages/teacher/TeacherCourseRedirect.js';
 import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
 import { MySectionPage } from './pages/teacher/MySectionPage.js';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage.js';
@@ -157,8 +158,10 @@ export const router = createBrowserRouter([
   adminRoute('/admin/settings', <SettingsPage />),
   adminRoute('/admin/analytics', <AdminAnalyticsPage />),
   teacherRoute('/teacher/courses', <MyCoursesPage />),
-  teacherRoute('/teacher/courses/:courseId', <TeacherCoursePage />),
+  teacherRoute('/teacher/courses/:courseId', <TeacherCourseRedirect />),
   teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
+  teacherRoute('/teacher/courses/:courseId/intelligence/:subsection', <TeacherCoursePage />),
+  teacherRoute('/teacher/courses/:courseId/:section', <TeacherCoursePage />),
   teacherRoute('/teacher/section', <MySectionPage />),
   studentRoute('/student/courses', <StudentCoursesPage />),
   studentRoute('/student/progress', <StudentProgressPage />),

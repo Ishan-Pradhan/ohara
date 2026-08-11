@@ -3,8 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMyCourses,
   fetchCourseRoster,
-  fetchMySection,
-  fetchSectionRoster,
   createFlag,
   fetchStudentFlags,
   resolveFlag,
@@ -19,16 +17,6 @@ export const useCourseRoster = (courseId: string) =>
     queryKey: ['teacher', 'courses', courseId, 'students'],
     queryFn: () => fetchCourseRoster(courseId),
     enabled: Boolean(courseId),
-  });
-
-export const useMySection = () =>
-  useQuery({ queryKey: ['teacher', 'section'], queryFn: fetchMySection });
-
-export const useSectionRoster = (sectionId: string) =>
-  useQuery({
-    queryKey: ['teacher', 'section', sectionId, 'students'],
-    queryFn: () => fetchSectionRoster(sectionId),
-    enabled: Boolean(sectionId),
   });
 
 export const useCreateFlag = () =>

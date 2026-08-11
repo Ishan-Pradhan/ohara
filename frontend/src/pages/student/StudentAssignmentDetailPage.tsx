@@ -14,6 +14,14 @@ import { Textarea } from '../../components/ui/Textarea.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Alert } from '../../components/ui/Alert.js';
 
+const scoreBadgeVariant = (score: number, maxScore: number): 'success' | 'accent' | 'danger' => {
+  if (maxScore <= 0) return 'success';
+  const pct = (score / maxScore) * 100;
+  if (pct >= 80) return 'success';
+  if (pct >= 60) return 'accent';
+  return 'danger';
+};
+
 const ACCEPTED_FILE_TYPES =
   'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg';
 
@@ -94,7 +102,9 @@ export const StudentAssignmentDetailPage = () => {
             <Card>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-fg">Grade</h2>
-                <Badge variant="success">{submission.grade.score} / {totalPoints}</Badge>
+                <Badge variant={scoreBadgeVariant(submission.grade.score, totalPoints)}>
+                  {submission.grade.score} / {totalPoints}
+                </Badge>
               </div>
               <div className="flex flex-col gap-3">
                 {submission.grade.criterionFeedback.map((c) => (

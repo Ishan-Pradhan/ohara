@@ -11,6 +11,7 @@ import {
 import { toast } from '../../../lib/toast.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Button } from '../../../components/ui/Button.js';
+import { Input } from '../../../components/ui/Input.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { cn } from '../../../lib/cn.js';
@@ -188,12 +189,12 @@ const ConversationView = ({ courseId, conversationId }: { courseId: string; conv
           }}
           className="flex gap-2"
         >
-          <input
+          <Input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about your class..."
-            className="flex-1 rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex-1"
             disabled={sendMessage.isPending}
           />
           <Button type="submit" size="sm" disabled={!input.trim() || sendMessage.isPending}>

@@ -56,15 +56,22 @@ export const StudentProjectsSection = ({ courseId }: StudentProjectsSectionProps
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {projects.map((p) => (
-        <Card key={p.id} padding="sm">
-          <button
-            type="button"
-            onClick={() => setSelectedId(p.id)}
-            className="w-full truncate text-left text-sm font-medium text-fg hover:text-primary"
+        <button
+          key={p.id}
+          type="button"
+          onClick={() => setSelectedId(p.id)}
+          className="group text-left"
+        >
+          <Card
+            padding="sm"
+            className="flex items-center gap-3 transition-all group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md"
           >
-            {p.name}
-          </button>
-        </Card>
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft">
+              <LayoutGrid className="size-4 text-primary" aria-hidden />
+            </div>
+            <p className="truncate text-sm font-medium text-fg group-hover:text-primary">{p.name}</p>
+          </Card>
+        </button>
       ))}
     </div>
   );

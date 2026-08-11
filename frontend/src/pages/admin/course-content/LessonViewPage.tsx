@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 
 import { useModules } from '../../../features/courseContent/useCourseContent.js';
+import { useCurrentUser } from '../../../features/auth/useAuth.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { Button } from '../../../components/ui/Button.js';
@@ -10,6 +11,8 @@ import { LessonReader } from '../../../components/course-content/LessonReader.js
 export const LessonViewPage = () => {
   const { courseId = '', lessonId = '' } = useParams();
   const navigate = useNavigate();
+  const { data: currentUser } = useCurrentUser();
+  const coursePath = currentUser?.role === 'teacher' ? `/teacher/courses/${courseId}/content` : `/admin/courses/${courseId}`;
   const { data: modules, isLoading } = useModules(courseId);
 
   const flattened = (modules ?? []).flatMap((m) =>
@@ -24,14 +27,14 @@ export const LessonViewPage = () => {
     <AppShell>
       <div className="mb-4 flex items-center justify-between">
         <Link
-          to={`/admin/courses/${courseId}`}
+          to={coursePath}
           className="flex items-center gap-1 text-sm text-muted hover:text-fg"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
           Course content
         </Link>
         <Link
-          to={`/admin/courses/${courseId}`}
+          to={coursePath}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
           <Pencil className="size-3.5" aria-hidden />

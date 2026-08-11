@@ -12,6 +12,14 @@ interface StudentQuizzesSectionProps {
   courseId: string;
 }
 
+const scoreBadgeVariant = (score: number, maxScore: number): 'success' | 'accent' | 'danger' => {
+  if (maxScore <= 0) return 'success';
+  const pct = (score / maxScore) * 100;
+  if (pct >= 80) return 'success';
+  if (pct >= 60) return 'accent';
+  return 'danger';
+};
+
 const QuizRow = ({ courseId, quiz }: { courseId: string; quiz: Quiz }) => {
   const { data: attempt } = useMyAttempt(courseId, quiz.id);
 
@@ -20,7 +28,7 @@ const QuizRow = ({ courseId, quiz }: { courseId: string; quiz: Quiz }) => {
       <Link to={`/student/courses/${courseId}/quizzes/${quiz.id}`} className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-fg hover:underline">{quiz.title}</p>
       </Link>
-      <Badge variant={attempt ? 'success' : 'neutral'}>
+      <Badge variant={attempt ? scoreBadgeVariant(attempt.score, attempt.maxScore) : 'neutral'}>
         {attempt ? `${attempt.score} / ${attempt.maxScore}` : 'Not attempted'}
       </Badge>
     </Card>

@@ -86,9 +86,9 @@ export const TeacherOverviewSection = ({ courseId }: TeacherOverviewSectionProps
         <h2 className="mb-3 text-sm font-semibold text-fg">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
-            { label: 'Take Attendance', to: `/admin/courses/${courseId}`, icon: CalendarCheck, color: 'text-success' },
-            { label: 'Create Assignment', to: `/admin/courses/${courseId}`, icon: ClipboardList, color: 'text-primary' },
-            { label: 'Gradebook', to: `/admin/courses/${courseId}`, icon: BarChart3, color: 'text-accent' },
+            { label: 'Take Attendance', to: `/teacher/courses/${courseId}/attendance`, icon: CalendarCheck, color: 'text-success' },
+            { label: 'Create Assignment', to: `/teacher/courses/${courseId}/assignments`, icon: ClipboardList, color: 'text-primary' },
+            { label: 'Gradebook', to: `/teacher/courses/${courseId}/gradebook`, icon: BarChart3, color: 'text-accent' },
             { label: 'View Roster', to: `/teacher/courses/${courseId}/students`, icon: Users, color: 'text-info' },
           ].map((action) => (
             <Link key={action.label} to={action.to}>

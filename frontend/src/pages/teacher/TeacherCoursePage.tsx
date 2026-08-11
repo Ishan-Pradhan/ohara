@@ -1,33 +1,86 @@
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, BookOpen, ClipboardList, HelpCircle, BarChart3, CalendarCheck, Brain } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 import { useMyCourses } from '../../features/teacher/useTeacher.js';
 import { usePublishCourse } from '../../features/courseContent/useCourseContent.js';
 import { toast } from '../../lib/toast.js';
 import { AppShell } from '../../components/layout/AppShell.js';
-import { PageHeader } from '../../components/layout/PageHeader.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Switch } from '../../components/ui/Switch.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.js';
 import { DocumentsSection } from '../admin/course-content/DocumentsSection.js';
 import { ModulesSection } from '../admin/course-content/ModulesSection.js';
 import { AssignmentsSection } from '../admin/course-content/AssignmentsSection.js';
 import { QuizzesSection } from '../admin/course-content/QuizzesSection.js';
 import { GradebookSection } from '../admin/course-content/GradebookSection.js';
 import { AttendanceSection } from '../admin/course-content/AttendanceSection.js';
-import { IntelligenceSection } from '../admin/course-content/IntelligenceSection.js';
+import { ClassIntelligenceCard } from '../admin/course-content/ClassIntelligenceCard.js';
+import { CopilotPanel } from '../admin/course-content/CopilotPanel.js';
+import { InterventionPanel } from '../admin/course-content/InterventionPanel.js';
+import { LessonPlannerPanel } from '../admin/course-content/LessonPlannerPanel.js';
+import { WeeklyIntelligencePanel } from '../admin/course-content/WeeklyIntelligencePanel.js';
 import { TeacherOverviewSection } from './TeacherOverviewSection.js';
+import { CourseSectionNav } from './CourseSectionNav.js';
+
+const SECTIONS = ['overview', 'content', 'assignments', 'quizzes', 'gradebook', 'attendance', 'intelligence'] as const;
+type Section = (typeof SECTIONS)[number];
+
+const INTELLIGENCE_SUBSECTIONS = ['weekly', 'copilot', 'interventions', 'lesson-planner'] as const;
+type IntelligenceSubsection = (typeof INTELLIGENCE_SUBSECTIONS)[number];
+
+const isSection = (value: string | undefined): value is Section =>
+  Boolean(value) && (SECTIONS as readonly string[]).includes(value!);
+
+const isIntelligenceSubsection = (value: string | undefined): value is IntelligenceSubsection =>
+  Boolean(value) && (INTELLIGENCE_SUBSECTIONS as readonly string[]).includes(value!);
 
 export const TeacherCoursePage = () => {
-  const { courseId = '' } = useParams();
+  const { courseId = '', section: rawSection, subsection: rawSubsection } = useParams();
   const { data: courses, isLoading } = useMyCourses();
   const course = courses?.find((c) => c.id === courseId);
   const publishCourse = usePublishCourse(courseId);
 
+  const section: Section = rawSubsection !== undefined ? 'intelligence' : isSection(rawSection) ? rawSection : 'overview';
+  const intelligenceSubsection = isIntelligenceSubsection(rawSubsection) ? rawSubsection : null;
+
   const onTogglePublish = async (checked: boolean) => {
     await publishCourse.mutateAsync(checked);
     toast.success(checked ? 'Course published' : 'Course unpublished');
+  };
+
+  const renderSection = () => {
+    switch (section) {
+      case 'overview':
+        return <TeacherOverviewSection courseId={courseId} />;
+      case 'content':
+        return (
+          <div className="flex flex-col gap-10">
+            <DocumentsSection courseId={courseId} />
+            <ModulesSection courseId={courseId} />
+          </div>
+        );
+      case 'assignments':
+        return <AssignmentsSection courseId={courseId} />;
+      case 'quizzes':
+        return <QuizzesSection courseId={courseId} />;
+      case 'gradebook':
+        return <GradebookSection courseId={courseId} />;
+      case 'attendance':
+        return <AttendanceSection courseId={courseId} />;
+      case 'intelligence':
+        switch (intelligenceSubsection) {
+          case 'weekly':
+            return <WeeklyIntelligencePanel courseId={courseId} />;
+          case 'copilot':
+            return <CopilotPanel courseId={courseId} />;
+          case 'interventions':
+            return <InterventionPanel courseId={courseId} />;
+          case 'lesson-planner':
+            return <LessonPlannerPanel courseId={courseId} />;
+          default:
+            return <ClassIntelligenceCard courseId={courseId} />;
+        }
+    }
   };
 
   return (
@@ -43,11 +96,15 @@ export const TeacherCoursePage = () => {
       {isLoading ? (
         <Skeleton className="h-10 w-64" />
       ) : (
-        <PageHeader
-          title={course?.title ?? 'Course'}
-          description={course ? `${course.code}${course.className ? ` — ${course.className}` : ''}` : undefined}
-          actions={
-            course ? (
+        <div className="mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-fg">{course?.title ?? 'Course'}</h1>
+              <p className="mt-0.5 text-sm text-muted">
+                {course ? `${course.code}${course.className ? ` — ${course.className}` : ''}` : undefined}
+              </p>
+            </div>
+            {course ? (
               <div className="flex items-center gap-3">
                 <Badge variant={course.isPublished ? 'success' : 'neutral'}>
                   {course.isPublished ? 'Published' : 'Draft'}
@@ -59,74 +116,17 @@ export const TeacherCoursePage = () => {
                   id="publish-toggle"
                 />
               </div>
-            ) : undefined
-          }
-        />
+            ) : null}
+          </div>
+        </div>
       )}
 
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">
-            <BarChart3 className="size-4" aria-hidden />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="content">
-            <BookOpen className="size-4" aria-hidden />
-            Content
-          </TabsTrigger>
-          <TabsTrigger value="assignments">
-            <ClipboardList className="size-4" aria-hidden />
-            Assignments
-          </TabsTrigger>
-          <TabsTrigger value="quizzes">
-            <HelpCircle className="size-4" aria-hidden />
-            Quizzes
-          </TabsTrigger>
-          <TabsTrigger value="gradebook">
-            <BarChart3 className="size-4" aria-hidden />
-            Gradebook
-          </TabsTrigger>
-          <TabsTrigger value="attendance">
-            <CalendarCheck className="size-4" aria-hidden />
-            Attendance
-          </TabsTrigger>
-          <TabsTrigger value="intelligence">
-            <Brain className="size-4" aria-hidden />
-            Intelligence
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <TeacherOverviewSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="content">
-          <div className="flex flex-col gap-10">
-            <DocumentsSection courseId={courseId} />
-            <ModulesSection courseId={courseId} />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="assignments">
-          <AssignmentsSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="quizzes">
-          <QuizzesSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="gradebook">
-          <GradebookSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="attendance">
-          <AttendanceSection courseId={courseId} />
-        </TabsContent>
-
-        <TabsContent value="intelligence">
-          <IntelligenceSection courseId={courseId} />
-        </TabsContent>
-      </Tabs>
+      <div className="flex flex-col gap-6 md:flex-row">
+        <div className="shrink-0 md:w-56">
+          <CourseSectionNav courseId={courseId} />
+        </div>
+        <div className="min-w-0 flex-1">{renderSection()}</div>
+      </div>
     </AppShell>
   );
 };

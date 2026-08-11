@@ -4,13 +4,13 @@ import { ClipboardCheck, Save, Search } from 'lucide-react';
 import { useExamTerms, useCourseExamMarks, useUpsertCourseExamMarks } from '../../../features/examMarks/useExamMarks.js';
 import { ApiError } from '../../../lib/apiError.js';
 import { toast } from '../../../lib/toast.js';
-import { Card } from '../../../components/ui/Card.js';
 import { Button } from '../../../components/ui/Button.js';
 import { Input } from '../../../components/ui/Input.js';
 import { Select } from '../../../components/ui/Select.js';
 import { Alert } from '../../../components/ui/Alert.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
+import { Table, TableHead, TableBody, TableRow, TableHeadCell, TableCell } from '../../../components/ui/Table.js';
 import { ExamTermManager } from './ExamTermManager.js';
 
 interface ExamMarksEntrySectionProps {
@@ -32,6 +32,13 @@ const pctColor = (obtained: number | null, max: number | null) => {
   if (pct >= 40) return 'text-accent-fg';
   return 'text-danger';
 };
+
+const StatTile = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-card border border-border bg-surface px-3 py-2">
+    <p className="text-xs text-subtle">{label}</p>
+    <p className="mt-1 text-sm font-semibold text-fg">{value}</p>
+  </div>
+);
 
 export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, className, batchName, sectionName }: ExamMarksEntrySectionProps) => {
   const { data: terms, isLoading: termsLoading } = useExamTerms();
@@ -63,6 +70,18 @@ export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, classNam
     const q = search.toLowerCase().trim();
     return q ? rows.filter((r) => r.studentName.toLowerCase().includes(q)) : rows;
   }, [rows, search]);
+
+  const enteredPercentages = Object.values(draft)
+    .map((entry) => {
+      const obtained = entry.marksObtained ? Number(entry.marksObtained) : null;
+      const max = entry.maxMarks ? Number(entry.maxMarks) : null;
+      return obtained !== null && max !== null && max > 0 ? (obtained / max) * 100 : null;
+    })
+    .filter((p): p is number => p !== null);
+  const classAverage =
+    enteredPercentages.length > 0
+      ? enteredPercentages.reduce((a, b) => a + b, 0) / enteredPercentages.length
+      : null;
 
   const setField = (studentId: string, key: 'marksObtained' | 'maxMarks', value: string) => {
     setDraft((prev) => ({ ...prev, [studentId]: { ...prev[studentId], [key]: value } }));
@@ -151,33 +170,35 @@ export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, classNam
               description="Marks can be entered once students are enrolled in this course."
             />
           ) : (
-            <Card padding="none" className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-surface-hover">
-                    <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-subtle">
-                      Student
-                    </th>
-                    <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-subtle">
-                      Marks Obtained
-                    </th>
-                    <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-subtle">
-                      Max Marks
-                    </th>
-                    <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-subtle">
-                      %
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile label="Class average" value={classAverage === null ? '—' : `${classAverage.toFixed(1)}%`} />
+                <StatTile label="Entered" value={`${enteredPercentages.length} / ${rows.length}`} />
+                <StatTile label="Students" value={String(rows.length)} />
+                <StatTile
+                  label="Below 40%"
+                  value={String(enteredPercentages.filter((p) => p < 40).length)}
+                />
+              </div>
+
+              <Table>
+                <TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHeadCell>Student</TableHeadCell>
+                    <TableHeadCell>Marks Obtained</TableHeadCell>
+                    <TableHeadCell>Max Marks</TableHeadCell>
+                    <TableHeadCell>%</TableHeadCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {filteredRows.map((row) => {
                     const entry = draft[row.studentId];
                     const obtained = entry?.marksObtained ? Number(entry.marksObtained) : null;
                     const max = entry?.maxMarks ? Number(entry.maxMarks) : null;
                     return (
-                      <tr key={row.studentId} className="transition-colors hover:bg-surface-hover/60">
-                        <td className="px-5 py-2.5 font-medium text-fg">{row.studentName}</td>
-                        <td className="px-5 py-2.5">
+                      <TableRow key={row.studentId}>
+                        <TableCell className="font-medium">{row.studentName}</TableCell>
+                        <TableCell>
                           <Input
                             type="number"
                             min={0}
@@ -185,8 +206,8 @@ export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, classNam
                             value={entry?.marksObtained ?? ''}
                             onChange={(e) => setField(row.studentId, 'marksObtained', e.target.value)}
                           />
-                        </td>
-                        <td className="px-5 py-2.5">
+                        </TableCell>
+                        <TableCell>
                           <Input
                             type="number"
                             min={1}
@@ -194,30 +215,30 @@ export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, classNam
                             value={entry?.maxMarks ?? ''}
                             onChange={(e) => setField(row.studentId, 'maxMarks', e.target.value)}
                           />
-                        </td>
-                        <td className="px-5 py-2.5">
+                        </TableCell>
+                        <TableCell>
                           {obtained !== null && max !== null && max > 0 ? (
-                            <span className={`text-sm font-semibold ${pctColor(obtained, max)}`}>
+                            <span className={`font-semibold ${pctColor(obtained, max)}`}>
                               {((obtained / max) * 100).toFixed(0)}%
                             </span>
                           ) : (
-                            <span className="text-sm text-muted">—</span>
+                            <span className="text-muted">—</span>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
                   {filteredRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-8 text-center text-sm text-muted">
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={4} className="py-8 text-center text-muted">
                         No students match "{search}"
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : null}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
 
-              <div className="flex items-center justify-between border-t border-border px-5 py-3">
+              <div className="flex items-center justify-between">
                 <p className="text-xs text-muted">
                   {filteredRows.length} student{filteredRows.length !== 1 ? 's' : ''}
                 </p>
@@ -226,7 +247,7 @@ export const ExamMarksEntrySection = ({ courseId, isAdmin, programName, classNam
                   Save marks
                 </Button>
               </div>
-            </Card>
+            </>
           )}
         </>
       )}

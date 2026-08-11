@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { BarChart3, CalendarCheck, ChevronRight, ClipboardList, HelpCircle, Layers, LayoutGrid, MessageCircle } from 'lucide-react';
+import { BarChart3, BookOpen, CalendarCheck, ChevronRight, ClipboardList, HelpCircle, Layers, LayoutGrid, Sparkles } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import { useStudentPlacement } from '../../features/placement/usePlacement.js';
@@ -35,11 +35,15 @@ export const StudentCoursePage = () => {
         teachers={course?.teachers ?? []}
       />
 
-      <Tabs defaultValue="learn">
+      <Tabs defaultValue="content">
         <TabsList>
-          <TabsTrigger value="learn">
-            <MessageCircle className="size-4" aria-hidden />
-            Learn
+          <TabsTrigger value="content">
+            <BookOpen className="size-4" aria-hidden />
+            Content
+          </TabsTrigger>
+          <TabsTrigger value="tutor">
+            <Sparkles className="size-4" aria-hidden />
+            AI Tutor
           </TabsTrigger>
           <TabsTrigger value="assignments">
             <ClipboardList className="size-4" aria-hidden />
@@ -63,60 +67,60 @@ export const StudentCoursePage = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="learn">
-          <div className="grid grid-cols-1 gap-6 lg:h-[calc(100dvh-18rem)] lg:grid-cols-[280px_1fr]">
-            <div className="flex flex-col gap-2 lg:overflow-y-auto lg:pr-1">
-              {!course?.isPublished ? (
-                <EmptyState
-                  icon={Layers}
-                  title="Not published yet"
-                  description="Your teacher is still preparing this course's material — check back soon. You can still ask the tutor questions in the meantime."
-                />
-              ) : isLoading ? (
-                <div className="flex flex-col gap-2">
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-14 w-full" />
-                </div>
-              ) : !modules || modules.length === 0 ? (
-                <EmptyState icon={Layers} title="No lessons yet" description="Your teacher hasn't added any lessons to this course yet." />
-              ) : (
-                modules.map((module) => (
-                  <Card key={module.id} padding="sm">
-                    <p className="text-sm font-semibold text-fg">{module.title}</p>
-                    {module.lessons.length === 0 ? (
-                      <p className="mt-1 text-xs text-muted">No lessons yet.</p>
-                    ) : (
-                      <div className="mt-2 flex flex-col gap-1">
-                        {module.lessons.map((lesson) => (
-                          <Link
-                            key={lesson.id}
-                            to={`/student/courses/${courseId}/lessons/${lesson.id}`}
-                            className="flex items-center justify-between gap-2 rounded-control px-2 py-1.5 transition-colors hover:bg-surface-hover"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-fg">{lesson.title}</p>
-                              {lesson.keyTopics.length > 0 ? (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {lesson.keyTopics.map((topic) => (
-                                    <Badge key={topic} variant="primary">
-                                      {topic}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                            <ChevronRight className="size-4 shrink-0 text-subtle" aria-hidden />
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                ))
-              )}
+        <TabsContent value="content">
+          {!course?.isPublished ? (
+            <EmptyState
+              icon={Layers}
+              title="Not published yet"
+              description="Your teacher is still preparing this course's material — check back soon. You can still ask the tutor questions in the meantime."
+            />
+          ) : isLoading ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
             </div>
+          ) : !modules || modules.length === 0 ? (
+            <EmptyState icon={Layers} title="No lessons yet" description="Your teacher hasn't added any lessons to this course yet." />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {modules.map((module) => (
+                <Card key={module.id}>
+                  <p className="text-sm font-semibold text-fg">{module.title}</p>
+                  {module.lessons.length === 0 ? (
+                    <p className="mt-1 text-xs text-muted">No lessons yet.</p>
+                  ) : (
+                    <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      {module.lessons.map((lesson) => (
+                        <Link
+                          key={lesson.id}
+                          to={`/student/courses/${courseId}/lessons/${lesson.id}`}
+                          className="flex items-center justify-between gap-2 rounded-control border border-border px-3 py-2 transition-colors hover:border-primary/30 hover:bg-surface-hover"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-fg">{lesson.title}</p>
+                            {lesson.keyTopics.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {lesson.keyTopics.slice(0, 3).map((topic) => (
+                                  <Badge key={topic} variant="primary">
+                                    {topic}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-subtle" aria-hidden />
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-            <TutorPanel courseId={courseId} />
-          </div>
+        <TabsContent value="tutor">
+          <TutorPanel courseId={courseId} />
         </TabsContent>
 
         <TabsContent value="assignments">

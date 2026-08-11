@@ -18,6 +18,8 @@ import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Table, TableHead, TableBody, TableRow, TableHeadCell, TableCell } from '../../../components/ui/Table.js';
 import { Dialog } from '../../../components/ui/Dialog.js';
 import { Field } from '../../../components/ui/Field.js';
+import { Input } from '../../../components/ui/Input.js';
+import { Select } from '../../../components/ui/Select.js';
 import { Textarea } from '../../../components/ui/Textarea.js';
 import type { CreateInterventionInput } from '../../../features/teacherIntelligence/intervention.schema.js';
 import { useCreateIntervention } from '../../../features/teacherIntelligence/useIntervention.js';
@@ -308,42 +310,38 @@ const CreateInterventionDialog = ({
     >
       <div className="flex flex-col gap-3">
         <Field label="Student" htmlFor="intervention-student">
-          <select
+          <Select
+            id="intervention-student"
             value={form.studentId}
-            onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
-            className="w-full rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg"
-          >
-            {atRiskStudents.map((s) => (
-              <option key={s.studentId} value={s.studentId}>
-                {s.studentName}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm((f) => ({ ...f, studentId: value }))}
+            options={atRiskStudents.map((s) => ({ value: s.studentId, label: s.studentName }))}
+          />
         </Field>
         <Field label="Type" htmlFor="intervention-type">
-          <select
+          <Select
+            id="intervention-type"
             value={form.type}
-            onChange={(e) =>
+            onValueChange={(value) =>
               setForm((f) => ({
                 ...f,
-                type: e.target.value as CreateInterventionInput['type'],
+                type: value as CreateInterventionInput['type'],
               }))
             }
-            className="w-full rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg"
-          >
-            <option value="manual">Manual</option>
-            <option value="meeting">Meeting</option>
-            <option value="tutoring">Tutoring</option>
-            <option value="other">Other</option>
-          </select>
+            options={[
+              { value: 'manual', label: 'Manual' },
+              { value: 'meeting', label: 'Meeting' },
+              { value: 'tutoring', label: 'Tutoring' },
+              { value: 'other', label: 'Other' },
+            ]}
+          />
         </Field>
         <Field label="Title" htmlFor="intervention-title">
-          <input
+          <Input
+            id="intervention-title"
             type="text"
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             placeholder="e.g. Scheduled parent meeting"
-            className="w-full rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted"
           />
         </Field>
         <Field label="Notes" htmlFor="intervention-notes">

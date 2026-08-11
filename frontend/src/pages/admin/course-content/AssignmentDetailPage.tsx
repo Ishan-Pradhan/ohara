@@ -4,6 +4,7 @@ import { ChevronLeft, Sparkles, Users } from 'lucide-react';
 
 import { useAssignment, useGradeAllSubmissions, useSubmissions } from '../../../features/assignments/useAssignments.js';
 import type { Submission } from '../../../features/assignments/assignments.schema.js';
+import { useCurrentUser } from '../../../features/auth/useAuth.js';
 import { ApiError } from '../../../lib/apiError.js';
 import { toast } from '../../../lib/toast.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
@@ -23,6 +24,8 @@ const gradeBadge = (submission: Submission): { variant: 'neutral' | 'warning' | 
 
 export const AssignmentDetailPage = () => {
   const { courseId = '', assignmentId = '' } = useParams();
+  const { data: currentUser } = useCurrentUser();
+  const coursePath = currentUser?.role === 'teacher' ? `/teacher/courses/${courseId}/assignments` : `/admin/courses/${courseId}`;
   const { data: assignment, isLoading: assignmentLoading } = useAssignment(courseId, assignmentId);
   const { data: submissions, isLoading: submissionsLoading } = useSubmissions(courseId, assignmentId);
   const gradeAll = useGradeAllSubmissions(courseId, assignmentId);
@@ -44,11 +47,11 @@ export const AssignmentDetailPage = () => {
   return (
     <AppShell>
       <Link
-        to={`/admin/courses/${courseId}`}
+        to={coursePath}
         className="mb-1 flex items-center gap-1 text-sm text-muted hover:text-fg"
       >
         <ChevronLeft className="size-3.5" aria-hidden />
-        Course content
+        {currentUser?.role === 'teacher' ? 'Assignments' : 'Course content'}
       </Link>
 
       {assignmentLoading ? (

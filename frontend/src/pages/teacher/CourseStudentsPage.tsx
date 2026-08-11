@@ -25,7 +25,14 @@ export const CourseStudentsPage = () => {
         <ChevronLeft className="size-3.5" aria-hidden />
         My Courses
       </Link>
-      <PageHeader title="Course roster" description="Students currently enrolled in this course." />
+      <PageHeader
+        title="Course roster"
+        description={
+          students && students.length > 0
+            ? `${students.length} student${students.length === 1 ? '' : 's'} currently enrolled.`
+            : 'Students currently enrolled in this course.'
+        }
+      />
 
       {isLoading ? (
         <div className="flex flex-col gap-2">

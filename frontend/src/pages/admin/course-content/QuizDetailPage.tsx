@@ -10,6 +10,7 @@ import {
   useQuiz,
 } from '../../../features/quizzes/useQuizzes.js';
 import type { Question } from '../../../features/quizzes/quizzes.schema.js';
+import { useCurrentUser } from '../../../features/auth/useAuth.js';
 import { ApiError } from '../../../lib/apiError.js';
 import { toast } from '../../../lib/toast.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
@@ -27,6 +28,8 @@ import { ShortAnswerReviewDialog } from './ShortAnswerReviewDialog.js';
 
 export const QuizDetailPage = () => {
   const { courseId = '', quizId = '' } = useParams();
+  const { data: currentUser } = useCurrentUser();
+  const coursePath = currentUser?.role === 'teacher' ? `/teacher/courses/${courseId}/quizzes` : `/admin/courses/${courseId}`;
   const { data: quiz, isLoading } = useQuiz(courseId, quizId);
   const { data: attempts, isLoading: attemptsLoading } = useAttempts(courseId, quizId);
   const publishQuiz = usePublishQuiz(courseId);
@@ -81,11 +84,11 @@ export const QuizDetailPage = () => {
   return (
     <AppShell>
       <Link
-        to={`/admin/courses/${courseId}`}
+        to={coursePath}
         className="mb-1 flex items-center gap-1 text-sm text-muted hover:text-fg"
       >
         <ChevronLeft className="size-3.5" aria-hidden />
-        Course content
+        {currentUser?.role === 'teacher' ? 'Quizzes' : 'Course content'}
       </Link>
 
       {isLoading ? (

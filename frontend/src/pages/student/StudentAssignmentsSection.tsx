@@ -15,10 +15,13 @@ interface StudentAssignmentsSectionProps {
 const AssignmentRow = ({ courseId, assignment }: { courseId: string; assignment: Assignment }) => {
   const { data: submission } = useMySubmission(courseId, assignment.id);
   const totalPoints = assignment.rubric.reduce((sum, c) => sum + c.maxPoints, 0);
+  const isPastDue = Date.now() > new Date(assignment.dueAt).getTime();
 
-  let badge: { variant: 'neutral' | 'warning' | 'success'; label: string };
+  let badge: { variant: 'neutral' | 'warning' | 'success' | 'danger'; label: string };
   if (!submission) {
-    badge = { variant: 'neutral', label: 'Not submitted' };
+    badge = isPastDue
+      ? { variant: 'danger', label: 'Overdue' }
+      : { variant: 'neutral', label: 'Not submitted' };
   } else if (submission.grade) {
     badge = { variant: 'success', label: `${submission.grade.score} / ${totalPoints}` };
   } else {
@@ -60,11 +63,29 @@ export const StudentAssignmentsSection = ({ courseId }: StudentAssignmentsSectio
     );
   }
 
+  const now = Date.now();
+  const overdueCount = assignments.filter((a) => now > new Date(a.dueAt).getTime()).length;
+
   return (
-    <div className="flex flex-col gap-2">
-      {assignments.map((assignment) => (
-        <AssignmentRow key={assignment.id} courseId={courseId} assignment={assignment} />
-      ))}
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Card padding="sm">
+          <p className="text-xs text-subtle">Total assignments</p>
+          <p className="mt-1 text-2xl font-bold text-fg">{assignments.length}</p>
+        </Card>
+        <Card padding="sm">
+          <p className="text-xs text-subtle">Overdue</p>
+          <p className={`mt-1 text-2xl font-bold ${overdueCount > 0 ? 'text-danger' : 'text-fg'}`}>
+            {overdueCount}
+          </p>
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {assignments.map((assignment) => (
+          <AssignmentRow key={assignment.id} courseId={courseId} assignment={assignment} />
+        ))}
+      </div>
     </div>
   );
 };

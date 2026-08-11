@@ -6,6 +6,7 @@ import { toast } from '../../../lib/toast.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Button } from '../../../components/ui/Button.js';
 import { Field } from '../../../components/ui/Field.js';
+import { Input } from '../../../components/ui/Input.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import type { LessonPlan } from '../../../features/teacherIntelligence/lessonPlanner.schema.js';
 
@@ -35,24 +36,24 @@ export const LessonPlannerPanel = ({ courseId }: LessonPlannerPanelProps) => {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Field label="Topic" htmlFor="lesson-topic">
-              <input
+              <Input
+                id="lesson-topic"
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="e.g. Introduction to Photosynthesis"
-                className="w-full rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted"
               />
             </Field>
           </div>
           <div className="w-32">
             <Field label="Duration (minutes)" htmlFor="lesson-duration">
-              <input
+              <Input
+                id="lesson-duration"
                 type="number"
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
                 min={10}
                 max={300}
-                className="w-full rounded-card border border-border bg-surface px-3 py-2 text-sm text-fg"
               />
             </Field>
           </div>

@@ -16,6 +16,14 @@ import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Alert } from '../../components/ui/Alert.js';
 import { cn } from '../../lib/cn.js';
 
+const scoreBadgeVariant = (score: number, maxScore: number): 'success' | 'accent' | 'danger' => {
+  if (maxScore <= 0) return 'success';
+  const pct = (score / maxScore) * 100;
+  if (pct >= 80) return 'success';
+  if (pct >= 60) return 'accent';
+  return 'danger';
+};
+
 export const QuizTakePage = () => {
   const { courseId = '', quizId = '' } = useParams();
   const { data: quiz, isLoading } = useQuiz(courseId, quizId);
@@ -59,7 +67,7 @@ export const QuizTakePage = () => {
           description={`${questions.length} question${questions.length === 1 ? '' : 's'}`}
           actions={
             attempt ? (
-              <Badge variant="success">
+              <Badge variant={scoreBadgeVariant(attempt.score, attempt.maxScore)}>
                 Score: {attempt.score} / {attempt.maxScore}
               </Badge>
             ) : undefined
@@ -133,7 +141,7 @@ export const QuizTakePage = () => {
                     {result?.correct ? 'Correct' : 'Incorrect'}
                   </Badge>
                 ) : attempt && result?.grade?.status === 'approved' ? (
-                  <Badge variant="success">
+                  <Badge variant={scoreBadgeVariant(result.grade.awardedPoints ?? 0, result.grade.maxPoints ?? 0)}>
                     {result.grade.awardedPoints} / {result.grade.maxPoints}
                   </Badge>
                 ) : attempt ? (

@@ -1,11 +1,12 @@
 import { Fragment, useMemo, useState } from 'react';
-import { AlertTriangle, Search, Sparkles, ArrowUpDown, TrendingDown, Clock, XCircle } from 'lucide-react';
+import { AlertTriangle, Lightbulb, Search, Sparkles, ArrowUpDown, TrendingDown, Clock, XCircle } from 'lucide-react';
 
 import { useAtRiskDashboard, useExplainAtRisk } from '../../../features/atRisk/useAtRisk.js';
 import { toast } from '../../../lib/toast.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Badge } from '../../../components/ui/Badge.js';
 import { Button } from '../../../components/ui/Button.js';
+import { Input } from '../../../components/ui/Input.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Table, TableHead, TableBody, TableRow, TableHeadCell, TableCell } from '../../../components/ui/Table.js';
@@ -26,6 +27,13 @@ const pctColor = (value: number | null, threshold = 60) => {
 };
 
 const fmtPct = (value: number | null) => (value === null ? '—' : `${value.toFixed(0)}%`);
+
+const StatTile = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-card border border-border bg-surface px-3 py-2">
+    <p className="text-xs text-subtle">{label}</p>
+    <p className="mt-1 text-sm font-semibold text-fg">{value}</p>
+  </div>
+);
 
 export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
   const { data: rows, isLoading } = useAtRiskDashboard(courseId, sectionId);
@@ -107,6 +115,8 @@ export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
   }
 
   const flaggedCount = rows.filter((r) => r.isAtRisk).length;
+  const grades = rows.map((r) => r.averageGrade).filter((g): g is number => g !== null);
+  const classAverage = grades.length > 0 ? grades.reduce((a, b) => a + b, 0) / grades.length : null;
 
   const SortHeader = ({ label, field }: { label: string; field: SortKey }) => (
     <TableHeadCell className="cursor-pointer select-none hover:text-fg transition-colors" onClick={() => toggleSort(field)}>
@@ -119,7 +129,16 @@ export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Summary + search */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="Flagged at-risk" value={String(flaggedCount)} />
+        <StatTile label="Class average" value={classAverage === null ? '—' : `${classAverage.toFixed(1)}%`} />
+        <StatTile label="Students" value={String(rows.length)} />
+        <StatTile
+          label="Missing work"
+          value={String(rows.filter((r) => r.missingSubmissions > 2).length)}
+        />
+      </div>
+
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted">
           {flaggedCount === 0
@@ -127,13 +146,12 @@ export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
             : `${flaggedCount} student${flaggedCount === 1 ? '' : 's'} flagged at-risk.`}
         </p>
         <div className="relative max-w-xs w-full">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted" />
-          <input
-            type="text"
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-subtle" />
+          <Input
             placeholder="Search students…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); }}
-            className="w-full rounded-md border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-fg placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+            className="pl-8"
           />
         </div>
       </div>
@@ -223,9 +241,12 @@ export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
                   </TableCell>
                 </TableRow>
                 {explanations[row.studentId] ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="bg-surface-hover/50 text-sm text-muted">
-                      {explanations[row.studentId]}
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={7} className="bg-transparent py-3">
+                      <div className="flex items-start gap-2 rounded-card border border-primary/20 bg-primary/5 p-3">
+                        <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                        <p className="text-sm leading-relaxed text-fg">{explanations[row.studentId]}</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : null}

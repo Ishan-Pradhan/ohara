@@ -8,12 +8,15 @@ import {
   useStudentElectives,
   useStudentPlacement,
 } from '../../features/placement/usePlacement.js';
-import type { ElectiveCourse } from '../../features/placement/placement.schema.js';
+import { useStudentDashboard } from '../../features/dashboard/useDashboard.js';
+import type { ElectiveCourse, StudentPlacement } from '../../features/placement/placement.schema.js';
+import type { PerformanceCourse } from '../../features/dashboard/dashboard.schema.js';
 import { AppShell } from '../../components/layout/AppShell.js';
 import { PageHeader } from '../../components/layout/PageHeader.js';
 import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
 import { Card } from '../../components/ui/Card.js';
+import { ProgressRing } from '../../components/ui/ProgressRing.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 
@@ -21,6 +24,11 @@ export const StudentCoursesPage = () => {
   const { data: currentUser } = useCurrentUser();
   const studentId = currentUser?.id ?? '';
   const { data: placement, isLoading, isError } = useStudentPlacement(studentId);
+  const { data: dashboard } = useStudentDashboard(Boolean(studentId));
+
+  const performanceByCourseId = new Map(
+    (dashboard?.performance.courses ?? []).map((c) => [c.courseId, c]),
+  );
 
   const placementLine = placement
     ? [placement.program?.name, placement.class?.name, placement.section ? `Section ${placement.section.name}` : null]
@@ -67,30 +75,11 @@ export const StudentCoursesPage = () => {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {placement.courses.map((course) => (
-            <Link key={course.id} to={`/student/courses/${course.id}`} className="group">
-              <Card className="flex h-full flex-col gap-4 transition-all group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex size-10 items-center justify-center rounded-full bg-primary-soft">
-                    <BookOpen className="size-5 text-primary" aria-hidden />
-                  </div>
-                  <Badge variant={course.isPublished ? 'success' : 'neutral'}>
-                    {course.isPublished ? 'Published' : 'Not published yet'}
-                  </Badge>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-fg group-hover:text-primary">{course.title}</p>
-                  <p className="mt-0.5 text-xs text-subtle">{course.code}</p>
-                </div>
-
-                <p className="flex items-center gap-1.5 truncate text-xs text-muted">
-                  <User className="size-3.5 shrink-0" aria-hidden />
-                  {course.teachers.length > 0
-                    ? course.teachers.map((t) => t.name).join(', ')
-                    : 'No teacher assigned yet'}
-                </p>
-              </Card>
-            </Link>
+            <StudentCourseCard
+              key={course.id}
+              course={course}
+              performance={performanceByCourseId.get(course.id)}
+            />
           ))}
         </div>
       )}
@@ -107,6 +96,58 @@ export const StudentCoursesPage = () => {
     </AppShell>
   );
 };
+
+interface StudentCourseCardProps {
+  course: StudentPlacement['courses'][number];
+  performance?: PerformanceCourse;
+}
+
+const StudentCourseCard = ({ course, performance }: StudentCourseCardProps) => (
+  <Link to={`/student/courses/${course.id}`} className="group">
+    <Card className="flex h-full flex-col gap-4 transition-all group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-3">
+          {performance?.averageGrade !== undefined && performance.averageGrade !== null ? (
+            <ProgressRing value={performance.averageGrade} size={40} strokeWidth={4} className="shrink-0" />
+          ) : (
+            <div className="flex size-10 items-center justify-center rounded-full bg-primary-soft">
+              <BookOpen className="size-5 text-primary" aria-hidden />
+            </div>
+          )}
+        </div>
+        <Badge variant={course.isPublished ? 'success' : 'neutral'}>
+          {course.isPublished ? 'Published' : 'Not published yet'}
+        </Badge>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-fg group-hover:text-primary">{course.title}</p>
+        <p className="mt-0.5 text-xs text-subtle">{course.code}</p>
+      </div>
+
+      <p className="flex items-center gap-1.5 truncate text-xs text-muted">
+        <User className="size-3.5 shrink-0" aria-hidden />
+        {course.teachers.length > 0
+          ? course.teachers.map((t) => t.name).join(', ')
+          : 'No teacher assigned yet'}
+      </p>
+
+      {performance ? (
+        <div className="flex items-center gap-4 border-t border-border pt-3 text-xs text-muted">
+          <span>
+            Attendance{' '}
+            <span className="font-medium text-fg">
+              {performance.attendancePercentage === null ? '—' : `${performance.attendancePercentage.toFixed(0)}%`}
+            </span>
+          </span>
+          {performance.missingSubmissions > 0 ? (
+            <span className="text-danger">{performance.missingSubmissions} missing</span>
+          ) : null}
+        </div>
+      ) : null}
+    </Card>
+  </Link>
+);
 
 interface ElectivesSectionProps {
   studentId: string;
