@@ -28,6 +28,13 @@ export const teacherDashboardSchema = z.object({
   totalAtRisk: z.number(),
   courses: z.array(courseSummarySchema),
   insights: dashboardInsightsSchema.nullable(),
+  insightsGeneratedAt: z.string().nullable(),
+});
+
+export const generatedInsightsSchema = z.object({
+  insights: dashboardInsightsSchema,
+  generatedAt: z.string(),
 });
 
 export type TeacherDashboard = z.infer<typeof teacherDashboardSchema>;
+export type DashboardInsights = z.infer<typeof dashboardInsightsSchema>;

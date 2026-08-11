@@ -7,7 +7,6 @@ import { useCurrentUser } from '../../features/auth/useAuth.js';
 import type {
   UpcomingItem,
   RecentGradeItem,
-  PerformanceCourse,
   PerformanceSnapshot,
 } from '../../features/dashboard/dashboard.schema.js';
 
@@ -17,6 +16,12 @@ import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { TodayIntelligencePanel } from './TodayIntelligencePanel.js';
 import { CourseCardsGrid } from './CourseCardsGrid.js';
+import { EventsWidget } from '../EventsWidget.js';
+
+// Both lists come back unbounded from the API — cap what the dashboard
+// itself renders (same convention as EventsWidget's 5) so a busy student
+// with a dozen courses doesn't turn the dashboard into an endless list.
+const MAX_LIST_ITEMS = 5;
 
 const itemLink = (item: { type: 'assignment' | 'quiz'; courseId: string; id: string }) =>
   `/student/courses/${item.courseId}/${item.type === 'assignment' ? 'assignments' : 'quizzes'}/${item.id}`;
@@ -77,21 +82,9 @@ const PerformanceStat = ({ label, value }: { label: string; value: string }) => 
   </div>
 );
 
-const PerformanceCourseRow = ({ course }: { course: PerformanceCourse }) => (
-  <div className="flex items-center justify-between gap-3 rounded-control bg-surface-hover px-3 py-2">
-    <div className="min-w-0">
-      <p className="truncate text-sm font-medium text-fg">{course.courseTitle}</p>
-      <p className="text-xs text-muted">
-        {course.evidence.assessments} assessments · {course.evidence.attendanceRecords} attendance records
-      </p>
-    </div>
-    <div className="flex shrink-0 items-center gap-2">
-      <Badge variant="primary">{formatPercent(course.averageGrade)}</Badge>
-      <Badge variant="neutral">{formatPercent(course.attendancePercentage)}</Badge>
-    </div>
-  </div>
-);
-
+// Per-course averages already live on each card in CourseCardsGrid below —
+// repeating them here was the same numbers twice on one screen. This card
+// stays to the aggregate snapshot only.
 const PerformanceCard = ({ performance }: { performance: PerformanceSnapshot }) => {
   if (performance.status === 'insufficient_data') {
     return (
@@ -106,19 +99,17 @@ const PerformanceCard = ({ performance }: { performance: PerformanceSnapshot }) 
     );
   }
 
-  const visibleCourses = performance.courses.slice(0, 3);
-
   return (
     <Card padding="sm">
       <h2 className="mb-3 px-1 text-sm font-semibold text-fg">Performance snapshot</h2>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <PerformanceStat label="Average" value={formatPercent(performance.averageGrade)} />
         <PerformanceStat label="Attendance" value={formatPercent(performance.attendancePercentage)} />
         <PerformanceStat label="Completion" value={formatPercent(performance.completionRate)} />
         <PerformanceStat
           label="Missing / late"
-          value={`${performance.missingSubmissions} missing · ${performance.lateSubmissions} late`}
+          value={`${performance.missingSubmissions} · ${performance.lateSubmissions}`}
         />
       </div>
 
@@ -126,14 +117,6 @@ const PerformanceCard = ({ performance }: { performance: PerformanceSnapshot }) 
         Based on {performance.evidence.courses} courses, {performance.evidence.assessments} assessments, and{' '}
         {performance.evidence.attendanceRecords} attendance records.
       </p>
-
-      {visibleCourses.length > 0 ? (
-        <div className="mt-4 flex flex-col gap-2">
-          {visibleCourses.map((course) => (
-            <PerformanceCourseRow key={course.courseId} course={course} />
-          ))}
-        </div>
-      ) : null}
     </Card>
   );
 };
@@ -145,11 +128,14 @@ export const StudentDashboardWidgets = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-48 w-full" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-48 w-full" />
         </div>
       </div>
     );
@@ -159,33 +145,15 @@ export const StudentDashboardWidgets = () => {
     return null;
   }
 
+  const visibleUpcoming = data.upcoming.slice(0, MAX_LIST_ITEMS);
+  const visibleGrades = data.recentGrades.slice(0, MAX_LIST_ITEMS);
+
   return (
-    <div className="flex flex-col gap-4">
-      <TodayIntelligencePanel />
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      {/* Main column: what to act on, then what you're taking. */}
+      <div className="flex flex-col gap-4 lg:col-span-2">
+        <TodayIntelligencePanel />
 
-      <PerformanceCard performance={data.performance} />
-
-      {placement && placement.courses.length > 0 ? (
-        <CourseCardsGrid
-          courses={placement.courses}
-          performanceCourses={data.performance.courses}
-        />
-      ) : data.courses.length > 0 ? (
-        <Card padding="sm">
-          <h2 className="mb-2 px-1 text-sm font-semibold text-fg">My Courses</h2>
-          <div className="flex flex-wrap gap-2">
-            {data.courses.map((course) => (
-              <Link key={course.id} to={`/student/courses/${course.id}`}>
-                <Badge variant="primary" className="gap-1.5 px-3 py-1.5">
-                  {course.title}
-                </Badge>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card padding="sm">
           <h2 className="mb-1 px-1 text-sm font-semibold text-fg">Up next</h2>
           {data.upcoming.length === 0 ? (
@@ -196,12 +164,42 @@ export const StudentDashboardWidgets = () => {
             />
           ) : (
             <div className="flex flex-col">
-              {data.upcoming.map((item) => (
+              {visibleUpcoming.map((item) => (
                 <UpcomingRow key={`${item.type}-${item.id}`} item={item} />
               ))}
             </div>
           )}
+          {data.upcoming.length > MAX_LIST_ITEMS ? (
+            <p className="mt-1 px-3 text-xs text-subtle">
+              Showing {MAX_LIST_ITEMS} of {data.upcoming.length} — open a course for the rest.
+            </p>
+          ) : null}
         </Card>
+
+        {placement && placement.courses.length > 0 ? (
+          <CourseCardsGrid
+            courses={placement.courses}
+            performanceCourses={data.performance.courses}
+          />
+        ) : data.courses.length > 0 ? (
+          <Card padding="sm">
+            <h2 className="mb-2 px-1 text-sm font-semibold text-fg">My Courses</h2>
+            <div className="flex flex-wrap gap-2">
+              {data.courses.map((course) => (
+                <Link key={course.id} to={`/student/courses/${course.id}`}>
+                  <Badge variant="primary" className="gap-1.5 px-3 py-1.5">
+                    {course.title}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+      </div>
+
+      {/* Sidebar: reference info that doesn't need daily action. */}
+      <div className="flex flex-col gap-4">
+        <PerformanceCard performance={data.performance} />
 
         <Card padding="sm">
           <h2 className="mb-1 px-1 text-sm font-semibold text-fg">Recent grades</h2>
@@ -213,12 +211,14 @@ export const StudentDashboardWidgets = () => {
             />
           ) : (
             <div className="flex flex-col">
-              {data.recentGrades.map((item) => (
+              {visibleGrades.map((item) => (
                 <RecentGradeRow key={`${item.type}-${item.id}`} item={item} />
               ))}
             </div>
           )}
         </Card>
+
+        <EventsWidget />
       </div>
     </div>
   );

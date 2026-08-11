@@ -19,7 +19,7 @@ export const CourseCardsGrid = ({ courses, performanceCourses }: CourseCardsGrid
   return (
     <div>
       <h2 className="mb-3 text-sm font-semibold text-fg">My Courses</h2>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {courses.map((course) => {
           const perf = perfByCourse.get(course.id);
           const avg = perf?.averageGrade;

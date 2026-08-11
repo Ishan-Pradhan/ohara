@@ -40,6 +40,7 @@ import { ProjectMember } from '../models/projectMembers.model.js';
 import { ExamTerm } from '../models/examTerms.model.js';
 import { ExamMark } from '../models/examMarks.model.js';
 import { StudyPlan } from '../models/studyPlan.model.js';
+import { TeacherDashboardInsight } from '../models/teacherDashboardInsight.model.js';
 import { Intervention } from '../models/intervention.model.js';
 import { TeacherCopilotConversation, TeacherCopilotMessage } from '../models/teacherCopilotConversation.model.js';
 import { BirthdayWish } from '../models/birthdayWish.model.js';
@@ -97,6 +98,7 @@ export const sequelize = new Sequelize({
     ExamTerm,
     ExamMark,
     StudyPlan,
+    TeacherDashboardInsight,
     Intervention,
     TeacherCopilotConversation,
     TeacherCopilotMessage,
