@@ -8,8 +8,8 @@ export interface ClassMembershipAttributes {
   id: string;
   studentId: string;
   batchId: string;
+  classId: string;
   sectionId: string;
-  academicYearId: string;
   outcome: ClassMembershipOutcome;
   promotedToId: string | null;
   createdAt?: Date;
@@ -27,7 +27,7 @@ export interface EnrollmentAttributes {
   id: string;
   studentId: string;
   courseId: string;
-  academicYearId: string;
+  batchId: string;
   status: EnrollmentStatus;
   createdAt?: Date;
   updatedAt?: Date;

@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, GraduationCap, ListPlus, MapPin, User } from 'lucide-react';
+import { BookOpen, ChevronDown, GraduationCap, ListPlus, MapPin, User } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
 import {
   useDropElective,
   useEnrollInElective,
   useStudentElectives,
+  useStudentPastCourses,
   useStudentPlacement,
 } from '../../features/placement/usePlacement.js';
 import { useStudentDashboard } from '../../features/dashboard/useDashboard.js';
-import type { ElectiveCourse, StudentPlacement } from '../../features/placement/placement.schema.js';
+import type { ElectiveCourse, PastCourse, StudentPlacement } from '../../features/placement/placement.schema.js';
 import type { PerformanceCourse } from '../../features/dashboard/dashboard.schema.js';
 import { AppShell } from '../../components/layout/AppShell.js';
 import { PageHeader } from '../../components/layout/PageHeader.js';
@@ -19,6 +21,7 @@ import { Card } from '../../components/ui/Card.js';
 import { ProgressRing } from '../../components/ui/ProgressRing.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { cn } from '../../lib/cn.js';
 
 export const StudentCoursesPage = () => {
   const { data: currentUser } = useCurrentUser();
@@ -93,6 +96,8 @@ export const StudentCoursesPage = () => {
           <ElectivesSection studentId={studentId} />
         </div>
       ) : null}
+
+      <PastCoursesSection studentId={studentId} />
     </AppShell>
   );
 };
@@ -237,3 +242,62 @@ const ElectiveCard = ({ course, onEnroll, onDrop, enrollPending, dropPending }: 
     </Card>
   );
 };
+
+/** Completed-course history — collapsed by default since it only grows
+ * every semester. Each card opens the same course screens (Assignments/
+ * Quizzes/Grades/Attendance) in read-only mode instead of the live "content"
+ * landing tab, since that (and Tutor/Study Tools) don't apply once a
+ * semester's done. */
+const PastCoursesSection = ({ studentId }: { studentId: string }) => {
+  const [expanded, setExpanded] = useState(false);
+  const { data: pastCourses, isLoading } = useStudentPastCourses(studentId);
+
+  if (isLoading || !pastCourses || pastCourses.length === 0) return null;
+
+  return (
+    <div className="mt-10">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg"
+      >
+        <ChevronDown className={cn('size-4 text-subtle transition-transform', expanded ? '' : '-rotate-90')} aria-hidden />
+        Past courses
+        <span className="font-normal text-subtle">({pastCourses.length})</span>
+      </button>
+
+      {expanded ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {pastCourses.map((course) => (
+            <PastCourseCard key={`${course.id}-${course.batchId}`} course={course} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const PastCourseCard = ({ course }: { course: PastCourse }) => (
+  <Link to={`/student/courses/${course.id}/grades`} className="group">
+    <Card className="flex h-full flex-col gap-4 opacity-80 transition-all group-hover:opacity-100 group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex size-10 items-center justify-center rounded-full bg-surface-hover">
+          <BookOpen className="size-5 text-subtle" aria-hidden />
+        </div>
+        <Badge variant="neutral">{course.batchName ?? 'Completed'}</Badge>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold text-fg group-hover:text-primary">{course.title}</p>
+        <p className="mt-0.5 text-xs text-subtle">{course.code}</p>
+      </div>
+
+      <p className="flex items-center gap-1.5 truncate text-xs text-muted">
+        <User className="size-3.5 shrink-0" aria-hidden />
+        {course.teachers.length > 0
+          ? course.teachers.map((t) => t.name).join(', ')
+          : 'No teacher assigned'}
+      </p>
+    </Card>
+  </Link>
+);

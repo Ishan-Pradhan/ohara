@@ -23,7 +23,6 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
-  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -53,7 +52,6 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
 };
 
 const setupCourseWithTeacherAndStudent = async () => {
-  await createAcademicYear({ isCurrent: true });
   const course = await createCourse();
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

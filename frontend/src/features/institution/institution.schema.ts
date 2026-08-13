@@ -2,12 +2,8 @@ import { z } from 'zod';
 
 /* Mirrors backend/src/validations/institution.validation.ts. */
 
-export const institutionTypes = ['school', 'college', 'university'] as const;
-export type InstitutionType = (typeof institutionTypes)[number];
-
 export const createProgramSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  institutionType: z.enum(institutionTypes),
   description: z.string().optional(),
   affiliation: z.string().optional(),
   abbreviation: z.string().max(10).optional(),
@@ -16,7 +12,6 @@ export const createProgramSchema = z.object({
 export const programSchema = z.object({
   id: z.string(),
   name: z.string(),
-  institutionType: z.enum(institutionTypes),
   description: z.string().nullable(),
   affiliation: z.string().nullable(),
   abbreviation: z.string().nullable(),
@@ -40,14 +35,12 @@ export const classSchema = z.object({
 export const createBatchSchema = z.object({
   programId: z.string().min(1, 'Choose a program'),
   name: z.string().min(1, 'Name is required'),
-  startAcademicYearId: z.string().min(1, 'Choose an academic year'),
 });
 
 export const batchSchema = z.object({
   id: z.string(),
   programId: z.string(),
   name: z.string(),
-  startAcademicYearId: z.string(),
   createdAt: z.string(),
 });
 
@@ -84,7 +77,8 @@ export const academicYearSchema = z.object({
 
 export const createSectionSchema = z.object({
   classId: z.string().min(1, 'Choose a class'),
-  academicYearId: z.string().min(1, 'Choose an academic year'),
+  batchId: z.string().min(1, 'Choose a batch'),
+  startDate: z.string().min(1, 'Start date is required'),
   name: z.string().min(1, 'Name is required'),
   classTeacherId: z.string().optional(),
   capacity: z.number().int().positive().optional(),
@@ -93,7 +87,8 @@ export const createSectionSchema = z.object({
 export const sectionSchema = z.object({
   id: z.string(),
   classId: z.string(),
-  academicYearId: z.string(),
+  batchId: z.string(),
+  startDate: z.string(),
   classTeacherId: z.string().nullable(),
   name: z.string(),
   capacity: z.number().nullable(),

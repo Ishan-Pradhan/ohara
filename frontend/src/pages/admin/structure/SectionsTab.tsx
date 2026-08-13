@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ArrowUpCircle,
   BookOpen,
-  CalendarRange,
   GraduationCap,
   LayoutGrid,
   MoreVertical,
@@ -13,12 +12,13 @@ import {
   Plus,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { z } from 'zod';
 
-import type { InstitutionType, Section } from '../../../features/institution/institution.schema.js';
+import type { Section } from '../../../features/institution/institution.schema.js';
 import {
-  useAcademicYears,
+  useBatches,
   useClasses,
   useCourses,
   useCreateSection,
@@ -26,7 +26,6 @@ import {
   useSections,
   useUpdateSection,
 } from '../../../features/institution/useInstitution.js';
-import { deriveClassTerm } from '../../../lib/academicTerm.js';
 import { useTeachers } from '../../../features/users/useUsers.js';
 import {
   useBulkPromoteSection,
@@ -55,6 +54,7 @@ import {
 
 const sectionFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  startDate: z.string().min(1, 'Start date is required'),
   classTeacherId: z.string().optional(),
   capacity: z.number().int().positive().optional(),
 });
@@ -63,14 +63,12 @@ type SectionFormInput = z.infer<typeof sectionFormSchema>;
 
 interface SectionsTabProps {
   classId: string;
-  institutionType: InstitutionType;
-  orderIndex: number;
+  programId: string;
 }
 
-export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTabProps) => {
+export const SectionsTab = ({ classId, programId }: SectionsTabProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showAllYears, setShowAllYears] = useState(false);
-  const { data: years, isLoading: yearsLoading } = useAcademicYears();
+  const { data: batches, isLoading: batchesLoading } = useBatches(programId);
   const { data: sections, isLoading: sectionsLoading } = useSections();
   const { data: classes } = useClasses();
   const { data: courses } = useCourses();
@@ -91,24 +89,10 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   // section's course rosters" really means "this class's courses."
   const classCourses = (courses ?? []).filter((c) => c.classId === classId);
 
-  // This class only ever runs in years matching its own term (annual for
-  // schools; odd/even for college/university, derived from the semester
-  // number) — filtering to those avoids mixing in an unrelated program's or
-  // the opposite-parity semester's years, which is what made the year
-  // dropdown confusing before. "Show all" is an escape hatch for browsing
-  // history or fixing a miscategorized year.
-  const classTerm = deriveClassTerm(institutionType, orderIndex);
-  const termYears = (years ?? []).filter((y) => y.term === classTerm);
-  const relevantYears = showAllYears || termYears.length === 0 ? years ?? [] : termYears;
-
-  const selectedYearId =
-    searchParams.get('year') ??
-    relevantYears.find((y) => y.isCurrent)?.id ??
-    relevantYears[0]?.id ??
-    '';
+  const selectedBatchId = searchParams.get('batch') ?? batches?.[0]?.id ?? '';
 
   const classSections = (sections ?? []).filter(
-    (s) => s.classId === classId && s.academicYearId === selectedYearId,
+    (s) => s.classId === classId && s.batchId === selectedBatchId,
   );
 
   const {
@@ -124,37 +108,21 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   // internally for "nothing selected" / the placeholder), so an explicit
   // "no teacher" choice needs its own sentinel rather than value: '' — there
   // was previously no way to *clear* an already-assigned class teacher once
-  // set, which matters for college/university programs that don't use the
-  // class-teacher concept at all (fixed 2026-08-12).
+  // set, which matters for programs that don't use the class-teacher concept
+  // at all (fixed 2026-08-12).
   const NO_TEACHER_VALUE = '__none__';
   const teacherOptions = [
     { value: NO_TEACHER_VALUE, label: 'No class teacher' },
     ...(teachers ?? []).map((t) => ({ value: t.id, label: t.name })),
   ];
-  const yearOptions = relevantYears.map((y) => ({
-    value: y.id,
-    // A mismatched-term year only ever shows up via "show all years" (the
-    // legacy-cleanup escape hatch) — the backend now hard-rejects creating a
-    // section under one, so flag it here rather than let it look like a
-    // normal option that just happens to fail on submit.
-    label:
-      `${y.name} (${y.term === 'odd' ? 'Odd' : y.term === 'even' ? 'Even' : 'Annual'})` +
-      (y.term !== classTerm ? ' ⚠ wrong term for this class' : ''),
-  }));
+  const batchOptions = (batches ?? []).map((b) => ({ value: b.id, label: b.name }));
 
-  // Promotion always moves a section's students into the same program's next
-  // class (by orderIndex), regardless of which academic year that class's
-  // sections belong to — mirrors StudentDetailPage's OutcomeDialog logic.
+  // Promotion always moves a section's students into the same batch's next
+  // class (by orderIndex) — a batch's own progression through Sem 1..N is
+  // the single source of truth for "which one is current," and promotion
+  // never moves a student to a different batch (mirrors
+  // StudentDetailPage's OutcomeDialog logic).
   const currentClass = classes?.find((c) => c.id === classId);
-  // Retention keeps a student in this same class, possibly moving them to a
-  // different section within it — mirrors StudentDetailPage's OutcomeDialog
-  // retainedSectionOptions (filtered by classId only, no year constraint).
-  const retainedSectionOptions = (sections ?? [])
-    .filter((s) => s.classId === currentClass?.id)
-    .map((s) => {
-      const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
-      return { value: s.id, label: `${s.name} (${yearName})` };
-    });
   const promotedSectionOptions = (sections ?? [])
     .filter((s) => {
       const targetClass = classes?.find((c) => c.id === s.classId);
@@ -162,24 +130,29 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
         targetClass &&
         currentClass &&
         targetClass.programId === currentClass.programId &&
-        targetClass.orderIndex === currentClass.orderIndex + 1
+        targetClass.orderIndex === currentClass.orderIndex + 1 &&
+        s.batchId === promoting?.batchId
       );
     })
     .map((s) => {
       const className = classes?.find((c) => c.id === s.classId)?.name ?? '—';
-      const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
-      return { value: s.id, label: `${className} — ${s.name} (${yearName})` };
+      return { value: s.id, label: `${className} — ${s.name}` };
     });
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ name: '', classTeacherId: undefined, capacity: undefined });
+    resetForm({ name: '', startDate: '', classTeacherId: undefined, capacity: undefined });
     setDialogOpen(true);
   };
 
   const openEdit = (section: Section) => {
     setEditing(section);
-    resetForm({ name: section.name, classTeacherId: section.classTeacherId ?? undefined, capacity: section.capacity ?? undefined });
+    resetForm({
+      name: section.name,
+      startDate: section.startDate,
+      classTeacherId: section.classTeacherId ?? undefined,
+      capacity: section.capacity ?? undefined,
+    });
     setDialogOpen(true);
   };
 
@@ -191,12 +164,11 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   };
 
   const onSubmit = handleSubmit(async (values) => {
-    const input = { ...values, classId, academicYearId: selectedYearId };
     if (editing) {
-      const updated = await updateSection.mutateAsync({ id: editing.id, input });
+      const updated = await updateSection.mutateAsync({ id: editing.id, input: { ...values, classId, batchId: selectedBatchId } });
       toast.success(`Section ${updated.name} updated`);
     } else {
-      const created = await createSection.mutateAsync(input);
+      const created = await createSection.mutateAsync({ ...values, classId, batchId: selectedBatchId });
       toast.success(`Section ${created.name} created`);
     }
     closeDialog();
@@ -218,8 +190,8 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
 
   const error = editing ? updateSection.error : createSection.error;
   const isPending = editing ? updateSection.isPending : createSection.isPending;
-  const isLoading = yearsLoading || sectionsLoading;
-  const selectedYear = years?.find((y) => y.id === selectedYearId);
+  const isLoading = batchesLoading || sectionsLoading;
+  const selectedBatch = batches?.find((b) => b.id === selectedBatchId);
 
   if (isLoading) {
     return (
@@ -230,18 +202,18 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
     );
   }
 
-  if (!years || years.length === 0) {
+  if (!batches || batches.length === 0) {
     return (
       <EmptyState
-        icon={CalendarRange}
-        title="Create an academic year first"
-        description="Sections belong to a specific academic year, like 2025/26."
+        icon={Users}
+        title="Create a batch first"
+        description="Sections place a batch's students into this class."
         action={
           <Link
-            to="/admin/academic-years"
+            to={`/admin/structure/${programId}`}
             className="inline-flex items-center justify-center gap-2 rounded-control bg-primary px-4 py-2.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
           >
-            Go to Academic years
+            Go to Batches
           </Link>
         }
       />
@@ -251,26 +223,13 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="max-w-xs">
-            <Select
-              value={selectedYearId}
-              onValueChange={(value) => setSearchParams({ year: value })}
-              options={yearOptions}
-              placeholder="Select a year"
-            />
-          </div>
-          {termYears.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowAllYears((prev) => !prev)}
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              {showAllYears
-                ? `Show only ${classTerm === 'annual' ? 'annual' : classTerm + '-semester'} years`
-                : 'Show all years'}
-            </button>
-          ) : null}
+        <div className="max-w-xs">
+          <Select
+            value={selectedBatchId}
+            onValueChange={(value) => setSearchParams({ batch: value })}
+            options={batchOptions}
+            placeholder="Select a batch"
+          />
         </div>
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" aria-hidden />
@@ -281,7 +240,7 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
       {classSections.length === 0 ? (
         <EmptyState
           icon={LayoutGrid}
-          title={`No sections yet for ${selectedYear?.name ?? 'this year'}`}
+          title={`No sections yet for ${selectedBatch?.name ?? 'this batch'}`}
           description="Create one to start placing students into it."
           action={<Button onClick={openCreate}>Create a section</Button>}
         />
@@ -341,13 +300,22 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
         open={dialogOpen}
         onOpenChange={(open) => (open ? setDialogOpen(true) : closeDialog())}
         title={editing ? 'Edit section' : 'New section'}
-        description={`For ${selectedYear?.name ?? 'the selected year'}. Assigning a class teacher is optional.`}
+        description={`For ${selectedBatch?.name ?? 'the selected batch'}. Assigning a class teacher is optional.`}
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
 
           <Field label="Name" htmlFor="name" error={errors.name?.message}>
             <Input id="name" placeholder="e.g. A" {...field('name')} />
+          </Field>
+
+          <Field
+            label="Start date"
+            htmlFor="startDate"
+            error={errors.startDate?.message}
+            hint="Display/reporting only — never used to decide what's current"
+          >
+            <Input id="startDate" type="date" {...field('startDate')} />
           </Field>
 
           <Field
@@ -419,7 +387,6 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
       <BulkPromoteDialog
         section={promoting}
         promotedSectionOptions={promotedSectionOptions}
-        retainedSectionOptions={retainedSectionOptions}
         onOpenChange={(open) => !open && setPromoting(null)}
       />
 
@@ -452,30 +419,28 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
 };
 
 const outcomeOverrideOptions = [
-  { value: 'promoted', label: 'Promote' },
-  { value: 'retained', label: 'Retained' },
+  { value: 'default', label: 'Promote (default section)' },
+  { value: 'custom', label: 'Promote (choose section)' },
   { value: 'graduated', label: 'Graduated' },
 ];
 
 interface OverrideState {
-  outcome: 'retained' | 'graduated';
-  /** Only meaningful (and required before submit) when outcome === 'retained' —
-   * graduation never needs a target section, and omitting it there is what
-   * correctly signals graduation to the backend. */
+  outcome: 'promoted' | 'graduated';
+  /** Only meaningful (and required before submit) when outcome === 'promoted' —
+   * a custom target section within the batch's next class, instead of the
+   * batch-wide default. */
   targetSectionId?: string;
 }
 
 interface BulkPromoteDialogProps {
   section: Section | null;
   promotedSectionOptions: { value: string; label: string }[];
-  retainedSectionOptions: { value: string; label: string }[];
   onOpenChange: (open: boolean) => void;
 }
 
 const BulkPromoteDialog = ({
   section,
   promotedSectionOptions,
-  retainedSectionOptions,
   onOpenChange,
 }: BulkPromoteDialogProps) => {
   const sectionId = section?.id ?? '';
@@ -500,20 +465,26 @@ const BulkPromoteDialog = ({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId]);
 
-  const setOverrideOutcome = (studentId: string, outcome: string) => {
+  const setOverrideOutcome = (studentId: string, value: string) => {
     setOverrides((prev) => {
       const next = { ...prev };
-      if (outcome === 'promoted') {
+      if (value === 'default') {
         delete next[studentId];
-      } else if (outcome === 'retained') {
+      } else if (value === 'custom') {
         // Keep a previously chosen target section if the admin flips back to
-        // 'retained' after trying something else.
-        next[studentId] = { outcome: 'retained', targetSectionId: next[studentId]?.targetSectionId };
+        // 'custom' after trying something else.
+        next[studentId] = { outcome: 'promoted', targetSectionId: next[studentId]?.targetSectionId };
       } else {
         next[studentId] = { outcome: 'graduated' };
       }
       return next;
     });
+  };
+
+  const overrideSelectValue = (studentId: string): string => {
+    const o = overrides[studentId];
+    if (!o) return 'default';
+    return o.outcome === 'graduated' ? 'graduated' : 'custom';
   };
 
   const setOverrideTargetSection = (studentId: string, targetSectionId: string) => {
@@ -524,8 +495,8 @@ const BulkPromoteDialog = ({
     });
   };
 
-  const hasIncompleteRetainedOverride = Object.values(overrides).some(
-    (o) => o.outcome === 'retained' && !o.targetSectionId,
+  const hasIncompleteCustomOverride = Object.values(overrides).some(
+    (o) => o.outcome === 'promoted' && !o.targetSectionId,
   );
 
   const submit = async () => {
@@ -535,7 +506,7 @@ const BulkPromoteDialog = ({
       overrides: Object.entries(overrides).map(([studentId, o]) => ({
         studentId,
         outcome: o.outcome,
-        targetSectionId: o.outcome === 'retained' ? o.targetSectionId : undefined,
+        targetSectionId: o.outcome === 'promoted' ? o.targetSectionId : undefined,
       })),
     };
     const outcomeResults = await bulkPromote.mutateAsync(payload);
@@ -561,7 +532,7 @@ const BulkPromoteDialog = ({
       open={Boolean(section)}
       onOpenChange={onOpenChange}
       title={`Promote all — ${section?.name ?? ''}`}
-      description="Applies to every student currently placed in this section. Override individual students below before submitting."
+      description="Applies to every student currently placed in this section, into the same batch's next class. Override individual students below before submitting."
     >
       <div className="flex flex-col gap-4">
         {bulkPromote.error instanceof ApiError ? <Alert>{bulkPromote.error.message}</Alert> : null}
@@ -596,7 +567,7 @@ const BulkPromoteDialog = ({
                 placeholder={
                   promotedSectionOptions.length
                     ? 'Select a section'
-                    : 'No next-class sections exist for this program yet'
+                    : 'No next-class section exists for this batch yet'
                 }
               />
             </Field>
@@ -629,10 +600,10 @@ const BulkPromoteDialog = ({
                         <p className="truncate text-xs text-muted">{entry.student.email}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        {override?.outcome === 'retained' ? (
+                        {override?.outcome === 'promoted' ? (
                           <div className="w-44">
                             <Select
-                              options={retainedSectionOptions}
+                              options={promotedSectionOptions}
                               value={override.targetSectionId ?? ''}
                               onValueChange={(value) => setOverrideTargetSection(entry.student.id, value)}
                               placeholder="Target section"
@@ -640,10 +611,10 @@ const BulkPromoteDialog = ({
                             />
                           </div>
                         ) : null}
-                        <div className="w-36">
+                        <div className="w-48">
                           <Select
                             options={outcomeOverrideOptions}
-                            value={override?.outcome ?? 'promoted'}
+                            value={overrideSelectValue(entry.student.id)}
                             onValueChange={(value) => setOverrideOutcome(entry.student.id, value)}
                           />
                         </div>
@@ -664,7 +635,7 @@ const BulkPromoteDialog = ({
             <Button
               type="button"
               loading={bulkPromote.isPending}
-              disabled={!defaultTargetSectionId || hasIncompleteRetainedOverride}
+              disabled={!defaultTargetSectionId || hasIncompleteCustomOverride}
               onClick={submit}
             >
               Promote all

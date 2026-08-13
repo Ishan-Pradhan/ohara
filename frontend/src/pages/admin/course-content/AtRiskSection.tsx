@@ -14,6 +14,9 @@ import { Table, TableHead, TableBody, TableRow, TableHeadCell, TableCell } from 
 interface AtRiskSectionProps {
   courseId: string;
   sectionId?: string;
+  /** Set when viewing a specific past batch's metrics (completed-course
+   * history) instead of the course's current batch. */
+  batchId?: string;
 }
 
 type SortKey = 'name' | 'averageGrade' | 'attendancePercentage' | 'missingSubmissions' | 'lateSubmissions';
@@ -35,9 +38,9 @@ const StatTile = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const AtRiskSection = ({ courseId, sectionId }: AtRiskSectionProps) => {
-  const { data: rows, isLoading } = useAtRiskDashboard(courseId, sectionId);
-  const explainAtRisk = useExplainAtRisk(courseId);
+export const AtRiskSection = ({ courseId, sectionId, batchId }: AtRiskSectionProps) => {
+  const { data: rows, isLoading } = useAtRiskDashboard(courseId, sectionId, batchId);
+  const explainAtRisk = useExplainAtRisk(courseId, batchId);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [explaining, setExplaining] = useState<string | null>(null);
   const [search, setSearch] = useState('');

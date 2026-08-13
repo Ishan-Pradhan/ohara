@@ -47,7 +47,6 @@ export interface ReportCardSemesterSection {
   orderIndex: number;
   batchName: string | null;
   sectionName: string | null;
-  academicYearName: string | null;
   examTerms: ReportCardExamTermHeader[];
   courses: ReportCardCourseRow[];
   totalObtained: number;
@@ -69,7 +68,7 @@ const letterGrade = (percentage: number | null): string => {
  * an overall cumulative percentage/grade. */
 export const buildReportCard = (
   marks: ExamMark[],
-  semesterMeta?: Map<string, { batchName: string | null; sectionName: string | null; academicYearName: string | null }>,
+  semesterMeta?: Map<string, { batchName: string | null; sectionName: string | null }>,
 ) => {
   const semestersMap = new Map<string, {
     classId: string;
@@ -166,7 +165,6 @@ export const buildReportCard = (
       orderIndex: sem.orderIndex,
       batchName: meta?.batchName ?? null,
       sectionName: meta?.sectionName ?? null,
-      academicYearName: meta?.academicYearName ?? null,
       examTerms,
       courses,
       totalObtained: semObtained,

@@ -12,9 +12,9 @@ export const classMembershipSchema = z.object({
   id: z.string(),
   studentId: z.string(),
   batchId: z.string(),
+  classId: z.string(),
   sectionId: z.string(),
-  academicYearId: z.string(),
-  outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated']),
+  outcome: z.enum(['enrolled', 'promoted', 'graduated', 'transferred']),
   promotedToId: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -28,7 +28,7 @@ export const enrollmentSchema = z.object({
   id: z.string(),
   studentId: z.string(),
   courseId: z.string(),
-  academicYearId: z.string(),
+  batchId: z.string(),
   status: z.enum(['active', 'completed', 'dropped']),
   createdAt: z.string(),
 });
@@ -39,7 +39,7 @@ export const transferSchema = z.object({
 
 export const outcomeSchema = z
   .object({
-    outcome: z.enum(['promoted', 'retained', 'graduated']),
+    outcome: z.enum(['promoted', 'graduated']),
     targetSectionId: z.string().optional(),
   })
   .refine((val) => val.outcome === 'graduated' || Boolean(val.targetSectionId), {
@@ -66,13 +66,11 @@ export const studentPlacementSchema = z.object({
     .object({
       id: z.string(),
       name: z.string(),
-      institutionType: z.string(),
       affiliation: z.string().nullable(),
     })
     .nullable(),
   class: z.object({ id: z.string(), name: z.string() }).nullable(),
   section: z.object({ id: z.string(), name: z.string() }).nullable(),
-  academicYear: z.object({ id: z.string(), name: z.string() }).nullable(),
   batch: z.object({ id: z.string(), name: z.string() }).nullable(),
   courses: z.array(
     z.object({
@@ -83,6 +81,15 @@ export const studentPlacementSchema = z.object({
       teachers: z.array(z.object({ id: z.string(), name: z.string() })),
     }),
   ),
+});
+
+export const pastCourseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  code: z.string(),
+  batchId: z.string(),
+  batchName: z.string().nullable(),
+  teachers: z.array(z.object({ id: z.string(), name: z.string() })),
 });
 
 export const rosterEntrySchema = z.object({
@@ -101,7 +108,7 @@ export const bulkPromoteInputSchema = z.object({
   overrides: z.array(
     z.object({
       studentId: z.string(),
-      outcome: z.enum(['retained', 'graduated']),
+      outcome: z.enum(['promoted', 'graduated']),
       targetSectionId: z.string().optional(),
     }),
   ),
@@ -142,6 +149,7 @@ export type Enrollment = z.infer<typeof enrollmentSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;
 export type OutcomeInput = z.infer<typeof outcomeSchema>;
 export type StudentPlacement = z.infer<typeof studentPlacementSchema>;
+export type PastCourse = z.infer<typeof pastCourseSchema>;
 export type RosterEntry = z.infer<typeof rosterEntrySchema>;
 export type BulkPromoteInput = z.infer<typeof bulkPromoteInputSchema>;
 export type BulkPromoteResult = z.infer<typeof bulkPromoteResultSchema>;

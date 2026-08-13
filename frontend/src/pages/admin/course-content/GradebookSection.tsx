@@ -10,6 +10,9 @@ import { cn } from '../../../lib/cn.js';
 
 interface GradebookSectionProps {
   courseId: string;
+  /** Omitted -> the course's current batch. Given -> a specific past
+   * batch's gradebook (viewing completed-course history). */
+  batchId?: string;
 }
 
 const statusLabel: Record<GradebookEntry['status'], string> = {
@@ -47,8 +50,8 @@ const StatTile = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const GradebookSection = ({ courseId }: GradebookSectionProps) => {
-  const { data: gradebook, isLoading } = useGradebook(courseId);
+export const GradebookSection = ({ courseId, batchId }: GradebookSectionProps) => {
+  const { data: gradebook, isLoading } = useGradebook(courseId, batchId);
 
   if (isLoading) {
     return (

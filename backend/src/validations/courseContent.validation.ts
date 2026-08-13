@@ -92,6 +92,10 @@ export const publishCourseSchema = {
   body: z.object({ isPublished: z.boolean() }),
 };
 
+export const listCourseBatchesSchema = {
+  params: z.object({ courseId: z.uuid() }),
+};
+
 // ── Response schemas ─────────────────────────────────────────────────────────
 
 export const lessonSchema = registry.register(
@@ -254,6 +258,25 @@ registry.registerPath({
     401: unauthenticated,
     403: forbidden,
     404: { description: 'Lesson not found' },
+  },
+});
+
+const courseBatchSchema = z.object({ id: z.uuid(), name: z.string() });
+
+registry.registerPath({
+  method: 'get',
+  path: '/courses/{courseId}/batches',
+  tags: ['Course Content'],
+  request: { params: listCourseBatchesSchema.params },
+  responses: {
+    200: {
+      description:
+        "Every batch that has ever had placement or enrollment history in this course's class, current and past — powers the batch picker for viewing completed-course history.",
+      content: { 'application/json': { schema: envelope(z.array(courseBatchSchema)) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Course not found' },
   },
 });
 

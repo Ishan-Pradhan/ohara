@@ -9,7 +9,7 @@ export interface RubricCriterion {
 export interface AssignmentAttributes {
   id: string;
   courseId: string;
-  academicYearId: string;
+  batchId: string;
   title: string;
   prompt: string;
   rubric: RubricCriterion[];

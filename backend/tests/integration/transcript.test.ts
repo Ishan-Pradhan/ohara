@@ -67,12 +67,12 @@ afterAll(async () => {
 describe('Exam marks + transcript', () => {
   it('lets a teacher enter marks for their course, and rolls them up into the student transcript', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -141,7 +141,6 @@ describe('Exam marks + transcript', () => {
           classId: cls.id,
           className: cls.name,
           orderIndex: cls.orderIndex,
-          academicYearName: year.name,
           batchName: batch.name,
           sectionName: section.name,
           examTerms: [
@@ -199,11 +198,11 @@ describe('Exam marks + transcript', () => {
 
   it("scopes a teacher's transcript view to only the courses they teach", async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     const physics = await createCourse({ classId: cls.id, title: 'Physics' });
     const chemistry = await createCourse({ classId: cls.id, title: 'Chemistry' });
     const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });

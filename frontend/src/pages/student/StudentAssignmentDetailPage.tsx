@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft, Paperclip } from 'lucide-react';
 
 import { useAssignment, useMySubmission, useSubmitAssignment } from '../../features/assignments/useAssignments.js';
+import { useCurrentUser } from '../../features/auth/useAuth.js';
+import { useStudentPastCourses, useStudentPlacement } from '../../features/placement/usePlacement.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -30,6 +32,17 @@ export const StudentAssignmentDetailPage = () => {
   const { data: assignment, isLoading } = useAssignment(courseId, assignmentId);
   const { data: submission } = useMySubmission(courseId, assignmentId);
   const submit = useSubmitAssignment(courseId, assignmentId);
+
+  const { data: currentUser } = useCurrentUser();
+  const studentId = currentUser?.id ?? '';
+  const { data: placement } = useStudentPlacement(studentId);
+  const { data: pastCourses } = useStudentPastCourses(studentId);
+  // Submitting is already blocked server-side once this course's enrollment
+  // is 'completed' (requireEnrolledStudent stays active-only) — this just
+  // replaces the form with an explanation instead of a confusing 403.
+  const isPastCourse =
+    !placement?.courses.some((c) => c.id === courseId) &&
+    Boolean(pastCourses?.some((c) => c.id === courseId));
 
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -134,8 +147,10 @@ export const StudentAssignmentDetailPage = () => {
             className={!submission ? (isPastDue ? 'border-danger/30' : 'border-primary/25') : undefined}
           >
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
-              {isApproved ? 'Your submission' : submission ? 'Update your submission' : 'Submit'}
-              {!submission ? <Badge variant={isPastDue ? 'danger' : 'primary'}>Action needed</Badge> : null}
+              {isApproved || isPastCourse ? 'Your submission' : submission ? 'Update your submission' : 'Submit'}
+              {!submission && !isPastCourse ? (
+                <Badge variant={isPastDue ? 'danger' : 'primary'}>Action needed</Badge>
+              ) : null}
             </h2>
 
             {submit.error instanceof ApiError ? (
@@ -144,10 +159,12 @@ export const StudentAssignmentDetailPage = () => {
               </div>
             ) : null}
 
-            {isApproved ? (
+            {isApproved || isPastCourse ? (
               <div>
                 {submission?.content ? (
                   <p className="whitespace-pre-wrap text-sm text-fg">{submission.content}</p>
+                ) : !submission ? (
+                  <p className="text-sm text-muted">Nothing was submitted for this assignment.</p>
                 ) : null}
                 {submission?.fileUrl ? (
                   <a
@@ -160,7 +177,11 @@ export const StudentAssignmentDetailPage = () => {
                     {submission.fileOriginalName ?? 'Attached file'}
                   </a>
                 ) : null}
-                <p className="mt-3 text-xs text-subtle">This submission has been graded and can no longer be edited.</p>
+                <p className="mt-3 text-xs text-subtle">
+                  {isApproved
+                    ? 'This submission has been graded and can no longer be edited.'
+                    : 'This semester is complete — submissions are closed.'}
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-3">

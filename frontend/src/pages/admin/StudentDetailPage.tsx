@@ -21,7 +21,6 @@ import {
   type TransferInput,
 } from '../../features/placement/placement.schema.js';
 import {
-  useAcademicYears,
   useBatches,
   useClasses,
   useCourses,
@@ -50,12 +49,12 @@ export const StudentDetailPage = () => {
   const { data: sections } = useSections();
   const { data: courses } = useCourses();
 
-  // The combined placement view is scoped to the current year but doesn't
-  // expose the underlying class_membership row id — transfer/outcome need
-  // that id, so find it in the (already-fetched) full membership list by
-  // matching the year the placement view is itself scoped to.
+  // The combined placement view doesn't expose the underlying
+  // class_membership row id — transfer/outcome need that id, so find it in
+  // the (already-fetched) full membership list by matching the exact
+  // section the placement view is itself scoped to.
   const currentMembership = memberships?.find(
-    (m) => m.academicYearId === placement?.academicYear?.id,
+    (m) => m.sectionId === placement?.section?.id,
   );
 
   const [placeOpen, setPlaceOpen] = useState(false);
@@ -69,14 +68,13 @@ export const StudentDetailPage = () => {
   const setOutcome = useSetClassMembershipOutcome(studentId);
 
   const { data: classes } = useClasses();
-  const { data: years } = useAcademicYears();
   const { data: batches } = useBatches();
 
   const sectionOptions = (sections ?? []).map((s) => {
     const className = classes?.find((c) => c.id === s.classId)?.name ?? '—';
-    const yearName = years?.find((y) => y.id === s.academicYearId)?.name ?? '—';
+    const batchName = batches?.find((b) => b.id === s.batchId)?.name ?? '—';
     const fill = s.capacity !== null ? `${s.enrolledCount}/${s.capacity}` : `${s.enrolledCount}`;
-    return { value: s.id, label: `${className} — ${s.name} (${yearName}) · ${fill}` };
+    return { value: s.id, label: `${className} — ${s.name} (${batchName}) · ${fill}` };
   });
   const enrolledCourseIds = new Set((placement?.courses ?? []).map((c) => c.id));
   const enrollableCourseOptions = (courses ?? [])
@@ -89,6 +87,9 @@ export const StudentDetailPage = () => {
     .map((c) => ({ value: c.id, label: c.title }));
 
   const currentClassForOutcome = classes?.find((c) => c.id === placement?.class?.id);
+  // Promotion never changes a student's batch — the target section must be
+  // the next class in the same program, under the same batch as the
+  // student's current placement.
   const promotedSectionOptions = sectionOptions.filter((o) => {
     const section = sections?.find((s) => s.id === o.value);
     const cls = classes?.find((c) => c.id === section?.classId);
@@ -96,23 +97,20 @@ export const StudentDetailPage = () => {
       cls &&
       currentClassForOutcome &&
       cls.programId === currentClassForOutcome.programId &&
-      cls.orderIndex === currentClassForOutcome.orderIndex + 1
+      cls.orderIndex === currentClassForOutcome.orderIndex + 1 &&
+      section?.batchId === placement?.batch?.id
     );
   });
-  const retainedSectionOptions = sectionOptions.filter((o) => {
-    const section = sections?.find((s) => s.id === o.value);
-    return section?.classId === currentClassForOutcome?.id;
-  });
 
-  // Transfer: same class AND same academic year as the student's current placement,
-  // excluding their current section. These are the only valid same-term, same-class
+  // Transfer: same class AND same batch as the student's current placement,
+  // excluding their current section. These are the only valid same-cohort
   // targets the backend will accept.
   const transferSectionOptions = (sections ?? [])
     .filter(
       (s) =>
         s.id !== placement?.section?.id &&
         s.classId === placement?.class?.id &&
-        s.academicYearId === placement?.academicYear?.id,
+        s.batchId === placement?.batch?.id,
     )
     .map((s) => {
       const fill = s.capacity !== null ? `${s.enrolledCount}/${s.capacity}` : `${s.enrolledCount}`;
@@ -158,7 +156,7 @@ export const StudentDetailPage = () => {
       ) : notPlaced ? (
         <EmptyState
           icon={MapPin}
-          title="Not placed for the current academic year"
+          title="Not placed"
           description="Place this student into a section to enroll them in courses."
           action={<Button onClick={() => setPlaceOpen(true)}>Place into section</Button>}
         />
@@ -192,8 +190,8 @@ export const StudentDetailPage = () => {
                   <p className="text-sm font-medium text-fg">{placement.section?.name ?? '—'}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-subtle">Academic year</p>
-                  <p className="text-sm font-medium text-fg">{placement.academicYear?.name ?? '—'}</p>
+                  <p className="text-xs text-subtle">Batch</p>
+                  <p className="text-sm font-medium text-fg">{placement.batch?.name ?? '—'}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -213,7 +211,7 @@ export const StudentDetailPage = () => {
                   disabled={!currentMembership}
                   onClick={() => setOutcomeOpen(true)}
                 >
-                  Promote / retain / graduate
+                  Promote / graduate
                 </Button>
               </div>
             </div>
@@ -274,7 +272,7 @@ export const StudentDetailPage = () => {
                             ? 'accent'
                             : membership.outcome === 'promoted'
                               ? 'success'
-                              : membership.outcome === 'retained'
+                              : membership.outcome === 'transferred'
                                 ? 'warning'
                                 : 'neutral'
                         }
@@ -320,7 +318,7 @@ export const StudentDetailPage = () => {
         error={createEnrollment.error}
       />
 
-      {/* Transfer to another section (same class + same academic year only) */}
+      {/* Transfer to another section (same class + same batch only) */}
       {currentMembership && placement?.section && transferSectionOptions.length > 0 ? (
         <TransferDialog
           open={transferOpen}
@@ -337,14 +335,12 @@ export const StudentDetailPage = () => {
         />
       ) : null}
 
-      {/* Promote / retain / graduate */}
+      {/* Promote / graduate */}
       {currentMembership ? (
         <OutcomeDialog
           open={outcomeOpen}
           onOpenChange={setOutcomeOpen}
-          institutionType={placement?.program?.institutionType ?? 'school'}
           promotedSectionOptions={promotedSectionOptions}
-          retainedSectionOptions={retainedSectionOptions}
           onSubmit={async (input) => {
             await setOutcome.mutateAsync({ membershipId: currentMembership.id, input });
             toast.success('Outcome recorded');
@@ -500,7 +496,7 @@ const TransferDialog = ({ open, onOpenChange, currentSectionName, sectionOptions
       open={open}
       onOpenChange={onOpenChange}
       title="Transfer to another section"
-      description={`Moving from Section ${currentSectionName}. Only sections in the same class and academic year are shown.`}
+      description={`Moving from Section ${currentSectionName}. Only sections in the same class and batch are shown.`}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
@@ -535,9 +531,7 @@ const TransferDialog = ({ open, onOpenChange, currentSectionName, sectionOptions
 interface OutcomeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  institutionType: string;
   promotedSectionOptions: { value: string; label: string }[];
-  retainedSectionOptions: { value: string; label: string }[];
   onSubmit: (input: OutcomeInput) => Promise<void>;
   loading: boolean;
   error: unknown;
@@ -545,16 +539,13 @@ interface OutcomeDialogProps {
 
 const outcomeOptions = [
   { value: 'promoted', label: 'Promoted' },
-  { value: 'retained', label: 'Retained' },
   { value: 'graduated', label: 'Graduated' },
 ];
 
 const OutcomeDialog = ({
   open,
   onOpenChange,
-  institutionType,
   promotedSectionOptions,
-  retainedSectionOptions,
   onSubmit,
   loading,
   error,
@@ -567,17 +558,13 @@ const OutcomeDialog = ({
   } = useForm<OutcomeInput>({ resolver: zodResolver(outcomeSchema) });
 
   const outcome = watch('outcome');
-  const sectionOptions = outcome === 'promoted' ? promotedSectionOptions : retainedSectionOptions;
-
-  // Universities use semester-based naming; schools and colleges use class-based naming.
-  const targetLabel = institutionType === 'university' ? 'Target semester' : 'Target class';
 
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Record end-of-year outcome"
-      description="Creates a new placement for the current academic year, unless the student is graduating."
+      title="Record end-of-semester outcome"
+      description="Creates a new placement in the batch's next class, unless the student is graduating. A student's batch never changes."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         {error instanceof ApiError ? <Alert>{error.message}</Alert> : null}
@@ -597,17 +584,17 @@ const OutcomeDialog = ({
           />
         </Field>
         {outcome && outcome !== 'graduated' ? (
-          <Field label={targetLabel} htmlFor="targetSectionId" error={errors.targetSectionId?.message}>
+          <Field label="Target class" htmlFor="targetSectionId" error={errors.targetSectionId?.message}>
             <Controller
               control={control}
               name="targetSectionId"
               render={({ field }) => (
                 <Select
                   id="targetSectionId"
-                  options={sectionOptions}
+                  options={promotedSectionOptions}
                   value={field.value}
                   onValueChange={field.onChange}
-                  placeholder={sectionOptions.length ? `Select a ${institutionType === 'university' ? 'semester section' : 'class section'}` : 'No valid target sections'}
+                  placeholder={promotedSectionOptions.length ? 'Select a section' : 'No valid target sections'}
                 />
               )}
             />

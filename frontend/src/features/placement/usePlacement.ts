@@ -10,6 +10,7 @@ import {
   fetchSectionRoster,
   fetchStudentAttendance,
   fetchStudentElectives,
+  fetchStudentPastCourses,
   fetchStudentPlacement,
   setClassMembershipOutcome,
   transferClassMembership,
@@ -18,6 +19,9 @@ import type { BulkPromoteInput, OutcomeInput, TransferInput } from './placement.
 
 export const studentPlacementKey = (studentId: string) =>
   ['placement', 'student', studentId] as const;
+
+export const studentPastCoursesKey = (studentId: string) =>
+  ['placement', 'student', studentId, 'past-courses'] as const;
 
 export const classMembershipsKey = (studentId: string) =>
   ['placement', 'class-memberships', studentId] as const;
@@ -30,6 +34,14 @@ export const useStudentPlacement = (studentId: string) =>
     queryFn: () => fetchStudentPlacement(studentId),
     enabled: Boolean(studentId),
     retry: false,
+  });
+
+/** "My Courses" Past section — completed-course history. */
+export const useStudentPastCourses = (studentId: string) =>
+  useQuery({
+    queryKey: studentPastCoursesKey(studentId),
+    queryFn: () => fetchStudentPastCourses(studentId),
+    enabled: Boolean(studentId),
   });
 
 export const useClassMemberships = (studentId: string) =>

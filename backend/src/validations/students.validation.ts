@@ -46,6 +46,35 @@ const placementResponseSchema = registry.register(
   }),
 );
 
+export const getStudentPastCoursesSchema = {
+  params: z.object({ studentId: z.uuid() }),
+};
+
+const pastCourseSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  code: z.string(),
+  batchId: z.uuid(),
+  batchName: z.string().nullable(),
+  teachers: z.array(z.object({ id: z.uuid(), name: z.string() })),
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/students/{studentId}/past-courses',
+  tags: ['Placement'],
+  request: { params: getStudentPastCoursesSchema.params },
+  responses: {
+    200: {
+      description:
+        "The caller's own completed-course history — courses from semesters they've already been promoted out of, most recent first. Each entry carries its own batchId for viewing that course's assignments/quizzes/gradebook read-only.",
+      content: { 'application/json': { schema: envelope(z.array(pastCourseSchema)) } },
+    },
+    401: { description: 'Not authenticated' },
+    403: { description: "Not authorized to view another student's past courses" },
+  },
+});
+
 export const getStudentElectivesSchema = {
   params: z.object({ studentId: z.uuid() }),
 };

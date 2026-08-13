@@ -71,7 +71,7 @@ export const createClassMembership = asyncHandler(
         studentId,
         batchId,
         sectionId,
-        academicYearId: section.academicYearId,
+        classId: section.classId,
       },
       autoEnrollCourseIds,
     );
@@ -82,15 +82,15 @@ export const createClassMembership = asyncHandler(
 
 export const listClassMemberships = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { studentId, sectionId, academicYearId } = req.validated?.query as {
+    const { studentId, sectionId, classId } = req.validated?.query as {
       studentId?: string;
       sectionId?: string;
-      academicYearId?: string;
+      classId?: string;
     };
     const memberships = await classMembershipRepository.findAll({
       studentId,
       sectionId,
-      academicYearId,
+      classId,
     });
     return ok(res, memberships.map(serializeClassMembership), 'Class memberships retrieved');
   },
@@ -124,7 +124,7 @@ export const createEnrollment = asyncHandler(
     const enrollment = await enrollmentRepository.create({
       studentId,
       courseId,
-      academicYearId: membership.academicYearId,
+      batchId: membership.batchId,
     });
 
     return ok(res, serializeEnrollment(enrollment), 'Enrollment created', 201);
@@ -133,15 +133,15 @@ export const createEnrollment = asyncHandler(
 
 export const listEnrollments = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { studentId, courseId, academicYearId } = req.validated?.query as {
+    const { studentId, courseId, batchId } = req.validated?.query as {
       studentId?: string;
       courseId?: string;
-      academicYearId?: string;
+      batchId?: string;
     };
     const enrollments = await enrollmentRepository.findAll({
       studentId,
       courseId,
-      academicYearId,
+      batchId,
     });
     return ok(res, enrollments.map(serializeEnrollment), 'Enrollments retrieved');
   },
@@ -176,10 +176,11 @@ export const transferClassMembership = asyncHandler(
       throw new ApiError(404, 'Target section not found');
     }
 
-    if (targetSection.academicYearId !== membership.academicYearId) {
+    if (targetSection.batchId !== membership.batchId) {
       throw new ApiError(
         400,
-        'Transfer target must be in the same term as the membership being transferred',
+        "Transfer target must be for the student's own batch — moving a student to a " +
+          'different batch is a reassign, not a transfer',
       );
     }
 
@@ -259,6 +260,24 @@ export const reassignClassMembership = asyncHandler(
       }
     }
 
+    // A student can hold only one membership per class, ever — not just
+    // currently (see 20260813130000's unique index). Moving into a
+    // different class the student already has a record in (e.g. an earlier
+    // class in their own history) would otherwise surface as a raw DB
+    // constraint error instead of an actionable one.
+    if (targetSection.classId !== membership.classId) {
+      const priorInTargetClass = await classMembershipRepository.findAll({
+        studentId: membership.studentId,
+        classId: targetSection.classId,
+      });
+      if (priorInTargetClass.length > 0) {
+        throw new ApiError(
+          400,
+          'This student already has a placement record in that class, from earlier in their history.',
+        );
+      }
+    }
+
     const classCourses = await courseRepository.findAll({ classId: targetSection.classId });
     const autoEnrollCourseIds = classCourses
       .filter((course) => course.courseType === 'compulsory')
@@ -270,7 +289,7 @@ export const reassignClassMembership = asyncHandler(
         studentId: membership.studentId,
         batchId: targetBatchId,
         sectionId: targetSectionId,
-        academicYearId: targetSection.academicYearId,
+        classId: targetSection.classId,
       },
       autoEnrollCourseIds,
     );
@@ -279,17 +298,25 @@ export const reassignClassMembership = asyncHandler(
   },
 );
 
-// ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
+// ── LIFECYCLE: OUTCOME (PROMOTE / GRADUATE) ──────────────────────────────────
 
 /**
  * Applies one outcome to one membership. Shared by the single-student route
- * below and Task 5's bulk-promote route — the guards (same program, exactly
- * the next class, not already advanced, graduate only from the program's
- * last class) must hold identically in both places.
+ * below and the bulk-promote route — the guards (same program, exactly the
+ * next class, same batch, not already advanced, graduate only from the
+ * program's last class) must hold identically in both places.
+ *
+ * No `retained` outcome: Nepali affiliated-university programs promote
+ * unconditionally — a failed final exam is a re-exam concern (administered
+ * by the affiliated university, out of scope here), not a repeated
+ * semester. Promotion also never changes a student's batch — a batch's own
+ * progression through Sem 1..N is the single source of truth for "which
+ * one is current," so the target section must belong to the same batch as
+ * the current placement.
  */
 export const applyOutcome = async (
   membership: ClassMembership,
-  outcome: 'promoted' | 'retained' | 'graduated',
+  outcome: 'promoted' | 'graduated',
   targetSectionId?: string,
 ): Promise<ClassMembership> => {
   const student = await userRepository.findById(membership.studentId);
@@ -307,13 +334,9 @@ export const applyOutcome = async (
     );
   }
 
-  const currentSection = await sectionRepository.findById(membership.sectionId);
-  if (!currentSection) {
-    throw new ApiError(500, 'Membership references a missing section');
-  }
-  const currentClass = await classRepository.findById(currentSection.classId);
+  const currentClass = await classRepository.findById(membership.classId);
   if (!currentClass) {
-    throw new ApiError(500, 'Section references a missing class');
+    throw new ApiError(500, 'Membership references a missing class');
   }
 
   if (outcome === 'graduated') {
@@ -326,7 +349,7 @@ export const applyOutcome = async (
   }
 
   if (!targetSectionId) {
-    throw new ApiError(400, 'targetSectionId is required for promoted/retained');
+    throw new ApiError(400, 'targetSectionId is required for promotion');
   }
 
   const targetSection = await sectionRepository.findById(targetSectionId);
@@ -339,30 +362,26 @@ export const applyOutcome = async (
   }
 
   if (targetClass.programId !== currentClass.programId) {
-    throw new ApiError(400, 'Promotion and retention must stay within the same program');
+    throw new ApiError(400, 'Promotion must stay within the same program');
   }
-  if (outcome === 'promoted' && targetClass.orderIndex !== currentClass.orderIndex + 1) {
+  if (targetClass.orderIndex !== currentClass.orderIndex + 1) {
     throw new ApiError(400, 'Promotion must move to the next class in the program');
   }
-  if (outcome === 'retained' && targetClass.id !== currentClass.id) {
-    throw new ApiError(400, 'Retention must stay in the same class');
-  }
-  if (targetSection.academicYearId === membership.academicYearId) {
+  if (targetSection.batchId !== membership.batchId) {
     throw new ApiError(
       400,
-      'Target section is in the same academic year/term as the current placement — promotion ' +
-        'must move into a different term. Create (or pick) a section under a different academic ' +
-        'year before promoting.',
+      "A student's batch never changes on promotion — the target section must belong to the " +
+        'same batch as the current placement. Create (or pick) that batch\'s section for the ' +
+        'next class before promoting.',
     );
   }
 
-  // A student can hold only one membership per academic year (DB-enforced). This most often
-  // trips when the next real-world term's academic year hasn't been created yet (or was created
-  // with the wrong `term`) and the picker falls back to a term-year the student already passed
-  // through earlier in their own history — surface that clearly instead of a raw DB 500.
-  const priorInTargetYear = await classMembershipRepository.findAll({
+  // A student can hold only one membership per class (DB-enforced). Surface that clearly
+  // instead of a raw DB 500 — most often this means the student was already promoted into
+  // this class earlier (e.g. via reassign) and is being promoted again by mistake.
+  const priorInTargetClass = await classMembershipRepository.findAll({
     studentId: membership.studentId,
-    academicYearId: targetSection.academicYearId,
+    classId: targetClass.id,
   });
   if (targetSection.capacity !== null) {
     const counts = await classMembershipRepository.countBySections([targetSectionId]);
@@ -374,12 +393,10 @@ export const applyOutcome = async (
     }
   }
 
-  if (priorInTargetYear.length > 0) {
+  if (priorInTargetClass.length > 0) {
     throw new ApiError(
       400,
-      'This student already has a placement record in that academic year, from earlier in ' +
-        "their history. Create the next academic year for this term (e.g. next year's odd/even " +
-        'term) and a section under it, then promote into that instead.',
+      'This student already has a placement record in that class, from earlier in their history.',
     );
   }
 
@@ -394,7 +411,7 @@ export const applyOutcome = async (
       studentId: membership.studentId,
       batchId: membership.batchId,
       sectionId: targetSectionId,
-      academicYearId: targetSection.academicYearId,
+      classId: targetSection.classId,
     },
     outcome,
     autoEnrollCourseIds,
@@ -405,7 +422,7 @@ export const setClassMembershipOutcome = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
     const { outcome, targetSectionId } = req.validated?.body as {
-      outcome: 'promoted' | 'retained' | 'graduated';
+      outcome: 'promoted' | 'graduated';
       targetSectionId?: string;
     };
 
@@ -437,7 +454,10 @@ export const getSectionRoster = asyncHandler(
 
 interface BulkPromoteOverride {
   studentId: string;
-  outcome: 'retained' | 'graduated';
+  outcome: 'promoted' | 'graduated';
+  /** Only meaningful for outcome: 'promoted' — send this student to a
+   * different section than the batch-wide default (e.g. splitting a large
+   * section across two target sections). Ignored for 'graduated'. */
   targetSectionId?: string;
 }
 

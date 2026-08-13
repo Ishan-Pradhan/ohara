@@ -11,6 +11,7 @@ import {
   updateLessonSchema,
   deleteLessonSchema,
   publishCourseSchema,
+  listCourseBatchesSchema,
 } from '../validations/courseContent.validation.js';
 import {
   generateCourseStructure,
@@ -22,6 +23,7 @@ import {
   updateLesson,
   deleteLesson,
   publishCourse,
+  listCourseBatches,
 } from '../controllers/courseContent.controller.js';
 
 // Mounted at /api/v1/courses — see documents.routes.ts for why this isn't
@@ -59,5 +61,9 @@ router
 router
   .route('/:courseId/publish')
   .patch(verifyJWT, requireCourseTeacher, validate(publishCourseSchema), publishCourse);
+
+router
+  .route('/:courseId/batches')
+  .get(verifyJWT, requireCourseTeacher, validate(listCourseBatchesSchema), listCourseBatches);
 
 export default router;

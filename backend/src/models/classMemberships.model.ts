@@ -15,7 +15,7 @@ import { CLASS_MEMBERSHIP_OUTCOMES } from '../constants/index.js';
 import type { ClassMembershipOutcome } from '../types/placement.types.js';
 import { User } from './users.model.js';
 import { Section } from './sections.model.js';
-import { AcademicYear } from './academicYears.model.js';
+import { Class } from './classes.model.js';
 import { Batch } from './batches.model.js';
 
 @Table({ tableName: 'ClassMemberships', timestamps: true })
@@ -49,13 +49,16 @@ export class ClassMembership extends Model {
   @BelongsTo(() => Section)
   declare section?: Section;
 
-  @ForeignKey(() => AcademicYear)
+  /** Denormalized from `section.classId` at write time — lets "which
+   * semester" queries (gradebook, at-risk, transcript) join straight off
+   * this table instead of through Sections. */
+  @ForeignKey(() => Class)
   @AllowNull(false)
   @Column(DataType.UUID)
-  declare academicYearId: string;
+  declare classId: string;
 
-  @BelongsTo(() => AcademicYear)
-  declare academicYear?: AcademicYear;
+  @BelongsTo(() => Class)
+  declare class?: Class;
 
   @AllowNull(false)
   @Default(CLASS_MEMBERSHIP_OUTCOMES.ENROLLED)
@@ -63,7 +66,6 @@ export class ClassMembership extends Model {
     DataType.ENUM(
       CLASS_MEMBERSHIP_OUTCOMES.ENROLLED,
       CLASS_MEMBERSHIP_OUTCOMES.PROMOTED,
-      CLASS_MEMBERSHIP_OUTCOMES.RETAINED,
       CLASS_MEMBERSHIP_OUTCOMES.GRADUATED,
       CLASS_MEMBERSHIP_OUTCOMES.TRANSFERRED,
     ),

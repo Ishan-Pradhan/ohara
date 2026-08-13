@@ -13,7 +13,6 @@ const { User } = await import('../../src/models/users.model.js');
 const {
   createSection,
   createStudentUser,
-  createAcademicYear,
   createProgram,
   createClass,
   createCourse,
@@ -53,10 +52,10 @@ describe('POST /admin/students/admit', () => {
   it('admits a student: creates the account, places them, and auto-enrolls compulsory courses only', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
 
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
     const compulsoryCourse = await createCourse({
       classId: cls.id,
       title: 'Physics',
@@ -69,7 +68,6 @@ describe('POST /admin/students/admit', () => {
       code: `ART-${Date.now()}`,
       courseType: 'elective',
     });
-    const batch = await createBatch({ programId: program.id });
 
     const res = await request(app)
       .post(ADMIT)
@@ -89,7 +87,7 @@ describe('POST /admin/students/admit', () => {
       studentId: res.body.data.student.id,
       batchId: batch.id,
       sectionId: section.id,
-      academicYearId: year.id,
+      classId: cls.id,
     });
 
     const enrollments = await request(app)

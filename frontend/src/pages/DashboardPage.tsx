@@ -148,7 +148,7 @@ const PlacementStrip = ({ studentId }: { studentId: string }) => {
         <EmptyState
           icon={MapPin}
           title="Not placed yet"
-          description="Your admin hasn't placed you into a class and section for this academic year yet."
+          description="Your admin hasn't placed you into a class and section yet."
         />
       </div>
     );
@@ -158,7 +158,7 @@ const PlacementStrip = ({ studentId }: { studentId: string }) => {
     placement.program?.name,
     placement.class?.name,
     placement.section ? `Section ${placement.section.name}` : null,
-    placement.academicYear?.name,
+    placement.batch?.name,
   ].filter((part): part is string => Boolean(part));
 
   return (

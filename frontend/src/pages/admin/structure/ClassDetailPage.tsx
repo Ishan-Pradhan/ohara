@@ -37,7 +37,7 @@ export const ClassDetailPage = () => {
         title={cls ? cls.name : 'Class'}
         description={
           cls
-            ? 'Sections place students into this class for a given academic year; courses are what gets taught in it.'
+            ? "Sections place a batch's students into this class; courses are what gets taught in it."
             : undefined
         }
       />
@@ -65,11 +65,7 @@ export const ClassDetailPage = () => {
             <TabsTrigger value="courses">Courses</TabsTrigger>
           </TabsList>
           <TabsContent value="sections">
-            <SectionsTab
-              classId={classId}
-              institutionType={program.institutionType}
-              orderIndex={cls.orderIndex}
-            />
+            <SectionsTab classId={classId} programId={programId} />
           </TabsContent>
           <TabsContent value="courses">
             <CoursesTab classId={classId} />

@@ -28,7 +28,7 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
-  createAcademicYear,
+  createBatch,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -53,10 +53,10 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
 
 /** A course with an assigned teacher and an enrolled student, ready to
  * exercise the assignment/submission/grading loop. Assignment creation
- * resolves the course's current academic year (default course/class is
- * school/annual), so one must exist and be marked current. */
+ * resolves the course's current batch from its active enrollments (see
+ * resolveCurrentBatchForCourse's tier 2 — no formal section placement is
+ * required here, direct enrollment is enough). */
 const setupCourseWithTeacherAndStudent = async () => {
-  await createAcademicYear({ isCurrent: true });
   const course = await createCourse();
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -144,8 +144,8 @@ describe('Cross-batch assignment isolation', () => {
     // that reaches it — this is the regression test for that exact bug.
     const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
 
-    const lastYearAssignment = await createAssignmentAs(teacherCookies, course.id);
-    expect(lastYearAssignment.status).toBe(201);
+    const oldBatchAssignment = await createAssignmentAs(teacherCookies, course.id);
+    expect(oldBatchAssignment.status).toBe(201);
 
     const beforePromotion = await request(app)
       .get(`/api/v1/courses/${course.id}/assignments`)
@@ -153,19 +153,15 @@ describe('Cross-batch assignment isolation', () => {
     expect(beforePromotion.body.data).toHaveLength(1);
 
     // Simulate the real transition: the old batch's enrollment completes
-    // (promotion does this), a new academic year becomes current, and a new
-    // batch enrolls under it. Merely flipping which year is "current" while
-    // the old student is still actively enrolled must NOT flip which year
-    // new assignments resolve to — resolveCurrentAcademicYearForCourse
-    // prefers the course's actual active cohort over the global flag
-    // specifically so a program running behind schedule on the same term
-    // isn't affected by another program finishing early.
+    // (promotion does this), and a new batch enrolls in the same course.
+    // resolveCurrentBatchForCourse must resolve to the new batch's own
+    // enrollments, not the old (now-completed) one.
     const oldEnrollments = await enrollmentRepository.findByCourseWithStudents(course.id);
     await Promise.all(oldEnrollments.map((e) => enrollmentRepository.setStatus(e.id, 'completed')));
 
-    const newYear = await createAcademicYear({ name: '2026-2027', isCurrent: true });
+    const newBatch = await createBatch();
     const newStudent = await createStudentUser({ email: `student2-${Date.now()}@example.com` });
-    await createEnrollment({ studentId: newStudent.id, courseId: course.id, academicYearId: newYear.id });
+    await createEnrollment({ studentId: newStudent.id, courseId: course.id, batchId: newBatch.id });
     const newStudentCookies = await signInAs(newStudent.email, 'student');
 
     const afterPromotion = await request(app)
@@ -174,51 +170,28 @@ describe('Cross-batch assignment isolation', () => {
     expect(afterPromotion.status).toBe(200);
     expect(afterPromotion.body.data).toHaveLength(0);
 
-    const thisYearAssignment = await createAssignmentAs(teacherCookies, course.id);
-    expect(thisYearAssignment.status).toBe(201);
-    expect(thisYearAssignment.body.data.id).not.toBe(lastYearAssignment.body.data.id);
+    const newBatchAssignment = await createAssignmentAs(teacherCookies, course.id);
+    expect(newBatchAssignment.status).toBe(201);
+    expect(newBatchAssignment.body.data.id).not.toBe(oldBatchAssignment.body.data.id);
 
     const finalList = await request(app)
       .get(`/api/v1/courses/${course.id}/assignments`)
       .set('Cookie', newStudentCookies);
     expect(finalList.body.data).toHaveLength(1);
-    expect(finalList.body.data[0].id).toBe(thisYearAssignment.body.data.id);
+    expect(finalList.body.data[0].id).toBe(newBatchAssignment.body.data.id);
   });
 
-  it('keeps resolving to a lagging program\'s actual academic year even after a different program marks the next one current', async () => {
-    const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
-
-    const firstAssignment = await createAssignmentAs(teacherCookies, course.id);
-    expect(firstAssignment.status).toBe(201);
-
-    // A different, faster program finishes its own term and the admin marks
-    // the next academic year current institution-wide — but this course's
-    // own student is still actively enrolled under the old year.
-    await createAcademicYear({ name: 'next-term-elsewhere', isCurrent: true });
-
-    const secondAssignment = await createAssignmentAs(teacherCookies, course.id);
-    expect(secondAssignment.status).toBe(201);
-
-    const res = await request(app)
-      .get(`/api/v1/courses/${course.id}/assignments`)
-      .set('Cookie', studentCookies);
-    expect(res.status).toBe(200);
-    expect(res.body.data.map((a: { id: string }) => a.id).sort()).toEqual(
-      [firstAssignment.body.data.id, secondAssignment.body.data.id].sort(),
-    );
-  });
-
-  it('rejects assignment creation with a clear 400 when no academic year is current for the course\'s term', async () => {
+  it('rejects assignment creation with a clear 400 when no student is placed or enrolled in the course\'s class', async () => {
     const course = await createCourse();
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
     const teacherCookies = await signInAs(teacher.email, 'teacher');
 
-    // No createAcademicYear call at all — nothing is current for this
-    // course's (school/annual) term.
+    // No createEnrollment/classMembership at all — nobody is placed or
+    // enrolled in this course's class.
     const res = await createAssignmentAs(teacherCookies, course.id);
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/no academic year is currently marked current/i);
+    expect(res.body.message).toMatch(/no students are currently placed or enrolled/i);
   });
 });
 

@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 
 import { useQuiz, useMyAttempt, useSubmitAttempt } from '../../features/quizzes/useQuizzes.js';
+import { useCurrentUser } from '../../features/auth/useAuth.js';
+import { useStudentPastCourses, useStudentPlacement } from '../../features/placement/usePlacement.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { AppShell } from '../../components/layout/AppShell.js';
@@ -30,6 +32,19 @@ export const QuizTakePage = () => {
   const { data: quiz, isLoading } = useQuiz(courseId, quizId);
   const { data: attempt } = useMyAttempt(courseId, quizId);
   const submitAttempt = useSubmitAttempt(courseId, quizId);
+
+  const { data: currentUser } = useCurrentUser();
+  const studentId = currentUser?.id ?? '';
+  const { data: placement } = useStudentPlacement(studentId);
+  const { data: pastCourses } = useStudentPastCourses(studentId);
+  // Attempting is already blocked server-side once this course's enrollment
+  // is 'completed' (requireEnrolledStudent stays active-only) — this just
+  // replaces the interactive form with an explanation instead of a
+  // confusing 403.
+  const isPastCourse =
+    !placement?.courses.some((c) => c.id === courseId) &&
+    Boolean(pastCourses?.some((c) => c.id === courseId));
+  const canAttempt = !attempt && !isPastCourse;
 
   const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -93,7 +108,7 @@ export const QuizTakePage = () => {
         </div>
       ) : null}
 
-      {!attempt && questions.length > 0 ? (
+      {canAttempt && questions.length > 0 ? (
         <div className="mb-4 flex items-center gap-3">
           <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-hover">
             <div
@@ -104,6 +119,12 @@ export const QuizTakePage = () => {
           <span className="shrink-0 text-xs text-subtle">
             {answeredCount} / {questions.length} answered
           </span>
+        </div>
+      ) : null}
+
+      {isPastCourse && !attempt ? (
+        <div className="mb-4">
+          <Alert>This semester is complete — this quiz was never attempted, and attempting is now closed.</Alert>
         </div>
       ) : null}
 
@@ -137,7 +158,7 @@ export const QuizTakePage = () => {
                       >
                         <Checkbox
                           checked={Boolean(isSelected)}
-                          disabled={Boolean(attempt)}
+                          disabled={Boolean(attempt) || isPastCourse}
                           onCheckedChange={() =>
                             setAnswers((prev) => ({ ...prev, [question.id]: optionIndex }))
                           }
@@ -161,6 +182,10 @@ export const QuizTakePage = () => {
                   )}
                 >
                   {String(result?.answer ?? '—')}
+                </p>
+              ) : isPastCourse ? (
+                <p className="rounded-control border border-border px-3 py-2 text-sm text-muted">
+                  Not attempted
                 </p>
               ) : (
                 <Textarea
@@ -193,7 +218,7 @@ export const QuizTakePage = () => {
         })}
       </div>
 
-      {!attempt && questions.length > 0 ? (
+      {canAttempt && questions.length > 0 ? (
         <Button className="mt-6" loading={submitAttempt.isPending} onClick={requestSubmit}>
           Submit quiz
         </Button>

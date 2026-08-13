@@ -13,7 +13,6 @@ const { User } = await import('../../src/models/users.model.js');
 const {
   createProgram,
   createClass,
-  createAcademicYear,
   createSection,
   createBatch,
   createCourse,
@@ -47,21 +46,20 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
  * valid attendance roster. */
 const setupCourseWithTeacherAndStudent = async () => {
   const cls = await createClass();
-  const academicYear = await createAcademicYear();
-  const batch = await createBatch({ programId: cls.programId, startAcademicYearId: academicYear.id });
-  const section = await createSection({ classId: cls.id, academicYearId: academicYear.id });
+  const batch = await createBatch({ programId: cls.programId });
+  const section = await createSection({ classId: cls.id, batchId: batch.id });
   const course = await createCourse({ classId: cls.id });
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
   const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
   await classMembershipRepository.create(
-    { studentId: student.id, sectionId: section.id, batchId: batch.id, academicYearId: academicYear.id },
+    { studentId: student.id, sectionId: section.id, batchId: batch.id, classId: cls.id },
     [course.id],
   );
 
   const teacherCookies = await signInAs(teacher.email, 'teacher');
   const studentCookies = await signInAs(student.email, 'student');
-  return { course, section, cls, academicYear, batch, teacher, student, teacherCookies, studentCookies };
+  return { course, section, cls, batch, teacher, student, teacherCookies, studentCookies };
 };
 
 beforeEach(async () => {
@@ -87,8 +85,8 @@ describe('Attendance', () => {
   });
 
   it('lists every section of the course’s class for the take-attendance picker', async () => {
-    const { course, section, cls, academicYear, teacherCookies } = await setupCourseWithTeacherAndStudent();
-    const otherSection = await createSection({ classId: cls.id, academicYearId: academicYear.id, name: 'B' });
+    const { course, section, cls, batch, teacherCookies } = await setupCourseWithTeacherAndStudent();
+    const otherSection = await createSection({ classId: cls.id, batchId: batch.id, name: 'B' });
 
     const res = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/sections`)
@@ -99,43 +97,29 @@ describe('Attendance', () => {
     );
   });
 
-  it('prefers a populated section over an empty one marked "current", when a class has same-named sections across two years', async () => {
-    // Reproduces a real production case: a university's odd-term class ends
-    // up with two "Section A" rows — one under the academic year still
-    // flagged is_current (created early, never actually populated) and one
-    // under the year that actually holds the class's promoted, enrolled
-    // student (not yet flagged current because the admin hasn't advanced it
-    // forward). The take-attendance picker must resolve to the section with
-    // the student, not the empty "current" one.
-    const program = await createProgram({ institutionType: 'university' });
-    const cls = await createClass({ programId: program.id, orderIndex: 3 }); // odd term (3 is odd)
+  it('prefers a populated batch\'s section over an empty batch\'s section sharing the same name', async () => {
+    // Reproduces a real production case: a class ends up with two "Section
+    // A" rows — one under a batch that was created but never actually
+    // populated, and one under the batch that actually holds the class's
+    // enrolled student. The take-attendance picker must resolve to the
+    // section with the student, purely from who's structurally enrolled —
+    // no "current" flag involved at all.
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
     const course = await createCourse({ classId: cls.id });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
-    const staleCurrentYear = await createAcademicYear({
-      name: '2026 odd',
-      term: 'odd',
-      isCurrent: true,
-      startDate: '2026-01-01',
-      endDate: '2026-12-31',
-    });
-    const realYear = await createAcademicYear({
-      name: '2027 odd',
-      term: 'odd',
-      isCurrent: false,
-      startDate: '2027-01-01',
-      endDate: '2027-12-31',
-    });
+    const emptyBatch = await createBatch({ programId: program.id, name: 'Empty' });
+    const populatedBatch = await createBatch({ programId: program.id, name: 'Populated' });
 
-    // Empty section under the stale "current" year — never populated.
-    const emptySection = await createSection({ classId: cls.id, academicYearId: staleCurrentYear.id, name: 'A' });
-    // Populated section under the real (non-current) year.
-    const populatedSection = await createSection({ classId: cls.id, academicYearId: realYear.id, name: 'A' });
-    const batch = await createBatch({ programId: program.id, startAcademicYearId: staleCurrentYear.id });
+    // Empty section — never populated.
+    const emptySection = await createSection({ classId: cls.id, batchId: emptyBatch.id, name: 'A' });
+    // Populated section under a different batch.
+    const populatedSection = await createSection({ classId: cls.id, batchId: populatedBatch.id, name: 'A' });
     const student = await createStudentUser({ email: `promoted-${Date.now()}@example.com` });
     await classMembershipRepository.create(
-      { studentId: student.id, sectionId: populatedSection.id, batchId: batch.id, academicYearId: realYear.id },
+      { studentId: student.id, sectionId: populatedSection.id, batchId: populatedBatch.id, classId: cls.id },
       [course.id],
     );
 
@@ -149,53 +133,40 @@ describe('Attendance', () => {
     expect(res.body.data.map((s: { id: string }) => s.id)).not.toContain(emptySection.id);
   });
 
-  it('scopes the whole-course attendance summary to the current year — a past batch\'s leftover enrollment and its attendance never show up', async () => {
+  it('scopes the whole-course attendance summary to the current batch — a past batch\'s leftover enrollment and its attendance never show up', async () => {
     // Reproduces a real report: a course reused across batches leaves every
     // past student's Enrollment row sitting at status 'active' forever
     // (nothing marks it inactive when a batch moves on), so a naive
     // "every enrollment for this course" query for the whole-course summary
     // (no sectionId — e.g. an "all sections" view) pulls in a graduated
-    // batch's attendance right alongside the real current roster, even when
-    // the current year's own section is otherwise empty of them.
+    // batch's attendance right alongside the real current roster. What
+    // actually decides "current" is the ClassMembership outcome, not the
+    // Enrollment status.
     const cls = await createClass();
-    const oldYear = await createAcademicYear({
-      name: '2024-2025',
-      term: 'annual',
-      isCurrent: false,
-      startDate: '2024-06-01',
-      endDate: '2025-05-31',
-    });
-    const currentYear = await createAcademicYear({
-      name: '2025-2026',
-      term: 'annual',
-      isCurrent: true,
-      startDate: '2025-06-01',
-      endDate: '2026-05-31',
-    });
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id, name: 'A' });
-    const currentSection = await createSection({ classId: cls.id, academicYearId: currentYear.id, name: 'A' });
+    const oldBatch = await createBatch({ programId: cls.programId, name: '24/25' });
+    const currentBatch = await createBatch({ programId: cls.programId, name: '25/26' });
+    const oldSection = await createSection({ classId: cls.id, batchId: oldBatch.id, name: 'A' });
+    const currentSection = await createSection({ classId: cls.id, batchId: currentBatch.id, name: 'A' });
     const course = await createCourse({ classId: cls.id });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
-    const oldBatch = await createBatch({ programId: cls.programId, name: '24/25', startAcademicYearId: oldYear.id });
     const pastStudent = await createStudentUser({ email: `past-${Date.now()}@example.com` });
-    await classMembershipRepository.create(
-      { studentId: pastStudent.id, sectionId: oldSection.id, batchId: oldBatch.id, academicYearId: oldYear.id },
+    const pastMembership = await classMembershipRepository.create(
+      { studentId: pastStudent.id, sectionId: oldSection.id, batchId: oldBatch.id, classId: cls.id },
       [course.id],
     );
 
-    const currentBatch = await createBatch({ programId: cls.programId, name: '25/26', startAcademicYearId: currentYear.id });
     const currentStudent = await createStudentUser({ email: `current-${Date.now()}@example.com` });
     await classMembershipRepository.create(
-      { studentId: currentStudent.id, sectionId: currentSection.id, batchId: currentBatch.id, academicYearId: currentYear.id },
+      { studentId: currentStudent.id, sectionId: currentSection.id, batchId: currentBatch.id, classId: cls.id },
       [course.id],
     );
 
     const teacherCookies = await signInAs(teacher.email, 'teacher');
 
     // Real attendance was legitimately taken for the past student, back
-    // when their section was the live one.
+    // when their section was the live one (and they were still 'enrolled').
     const oldSessionRes = await request(app)
       .post(`/api/v1/courses/${course.id}/attendance/sessions`)
       .set('Cookie', teacherCookies)
@@ -213,6 +184,11 @@ describe('Attendance', () => {
         records: [{ studentId: currentStudent.id, status: 'present' }],
       });
 
+    // Simulate the old batch moving on — their ClassMembership is no longer
+    // 'enrolled' (graduated out), even though their course Enrollment row
+    // (created above via auto-enroll) is left at 'active' forever.
+    await classMembershipRepository.graduate(pastMembership.id, pastStudent.id);
+
     const summaryRes = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/summary`)
       .set('Cookie', teacherCookies);
@@ -223,7 +199,7 @@ describe('Attendance', () => {
 
     // The whole-course sessions list must also exclude the old batch's
     // session, not just the per-student summary — a sibling endpoint with
-    // the identical unscoped-by-year bug.
+    // the identical unscoped bug.
     const sessionsRes = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/sessions`)
       .set('Cookie', teacherCookies);
@@ -240,56 +216,17 @@ describe('Attendance', () => {
     expect(trendsRes.body.data).toEqual([{ date: '2025-09-10', present: 1, absent: 0, late: 0, total: 1 }]);
   });
 
-  it('does not fall back to a stale, never-promoted-out cohort from an older year when the current term is genuinely empty', async () => {
-    // Distinguishes two look-alike cases that both present as "current
-    // year's section has 0 currently-enrolled students": (a) the isCurrent
-    // flag just hasn't been advanced yet and the real cohort is in a NEWER
-    // year (covered by the test above — must still resolve to that newer
-    // year), vs (b) a class_membership row was simply never updated away
-    // from outcome: 'enrolled' when an OLDER cohort moved on, and the
-    // current term genuinely has nobody placed in it yet. Case (b) must
-    // show empty, not the stale older cohort's attendance.
+  it('shows nothing when a class has sections but no batch has ever been placed in any of them', async () => {
     const program = await createProgram();
     const cls = await createClass({ programId: program.id });
     const course = await createCourse({ classId: cls.id });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
-    const oldYear = await createAcademicYear({
-      name: '2023-2024',
-      term: 'annual',
-      isCurrent: false,
-      startDate: '2023-06-01',
-      endDate: '2024-05-31',
-    });
-    const currentYear = await createAcademicYear({
-      name: '2026-2027',
-      term: 'annual',
-      isCurrent: true,
-      startDate: '2026-06-01',
-      endDate: '2027-05-31',
-    });
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id, name: 'A' });
-    // Current year has a section, but nobody has ever been placed in it.
-    await createSection({ classId: cls.id, academicYearId: currentYear.id, name: 'A' });
-
-    const oldBatch = await createBatch({ programId: program.id, startAcademicYearId: oldYear.id });
-    const staleStudent = await createStudentUser({ email: `stale-${Date.now()}@example.com` });
-    // Left at outcome: 'enrolled' forever — nobody ever ran promote/graduate for them.
-    await classMembershipRepository.create(
-      { studentId: staleStudent.id, sectionId: oldSection.id, batchId: oldBatch.id, academicYearId: oldYear.id },
-      [course.id],
-    );
+    const batch = await createBatch({ programId: program.id });
+    await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
 
     const teacherCookies = await signInAs(teacher.email, 'teacher');
-    await request(app)
-      .post(`/api/v1/courses/${course.id}/attendance/sessions`)
-      .set('Cookie', teacherCookies)
-      .send({
-        sectionId: oldSection.id,
-        sessionDate: '2023-09-10',
-        records: [{ studentId: staleStudent.id, status: 'present' }],
-      });
 
     const summaryRes = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/summary`)
@@ -312,22 +249,21 @@ describe('Attendance', () => {
 
   it('scopes attendance trends to one section when ?sectionId= is given', async () => {
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true, term: 'annual' });
-    const sectionA = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
-    const sectionB = await createSection({ classId: cls.id, academicYearId: year.id, name: 'B' });
+    const batch = await createBatch({ programId: cls.programId });
+    const sectionA = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
+    const sectionB = await createSection({ classId: cls.id, batchId: batch.id, name: 'B' });
     const course = await createCourse({ classId: cls.id });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
-    const batch = await createBatch({ programId: cls.programId, startAcademicYearId: year.id });
     const studentA = await createStudentUser({ email: `a-${Date.now()}@example.com` });
     await classMembershipRepository.create(
-      { studentId: studentA.id, sectionId: sectionA.id, batchId: batch.id, academicYearId: year.id },
+      { studentId: studentA.id, sectionId: sectionA.id, batchId: batch.id, classId: cls.id },
       [course.id],
     );
     const studentB = await createStudentUser({ email: `b-${Date.now()}@example.com` });
     await classMembershipRepository.create(
-      { studentId: studentB.id, sectionId: sectionB.id, batchId: batch.id, academicYearId: year.id },
+      { studentId: studentB.id, sectionId: sectionB.id, batchId: batch.id, classId: cls.id },
       [course.id],
     );
 
@@ -349,33 +285,31 @@ describe('Attendance', () => {
     expect(res.body.data).toEqual([{ date: '2026-09-10', present: 1, absent: 0, late: 0, total: 1 }]);
   });
 
-  it('excludes a since-departed student\'s attendance from both the trends chart and the sessions list, section-scoped and whole-course', async () => {
+  it('keeps a since-departed student\'s attendance visible when their old section is explicitly picked, but whole-course mode still resolves to the current section', async () => {
     // Reproduces a real case: attendance was taken while the student was
     // genuinely there, then they were promoted to the next semester (a
-    // normal end-of-term action) — that history is correct, but it must
-    // stop counting toward the section's *current* trend chart, the same
-    // way getAttendanceSummary already excludes them from the roster.
-    // Otherwise the chart contradicts the (now-empty) summary table, and
-    // reusing this section for a new intake later would mix cohorts.
+    // normal end-of-term action). A Section is permanently tied to one
+    // (class, batch) cohort and is never reused by a later intake, so once
+    // its own sectionId is explicitly picked there's no "mixing cohorts"
+    // risk — that history should stay fully visible (fixed 2026-08-13,
+    // this used to also narrow to *currently*-enrolled students, silently
+    // emptying a promoted-out section's entire history). Whole-course mode
+    // (no sectionId — genuinely ambiguous across every batch that's ever
+    // taken this course) still resolves to whichever batch/section is
+    // current right now, which has no attendance of its own here.
     const program = await createProgram();
     const cls = await createClass({ programId: program.id, orderIndex: 1 });
     const nextCls = await createClass({ programId: program.id, orderIndex: 2 });
-    const year = await createAcademicYear({
-      name: '2025-2026', term: 'annual', isCurrent: false, startDate: '2025-06-01', endDate: '2026-05-31',
-    });
-    const nextYear = await createAcademicYear({
-      name: '2026-2027', term: 'annual', isCurrent: true, startDate: '2026-06-01', endDate: '2027-05-31',
-    });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
-    const nextSection = await createSection({ classId: nextCls.id, academicYearId: nextYear.id, name: 'A' });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
+    const nextSection = await createSection({ classId: nextCls.id, batchId: batch.id, name: 'A' });
     const course = await createCourse({ classId: cls.id });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
-    const batch = await createBatch({ programId: program.id, startAcademicYearId: year.id });
     const student = await createStudentUser({ email: `promoted-${Date.now()}@example.com` });
     const membership = await classMembershipRepository.create(
-      { studentId: student.id, sectionId: section.id, batchId: batch.id, academicYearId: year.id },
+      { studentId: student.id, sectionId: section.id, batchId: batch.id, classId: cls.id },
       [course.id],
     );
 
@@ -387,10 +321,11 @@ describe('Attendance', () => {
 
     // Promote the student out of `section` into `nextSection` — a normal
     // end-of-term action that flips the old membership's outcome away from
-    // 'enrolled' while its attendance history stays exactly as it was.
+    // 'enrolled' while its attendance history stays exactly as it was. Batch
+    // never changes on promotion.
     await classMembershipRepository.promote(
       membership.id,
-      { studentId: student.id, sectionId: nextSection.id, batchId: batch.id, academicYearId: nextYear.id },
+      { studentId: student.id, sectionId: nextSection.id, batchId: batch.id, classId: nextCls.id },
       'promoted',
     );
 
@@ -398,7 +333,9 @@ describe('Attendance', () => {
       .get(`/api/v1/courses/${course.id}/attendance-trends?sectionId=${section.id}`)
       .set('Cookie', teacherCookies);
     expect(sectionScoped.status).toBe(200);
-    expect(sectionScoped.body.data).toEqual([]);
+    expect(sectionScoped.body.data).toEqual([
+      { date: '2026-08-10', present: 1, absent: 0, late: 0, total: 1 },
+    ]);
 
     const wholeCourse = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance-trends`)
@@ -406,20 +343,37 @@ describe('Attendance', () => {
     expect(wholeCourse.status).toBe(200);
     expect(wholeCourse.body.data).toEqual([]);
 
-    // The sessions list has the identical contradiction — the date entry
-    // itself would still show up for a section the summary/roster already
-    // say has nobody in it.
+    // The sessions list mirrors the same split.
     const sectionScopedSessions = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/sessions?sectionId=${section.id}`)
       .set('Cookie', teacherCookies);
     expect(sectionScopedSessions.status).toBe(200);
-    expect(sectionScopedSessions.body.data).toEqual([]);
+    expect(sectionScopedSessions.body.data).toHaveLength(1);
+    expect(sectionScopedSessions.body.data[0]).toMatchObject({ sessionDate: '2026-08-10' });
 
     const wholeCourseSessions = await request(app)
       .get(`/api/v1/courses/${course.id}/attendance/sessions`)
       .set('Cookie', teacherCookies);
     expect(wholeCourseSessions.status).toBe(200);
     expect(wholeCourseSessions.body.data).toEqual([]);
+
+    // The section's own roster/summary also stay visible when it's
+    // explicitly picked — this is the same "viewing completed-course
+    // history" fix, applied consistently across roster/summary/sessions/
+    // trends. See docs/superpowers/specs/2026-08-13-completed-course-history-design.md.
+    const rosterRes = await request(app)
+      .get(`/api/v1/courses/${course.id}/attendance/roster?sectionId=${section.id}`)
+      .set('Cookie', teacherCookies);
+    expect(rosterRes.status).toBe(200);
+    expect(rosterRes.body.data).toEqual([{ studentId: student.id, studentName: student.name }]);
+
+    const summaryRes = await request(app)
+      .get(`/api/v1/courses/${course.id}/attendance/summary?sectionId=${section.id}`)
+      .set('Cookie', teacherCookies);
+    expect(summaryRes.status).toBe(200);
+    expect(summaryRes.body.data).toEqual([
+      { studentId: student.id, studentName: student.name, present: 1, absent: 0, late: 0, total: 1, percentage: 100 },
+    ]);
   });
 
   it('rejects a record for a student who is not enrolled + placed in that section', async () => {
@@ -437,13 +391,13 @@ describe('Attendance', () => {
   });
 
   it('scopes the roster and sessions to one section — a student in a different section of the same course never appears', async () => {
-    const { course, section, cls, academicYear, batch, teacherCookies, student } =
+    const { course, section, cls, batch, teacherCookies, student } =
       await setupCourseWithTeacherAndStudent();
 
-    const otherSection = await createSection({ classId: cls.id, academicYearId: academicYear.id, name: 'B' });
+    const otherSection = await createSection({ classId: cls.id, batchId: batch.id, name: 'B' });
     const otherStudent = await createStudentUser({ email: `other-section-${Date.now()}@example.com` });
     await classMembershipRepository.create(
-      { studentId: otherStudent.id, sectionId: otherSection.id, batchId: batch.id, academicYearId: academicYear.id },
+      { studentId: otherStudent.id, sectionId: otherSection.id, batchId: batch.id, classId: cls.id },
       [course.id],
     );
 

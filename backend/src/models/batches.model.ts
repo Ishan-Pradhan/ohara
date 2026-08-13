@@ -12,10 +12,12 @@ import {
 } from 'sequelize-typescript';
 
 import { Program } from './programs.model.js';
-import { AcademicYear } from './academicYears.model.js';
 
-/** A cohort label (e.g. "26/27") that stays fixed for a group of students
- * across every promotion in a program — see docs/SCHEMA.md. */
+/** A cohort label (e.g. "2026") that stays fixed for a group of students,
+ * across every promotion, for their entire academic life in the program —
+ * see docs/SCHEMA.md. `name` alone is the batch's identity: admission
+ * happens once a year, so the batch itself already says when it started;
+ * there's no separate year FK to keep in sync with it. */
 @Table({ tableName: 'Batches', timestamps: true })
 export class Batch extends Model {
   @PrimaryKey
@@ -34,12 +36,4 @@ export class Batch extends Model {
   @AllowNull(false)
   @Column(DataType.STRING)
   declare name: string;
-
-  @ForeignKey(() => AcademicYear)
-  @AllowNull(false)
-  @Column(DataType.UUID)
-  declare startAcademicYearId: string;
-
-  @BelongsTo(() => AcademicYear, { foreignKey: 'startAcademicYearId' })
-  declare startAcademicYear?: AcademicYear;
 }

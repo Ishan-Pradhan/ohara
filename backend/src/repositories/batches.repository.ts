@@ -15,6 +15,11 @@ export const batchRepository = {
     return await Batch.findByPk(id);
   },
 
+  findByIds: async (ids: string[]): Promise<Batch[]> => {
+    if (ids.length === 0) return [];
+    return await Batch.findAll({ where: { id: ids }, order: [['name', 'ASC']] });
+  },
+
   update: async (
     id: string,
     data: Partial<Pick<BatchCreationAttributes, 'name'>>,

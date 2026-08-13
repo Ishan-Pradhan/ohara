@@ -28,10 +28,15 @@ export const COURSE_TYPES = {
   ELECTIVE: 'elective',
 } as const;
 
+// Nepali affiliated-university programs promote unconditionally — a failed
+// final exam is a re-exam concern (out of scope here), not a repeated
+// semester — so there is no 'retained' outcome. 'transferred' is the
+// mis-placement correction tool (see classMembershipRepository.reassign),
+// not a normal lifecycle event; it doesn't move a student's permanent batch
+// except as an explicit admin correction.
 export const CLASS_MEMBERSHIP_OUTCOMES = {
   ENROLLED: 'enrolled',
   PROMOTED: 'promoted',
-  RETAINED: 'retained',
   GRADUATED: 'graduated',
   TRANSFERRED: 'transferred',
 } as const;

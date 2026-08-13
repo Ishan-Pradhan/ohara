@@ -12,9 +12,15 @@ import {
 } from 'sequelize-typescript';
 
 import { Class } from './classes.model.js';
-import { AcademicYear } from './academicYears.model.js';
+import { Batch } from './batches.model.js';
 import { User } from './users.model.js';
 
+/** One specific offering of a class (semester) — identified by which batch
+ * is taking it, not which academic year it happens to fall in. A batch has
+ * at most one section per class, ever (Nepali affiliated-university
+ * programs promote unconditionally; there's no repeating a semester —
+ * see docs/SCHEMA.md), so (classId, batchId, name) is enough to be unique
+ * without any notion of "current" academic year. */
 @Table({ tableName: 'Sections', timestamps: true })
 export class Section extends Model {
   @PrimaryKey
@@ -30,13 +36,20 @@ export class Section extends Model {
   @BelongsTo(() => Class)
   declare class?: Class;
 
-  @ForeignKey(() => AcademicYear)
+  @ForeignKey(() => Batch)
   @AllowNull(false)
   @Column(DataType.UUID)
-  declare academicYearId: string;
+  declare batchId: string;
 
-  @BelongsTo(() => AcademicYear)
-  declare academicYear?: AcademicYear;
+  @BelongsTo(() => Batch)
+  declare batch?: Batch;
+
+  /** When this offering actually started — display/reporting only (e.g. a
+   * transcript row), never used to resolve "is this current." Set once,
+   * at creation (promotion, or admission for a batch's first semester). */
+  @AllowNull(false)
+  @Column(DataType.DATEONLY)
+  declare startDate: string;
 
   @ForeignKey(() => User)
   @Default(null)

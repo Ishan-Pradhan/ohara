@@ -35,12 +35,13 @@ export const useAttendanceSession = (courseId: string, id: string) =>
     enabled: Boolean(courseId) && Boolean(id),
   });
 
-export const attendanceSectionsKey = (courseId: string) => ['attendanceSections', courseId] as const;
+export const attendanceSectionsKey = (courseId: string, batchId?: string) =>
+  ['attendanceSections', courseId, batchId ?? null] as const;
 
-export const useAttendanceSections = (courseId: string) =>
+export const useAttendanceSections = (courseId: string, batchId?: string) =>
   useQuery({
-    queryKey: attendanceSectionsKey(courseId),
-    queryFn: () => fetchAttendanceSections(courseId),
+    queryKey: attendanceSectionsKey(courseId, batchId),
+    queryFn: () => fetchAttendanceSections(courseId, batchId),
     enabled: Boolean(courseId),
   });
 

@@ -31,7 +31,6 @@ export const serializeStudentPlacement = (
     ? {
         id: membership.section.class.program.id,
         name: membership.section.class.program.name,
-        institutionType: membership.section.class.program.institutionType,
         affiliation: membership.section.class.program.affiliation,
       }
     : null,
@@ -40,9 +39,6 @@ export const serializeStudentPlacement = (
     : null,
   section: membership.section
     ? { id: membership.section.id, name: membership.section.name }
-    : null,
-  academicYear: membership.academicYear
-    ? { id: membership.academicYear.id, name: membership.academicYear.name }
     : null,
   batch: membership.batch ? { id: membership.batch.id, name: membership.batch.name } : null,
   courses: enrollments.map((enrollment) => ({
@@ -56,3 +52,20 @@ export const serializeStudentPlacement = (
     })),
   })),
 });
+
+/** A student's completed-course history — "My Courses" Past section. Each
+ * entry carries its own batchId so the frontend can pass it straight back
+ * as the batchId query param when opening that course's
+ * assignments/quizzes/gradebook read-only. */
+export const serializeStudentPastCourses = (enrollments: Enrollment[]) =>
+  enrollments.map((enrollment) => ({
+    id: enrollment.course?.id,
+    title: enrollment.course?.title,
+    code: enrollment.course?.code,
+    batchId: enrollment.batchId,
+    batchName: enrollment.batch?.name ?? null,
+    teachers: (enrollment.course?.teachers ?? []).map((teacher) => ({
+      id: teacher.id,
+      name: teacher.name,
+    })),
+  }));

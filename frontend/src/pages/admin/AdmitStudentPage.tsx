@@ -10,10 +10,6 @@ import {
 } from '../../features/admission/admission.schema.js';
 import { useAdmitStudent } from '../../features/admission/useAdmission.js';
 import {
-  institutionTypes,
-  type InstitutionType,
-} from '../../features/institution/institution.schema.js';
-import {
   useBatches,
   usePrograms,
   useClasses,
@@ -30,17 +26,6 @@ import { Input } from '../../components/ui/Input.js';
 import { Select } from '../../components/ui/Select.js';
 import { Alert } from '../../components/ui/Alert.js';
 
-const institutionTypeLabels: Record<InstitutionType, string> = {
-  school: 'School',
-  college: 'College',
-  university: 'University',
-};
-
-const institutionTypeOptions = institutionTypes.map((value) => ({
-  value,
-  label: institutionTypeLabels[value],
-}));
-
 export const AdmitStudentPage = () => {
   const navigate = useNavigate();
   const { data: programs } = usePrograms();
@@ -48,7 +33,6 @@ export const AdmitStudentPage = () => {
   const { data: sections } = useSections();
   const admitStudent = useAdmitStudent();
 
-  const [institutionType, setInstitutionType] = useState('');
   const [programId, setProgramId] = useState('');
   const [classId, setClassId] = useState('');
 
@@ -62,9 +46,7 @@ export const AdmitStudentPage = () => {
     formState: { errors },
   } = useForm<AdmitStudentInput>({ resolver: zodResolver(admitStudentSchema) });
 
-  const programOptions = (programs ?? [])
-    .filter((p) => p.institutionType === institutionType)
-    .map((p) => ({ value: p.id, label: p.name }));
+  const programOptions = (programs ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const classOptions = (classes ?? [])
     .filter((c) => c.programId === programId)
@@ -143,21 +125,6 @@ export const AdmitStudentPage = () => {
 
           <div className="flex flex-col gap-4 border-t border-border pt-4">
             <h2 className="text-sm font-semibold text-fg">Placement</h2>
-            <Field label="Institution type" htmlFor="institutionType">
-              <Select
-                id="institutionType"
-                options={institutionTypeOptions}
-                value={institutionType}
-                onValueChange={(value) => {
-                  setInstitutionType(value);
-                  setProgramId('');
-                  setClassId('');
-                  setValue('sectionId', '');
-                  setValue('batchId', '');
-                }}
-                placeholder="Select institution type"
-              />
-            </Field>
             <Field label="Program" htmlFor="programId">
               <Select
                 id="programId"
@@ -169,7 +136,7 @@ export const AdmitStudentPage = () => {
                   setValue('sectionId', '');
                   setValue('batchId', '');
                 }}
-                placeholder={institutionType ? 'Select a program' : 'Select an institution type first'}
+                placeholder="Select a program"
               />
             </Field>
             <Field label="Class" htmlFor="classId">

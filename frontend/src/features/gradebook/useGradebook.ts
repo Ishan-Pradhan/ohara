@@ -2,13 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 
 import { fetchGradebook, fetchMyGrades } from './gradebook.api.js';
 
-export const gradebookKey = (courseId: string) => ['gradebook', courseId] as const;
+export const gradebookKey = (courseId: string, batchId?: string) =>
+  ['gradebook', courseId, batchId ?? null] as const;
 export const myGradesKey = (courseId: string) => ['myGrades', courseId] as const;
 
-export const useGradebook = (courseId: string) =>
+export const useGradebook = (courseId: string, batchId?: string) =>
   useQuery({
-    queryKey: gradebookKey(courseId),
-    queryFn: () => fetchGradebook(courseId),
+    queryKey: gradebookKey(courseId, batchId),
+    queryFn: () => fetchGradebook(courseId, batchId),
     enabled: Boolean(courseId),
   });
 

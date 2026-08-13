@@ -6,11 +6,15 @@ const teacherOnly = { description: 'Caller is not an admin or a teacher assigned
 
 export const getAtRiskDashboardSchema = {
   params: z.object({ courseId: z.uuid() }),
-  query: z.object({ sectionId: z.uuid().optional() }),
+  // batchId omitted -> the course's current batch (unchanged default).
+  // Given -> a specific past batch's at-risk metrics (completed-course
+  // history). sectionId stays a separate narrowing filter within a batch.
+  query: z.object({ sectionId: z.uuid().optional(), batchId: z.uuid().optional() }),
 };
 
 export const explainAtRiskSchema = {
   params: z.object({ courseId: z.uuid(), studentId: z.uuid() }),
+  query: z.object({ batchId: z.uuid().optional() }),
 };
 
 const atRiskRowSchema = registry.register(
@@ -30,10 +34,10 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/at-risk',
   tags: ['At-Risk Analytics'],
-  request: { params: getAtRiskDashboardSchema.params },
+  request: { params: getAtRiskDashboardSchema.params, query: getAtRiskDashboardSchema.query },
   responses: {
     200: {
-      description: "FR-40/41: every enrolled student's average grade, attendance %, missing/late submission counts, and whether they cross an at-risk threshold",
+      description: "FR-40/41: every enrolled student's average grade, attendance %, missing/late submission counts, and whether they cross an at-risk threshold. Optional batchId views a specific past batch's metrics (completed-course history); omitted defaults to the current batch.",
       content: { 'application/json': { schema: envelope(z.array(atRiskRowSchema)) } },
     },
     401: unauthenticated,
@@ -45,7 +49,7 @@ registry.registerPath({
   method: 'post',
   path: '/courses/{courseId}/at-risk/{studentId}/explain',
   tags: ['At-Risk Analytics'],
-  request: { params: explainAtRiskSchema.params },
+  request: { params: explainAtRiskSchema.params, query: explainAtRiskSchema.query },
   responses: {
     200: {
       description: 'FR-42: a short natural-language explanation of why this student was flagged, generated on demand (never automatic)',

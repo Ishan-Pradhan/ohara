@@ -8,7 +8,7 @@ export interface ReportCardData {
   programName: string;
   className: string;
   sectionName: string;
-  academicYearName: string;
+  batchName: string;
   semesters: ReportCardSemesterSection[];
   overallPercentage: number | null;
   overallGrade: string;
@@ -32,7 +32,7 @@ export const generateReportCardPdf = (data: ReportCardData): Promise<Buffer> => 
     doc.fontSize(10).font('Helvetica-Bold').text('Student: ', { continued: true }).font('Helvetica').text(data.studentName);
     doc.font('Helvetica-Bold').text('Program: ', { continued: true }).font('Helvetica').text(data.programName);
     doc.font('Helvetica-Bold').text('Class: ', { continued: true }).font('Helvetica').text(`${data.className} — Section ${data.sectionName}`);
-    doc.font('Helvetica-Bold').text('Academic year: ', { continued: true }).font('Helvetica').text(data.academicYearName);
+    doc.font('Helvetica-Bold').text('Batch: ', { continued: true }).font('Helvetica').text(data.batchName);
     doc.moveDown(1.5);
 
     if (data.semesters.length === 0) {

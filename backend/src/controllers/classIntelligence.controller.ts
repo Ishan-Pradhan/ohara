@@ -7,7 +7,7 @@ import { assignmentRepository } from '../repositories/assignments.repository.js'
 import { submissionRepository } from '../repositories/submissions.repository.js';
 import { attendanceRecordRepository } from '../repositories/attendanceRecords.repository.js';
 import { buildAttendancePercentage } from '../serializers/attendance.serializer.js';
-import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { resolveCurrentBatchForCourseOrNull, resolveBatchForCourse } from './courses.controller.js';
 import {
   AT_RISK_MIN_AVERAGE_PERCENT,
   AT_RISK_MIN_ATTENDANCE_PERCENT,
@@ -26,13 +26,24 @@ export interface StudentMetrics {
   isAtRisk: boolean;
 }
 
-/** Shared computation reused by class intelligence and at-risk controllers. */
-export const computeCourseMetrics = async (courseId: string): Promise<StudentMetrics[]> => {
-  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+/** Shared computation reused by class intelligence and at-risk controllers.
+ * `batchId` omitted -> the course's current batch (unchanged default).
+ * Given -> a specific past batch's metrics (viewing completed-course
+ * history — see docs/superpowers/specs/2026-08-13-completed-course-history-design.md).
+ * Attendance isn't batch-filtered here since countByStatusForCourse is
+ * already keyed per-student across all of a course's sessions — a student
+ * only ever appears under the section(s)/batch they actually attended in,
+ * so it's precise regardless. */
+export const computeCourseMetrics = async (courseId: string, batchId?: string): Promise<StudentMetrics[]> => {
+  const batch = batchId
+    ? await resolveBatchForCourse(courseId, batchId)
+    : await resolveCurrentBatchForCourseOrNull(courseId);
   const [gradebook, roster, assignments, byStudentAttendance] = await Promise.all([
-    loadGradebook(courseId),
-    enrollmentRepository.findByCourseWithStudents(courseId),
-    assignmentRepository.findAllByCourse(courseId, academicYear.id),
+    loadGradebook(courseId, batchId),
+    batchId
+      ? enrollmentRepository.findByCourseAndBatchWithStudents(courseId, batchId)
+      : enrollmentRepository.findByCourseWithStudents(courseId),
+    batch ? assignmentRepository.findAllByCourse(courseId, batch.id) : Promise.resolve([]),
     attendanceRecordRepository.countByStatusForCourse(courseId),
   ]);
 
@@ -89,8 +100,8 @@ const computeSubmissionRate = async (
   courseId: string,
   rosterLength: number,
 ): Promise<number | null> => {
-  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
-  const assignments = await assignmentRepository.findAllByCourse(courseId, academicYear.id);
+  const batch = await resolveCurrentBatchForCourseOrNull(courseId);
+  const assignments = batch ? await assignmentRepository.findAllByCourse(courseId, batch.id) : [];
   const now = new Date();
   const pastDueAssignments = assignments.filter((a) => a.dueAt < now);
   if (pastDueAssignments.length === 0 || rosterLength === 0) return null;

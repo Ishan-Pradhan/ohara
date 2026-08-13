@@ -67,7 +67,7 @@ router
 
 router
   .route('/:courseId/assignments/:id/submissions/me')
-  .get(verifyJWT, requireEnrolledStudent, validate(getMySubmissionSchema), getMySubmission);
+  .get(verifyJWT, requireCourseAccess, validate(getMySubmissionSchema), getMySubmission);
 
 router
   .route('/:courseId/assignments/:id/submissions/:submissionId/grade')

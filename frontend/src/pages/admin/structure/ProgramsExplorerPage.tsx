@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowRight, MoreVertical, Pencil, Plus, School, Trash2 } from 'lucide-react';
 
 import {
   createProgramSchema,
-  institutionTypes,
   type CreateProgramInput,
   type Program,
 } from '../../../features/institution/institution.schema.js';
@@ -22,11 +21,9 @@ import { toast } from '../../../lib/toast.js';
 import { AppShell } from '../../../components/layout/AppShell.js';
 import { PageHeader } from '../../../components/layout/PageHeader.js';
 import { Button } from '../../../components/ui/Button.js';
-import { Badge } from '../../../components/ui/Badge.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Field } from '../../../components/ui/Field.js';
 import { Input } from '../../../components/ui/Input.js';
-import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
@@ -39,14 +36,6 @@ import {
   DropdownMenuTrigger,
 } from '../../../components/ui/DropdownMenu.js';
 import { HierarchyLegend } from './HierarchyLegend.js';
-
-const typeLabels: Record<(typeof institutionTypes)[number], string> = {
-  school: 'School',
-  college: 'College',
-  university: 'University',
-};
-
-const typeOptions = institutionTypes.map((value) => ({ value, label: typeLabels[value] }));
 
 export const ProgramsExplorerPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -62,7 +51,6 @@ export const ProgramsExplorerPage = () => {
   const {
     register: field,
     handleSubmit,
-    control,
     reset: resetForm,
     formState: { errors },
   } = useForm<CreateProgramInput>({ resolver: zodResolver(createProgramSchema) });
@@ -72,7 +60,7 @@ export const ProgramsExplorerPage = () => {
 
   const openCreate = () => {
     setEditing(null);
-    resetForm({ name: '', institutionType: undefined, description: '', affiliation: '' });
+    resetForm({ name: '', description: '', affiliation: '' });
     setDialogOpen(true);
   };
 
@@ -80,7 +68,6 @@ export const ProgramsExplorerPage = () => {
     setEditing(program);
     resetForm({
       name: program.name,
-      institutionType: program.institutionType,
       description: program.description ?? '',
       affiliation: program.affiliation ?? '',
     });
@@ -160,9 +147,6 @@ export const ProgramsExplorerPage = () => {
                   {program.abbreviation && (
                     <p className="text-xs text-muted mt-0.5">{program.abbreviation}</p>
                   )}
-                  <Badge variant="primary" className="mt-1.5">
-                    {typeLabels[program.institutionType]}
-                  </Badge>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger className="shrink-0 rounded-control p-1.5 text-subtle transition-colors hover:bg-surface-hover hover:text-fg">
@@ -221,27 +205,6 @@ export const ProgramsExplorerPage = () => {
               placeholder="e.g. BIM"
               maxLength={10}
               {...field('abbreviation')}
-            />
-          </Field>
-
-          <Field
-            label="Institution type"
-            htmlFor="institutionType"
-            error={errors.institutionType?.message}
-          >
-            <Controller
-              control={control}
-              name="institutionType"
-              render={({ field: selectField }) => (
-                <Select
-                  id="institutionType"
-                  options={typeOptions}
-                  value={selectField.value}
-                  onValueChange={selectField.onChange}
-                  invalid={Boolean(errors.institutionType)}
-                  placeholder="Select a type"
-                />
-              )}
             />
           </Field>
 

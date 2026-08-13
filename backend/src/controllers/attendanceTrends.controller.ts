@@ -2,9 +2,8 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../types/auth.types.js';
 import { attendanceSessionRepository } from '../repositories/attendanceSessions.repository.js';
-import { classMembershipRepository } from '../repositories/classMemberships.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
-import { resolveRelevantAttendanceYear, findCurrentYearStudentIds } from './attendance.controller.js';
+import { resolveRelevantAttendanceBatch, findCurrentBatchStudentIds } from './attendance.controller.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 
@@ -23,23 +22,21 @@ export const getAttendanceTrends = asyncHandler(
 
     let sessions = await attendanceSessionRepository.findAllByCourseWithRecords(courseId);
 
-    // A student promoted/transferred/retained out of a section keeps their
-    // attendance_records from when they were genuinely there — correct as
-    // history, but counting them here would plot a departed cohort's
-    // sessions right alongside (or instead of) the section's actual current
-    // roster, contradicting getAttendanceSummary, which already scopes to
-    // currently-enrolled students only. currentStudentIds narrows to that
-    // same set; null means "no scoping resolved" (e.g. course has no
-    // sections yet), in which case every record on an in-scope session counts.
+    // currentStudentIds narrows plotted records to a resolved batch's
+    // students; null means "no scoping needed," in which case every record
+    // on an in-scope session counts.
     let currentStudentIds: Set<string> | null = null;
 
     if (sectionId) {
-      // One section belongs to exactly one academic year, so this already
-      // excludes every other year's sessions — same as the other
-      // per-section attendance views.
+      // One section belongs to exactly one batch, and is never reused, so
+      // this already excludes every other batch's sessions with no
+      // ambiguity left to resolve — every record on a session recorded here
+      // legitimately belongs to this section's history, regardless of
+      // whether its students have since been promoted/transferred/
+      // graduated out (fixed 2026-08-13 — this used to also narrow to
+      // *currently*-enrolled students, which silently zeroed out the whole
+      // chart the moment a section's entire cohort moved on).
       sessions = sessions.filter((s) => s.sectionId === sectionId);
-      const members = await classMembershipRepository.findBySectionWithStudents(sectionId);
-      currentStudentIds = new Set(members.map((m) => m.studentId));
     } else {
       // Whole-course mode: findAllByCourseWithRecords returns every session
       // ever taken for this course, across every batch that has reused its
@@ -48,13 +45,13 @@ export const getAttendanceTrends = asyncHandler(
       // the current one.
       const course = await courseRepository.findById(courseId);
       if (course) {
-        const { targetYearId, allClassSections } = await resolveRelevantAttendanceYear(course.classId);
-        const currentYearSectionIds = new Set(
-          allClassSections.filter((s) => s.academicYearId === targetYearId).map((s) => s.id),
+        const { targetBatchId, allClassSections } = await resolveRelevantAttendanceBatch(course.classId);
+        const currentBatchSectionIds = new Set(
+          allClassSections.filter((s) => s.batchId === targetBatchId).map((s) => s.id),
         );
-        sessions = sessions.filter((s) => s.sectionId !== null && currentYearSectionIds.has(s.sectionId));
-        if (targetYearId) {
-          currentStudentIds = await findCurrentYearStudentIds(course.classId, targetYearId);
+        sessions = sessions.filter((s) => s.sectionId !== null && currentBatchSectionIds.has(s.sectionId));
+        if (targetBatchId) {
+          currentStudentIds = await findCurrentBatchStudentIds(course.classId, targetBatchId);
         }
       }
     }

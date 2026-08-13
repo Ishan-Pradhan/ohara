@@ -2,10 +2,7 @@ import { Program } from '../models/programs.model.js';
 import type { ProgramCreationAttributes } from '../types/institution.types.js';
 
 type ProgramUpdateAttributes = Partial<
-  Pick<
-    ProgramCreationAttributes,
-    'name' | 'institutionType' | 'description' | 'affiliation' | 'abbreviation'
-  >
+  Pick<ProgramCreationAttributes, 'name' | 'description' | 'affiliation' | 'abbreviation'>
 >;
 
 export const programRepository = {

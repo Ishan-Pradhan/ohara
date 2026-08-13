@@ -14,7 +14,6 @@ const {
   createProgram,
   createClass,
   createSection,
-  createAcademicYear,
   createCourse,
   createStudentUser,
   createTeacherUser,
@@ -67,12 +66,11 @@ afterAll(async () => {
 describe('Events (academic calendar)', () => {
   it('scopes creation and relevance across global/institution_type/program/class, and enforces delete ownership', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -81,11 +79,14 @@ describe('Events (academic calendar)', () => {
     const studentCookies = await signInAs(student.email, 'student');
     const teacherCookies = await signInAs(teacher.email, 'teacher');
 
-    // A school-scoped teacher/student pair has no overlap with the college program above.
-    const schoolProgram = await createProgram({ institutionType: 'school' });
+    // A different program's teacher — every program is university-type now
+    // (Program.institutionType was dropped), so this pair shares the same
+    // institution_type scope as the cohort above despite having no other
+    // overlap; program/class scoping is what actually separates them.
+    const otherProgram = await createProgram();
     const outsiderTeacher = await createTeacherUser({ email: `outsider-${Date.now()}@example.com` });
     const outsiderCourse = await createCourse({
-      classId: (await createClass({ programId: schoolProgram.id })).id,
+      classId: (await createClass({ programId: otherProgram.id })).id,
       title: 'Outsider course',
     });
     await courseTeacherRepository.assign({ teacherId: outsiderTeacher.id, courseId: outsiderCourse.id });
@@ -118,19 +119,19 @@ describe('Events (academic calendar)', () => {
       });
     expect(globalRes.status).toBe(201);
 
-    // Admin creates a college-wide exam period (institution_type-scoped).
-    const collegeExamRes = await request(app)
+    // Admin creates a university-wide exam period (institution_type-scoped).
+    const universityExamRes = await request(app)
       .post('/api/v1/events')
       .set('Cookie', adminCookies)
       .send({
-        title: 'College Finals',
+        title: 'University Finals',
         type: 'exam',
         startAt: new Date(Date.now() + 5400_000).toISOString(),
         allDay: false,
         audience: 'institution_type',
-        institutionType: 'college',
+        institutionType: 'university',
       });
-    expect(collegeExamRes.status).toBe(201);
+    expect(universityExamRes.status).toBe(201);
 
     // Teacher creates a class-scoped event for their own class.
     const classEventRes = await request(app)
@@ -147,11 +148,11 @@ describe('Events (academic calendar)', () => {
     expect(classEventRes.status).toBe(201);
     const classEventId = classEventRes.body.data.id;
 
-    // Student sees all 3 (global + college institution_type + their class), sorted soonest-first.
+    // Student sees all 3 (global + university institution_type + their class), sorted soonest-first.
     const studentEvents = await request(app).get('/api/v1/events/me').set('Cookie', studentCookies);
     expect(studentEvents.body.data.map((e: { title: string }) => e.title)).toEqual([
       'Winter Break',
-      'College Finals',
+      'University Finals',
       'Class trip',
     ]);
 
@@ -159,9 +160,14 @@ describe('Events (academic calendar)', () => {
     const teacherEvents = await request(app).get('/api/v1/events/me').set('Cookie', teacherCookies);
     expect(teacherEvents.body.data).toHaveLength(3);
 
-    // A school-scoped outsider only sees the global holiday — not the college exam or the class trip.
+    // A different-program outsider shares the same institution_type scope (every
+    // program is university-type now) so they see the global holiday and the
+    // university-wide exam — but not the other program's class-scoped trip.
     const outsiderEvents = await request(app).get('/api/v1/events/me').set('Cookie', outsiderCookies);
-    expect(outsiderEvents.body.data.map((e: { title: string }) => e.title)).toEqual(['Winter Break']);
+    expect(outsiderEvents.body.data.map((e: { title: string }) => e.title)).toEqual([
+      'Winter Break',
+      'University Finals',
+    ]);
 
     // Outsider cannot delete an event they didn't create.
     const forbiddenDelete = await request(app)
@@ -174,7 +180,7 @@ describe('Events (academic calendar)', () => {
     expect(okDelete.status).toBe(200);
 
     const afterDelete = await request(app).get('/api/v1/events/me').set('Cookie', studentCookies);
-    expect(afterDelete.body.data.map((e: { title: string }) => e.title)).toEqual(['Winter Break', 'College Finals']);
+    expect(afterDelete.body.data.map((e: { title: string }) => e.title)).toEqual(['Winter Break', 'University Finals']);
   });
 
   it('rejects a student trying to create an event', async () => {

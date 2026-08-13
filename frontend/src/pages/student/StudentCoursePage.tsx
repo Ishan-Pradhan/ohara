@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ChevronRight, FileText, Layers } from 'lucide-react';
 
 import { useCurrentUser } from '../../features/auth/useAuth.js';
-import { useStudentPlacement } from '../../features/placement/usePlacement.js';
+import { useStudentPastCourses, useStudentPlacement } from '../../features/placement/usePlacement.js';
 import { useOutline } from '../../features/tutor/useTutor.js';
 import { useViewableDocuments } from '../../features/documents/useDocuments.js';
 import { documentFileUrl } from '../../features/documents/documents.api.js';
@@ -22,27 +22,47 @@ import { StudentCourseSectionNav } from './StudentCourseSectionNav.js';
 
 const SECTIONS = ['content', 'tutor', 'study-tools', 'assignments', 'quizzes', 'grades', 'attendance'] as const;
 type Section = (typeof SECTIONS)[number];
+// Content/Tutor/Study Tools are live-course features (still gated active-only
+// server-side, per docs/superpowers/specs/2026-08-13-completed-course-history-design.md's
+// non-goals) — a past course only ever shows these four.
+const PAST_COURSE_SECTIONS: readonly Section[] = ['assignments', 'quizzes', 'grades', 'attendance'];
 
 const isSection = (value: string | undefined): value is Section =>
   Boolean(value) && (SECTIONS as readonly string[]).includes(value!);
 
 export const StudentCoursePage = () => {
   const { courseId = '', section: rawSection } = useParams();
-  const section: Section = isSection(rawSection) ? rawSection : 'content';
+  let section: Section = isSection(rawSection) ? rawSection : 'content';
 
   const { data: currentUser } = useCurrentUser();
   const studentId = currentUser?.id ?? '';
   const { data: placement } = useStudentPlacement(studentId);
-  const course = placement?.courses.find((c) => c.id === courseId);
-  const { data: modules, isLoading } = useOutline(course?.isPublished && section === 'content' ? courseId : '');
+  const { data: pastCourses } = useStudentPastCourses(studentId);
+
+  const activeCourse = placement?.courses.find((c) => c.id === courseId);
+  const pastCourse = !activeCourse ? pastCourses?.find((c) => c.id === courseId) : undefined;
+  const isPastCourse = Boolean(pastCourse);
+  const course = activeCourse ?? pastCourse;
+  const batchId = pastCourse?.batchId;
+
+  // A past course only has the four read-only sections — fall back to
+  // Grades (rather than Content, which doesn't apply) if the URL points
+  // somewhere that isn't available for it.
+  if (isPastCourse && !PAST_COURSE_SECTIONS.includes(section)) {
+    section = 'grades';
+  }
+
+  const { data: modules, isLoading } = useOutline(
+    !isPastCourse && activeCourse?.isPublished && section === 'content' ? courseId : '',
+  );
   const { data: documents, isLoading: documentsLoading } = useViewableDocuments(
-    course?.isPublished && section === 'content' ? courseId : '',
+    !isPastCourse && activeCourse?.isPublished && section === 'content' ? courseId : '',
   );
 
   const renderSection = () => {
     switch (section) {
       case 'content':
-        return !course?.isPublished ? (
+        return !activeCourse?.isPublished ? (
           <EmptyState
             icon={Layers}
             title="Not published yet"
@@ -125,9 +145,9 @@ export const StudentCoursePage = () => {
       case 'study-tools':
         return <StudyAidsPanel courseId={courseId} />;
       case 'assignments':
-        return <StudentAssignmentsSection courseId={courseId} />;
+        return <StudentAssignmentsSection courseId={courseId} batchId={batchId} readOnly={isPastCourse} />;
       case 'quizzes':
-        return <StudentQuizzesSection courseId={courseId} />;
+        return <StudentQuizzesSection courseId={courseId} batchId={batchId} readOnly={isPastCourse} />;
       case 'grades':
         return <StudentGradesSection courseId={courseId} />;
       case 'attendance':
@@ -140,13 +160,15 @@ export const StudentCoursePage = () => {
       <CourseHeader
         title={course?.title ?? 'Course'}
         code={course?.code ?? ''}
-        isPublished={course?.isPublished ?? false}
+        isPublished={activeCourse?.isPublished ?? true}
         teachers={course?.teachers ?? []}
+        isPastCourse={isPastCourse}
+        batchName={pastCourse?.batchName}
       />
 
       <div className="flex flex-col gap-6 md:flex-row">
         <div className="shrink-0 md:w-56">
-          <StudentCourseSectionNav courseId={courseId} />
+          <StudentCourseSectionNav courseId={courseId} isPastCourse={isPastCourse} />
         </div>
         <div className="min-w-0 flex-1">{renderSection()}</div>
       </div>

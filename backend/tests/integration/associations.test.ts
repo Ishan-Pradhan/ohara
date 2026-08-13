@@ -5,7 +5,7 @@ const {
   createProgram,
   createClass,
   createSection,
-  createAcademicYear,
+  createBatch,
   createCourse,
   createTeacherUser,
 } = await import('../helpers/institution.js');
@@ -45,8 +45,8 @@ describe('Sequelize associations (institution models)', () => {
 
   it('Class.sections and Class.courses resolve their children', async () => {
     const cls = await createClass();
-    const year = await createAcademicYear();
-    await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
+    const batch = await createBatch({ programId: cls.programId });
+    await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
     await createCourse({
       classId: cls.id,
       title: 'Physics',
@@ -58,21 +58,21 @@ describe('Sequelize associations (institution models)', () => {
     expect(found?.courses).toHaveLength(1);
   });
 
-  it('Section resolves its class, academic year, and class teacher', async () => {
+  it('Section resolves its class, batch, and class teacher', async () => {
     const cls = await createClass();
-    const year = await createAcademicYear();
+    const batch = await createBatch({ programId: cls.programId });
     const teacher = await createTeacherUser();
     const section = await createSection({
       classId: cls.id,
-      academicYearId: year.id,
+      batchId: batch.id,
       classTeacherId: teacher.id,
     });
 
     const found = await Section.findByPk(section.id, {
-      include: ['class', 'academicYear', 'classTeacher'],
+      include: ['class', 'batch', 'classTeacher'],
     });
     expect(found?.class?.id).toBe(cls.id);
-    expect(found?.academicYear?.id).toBe(year.id);
+    expect(found?.batch?.id).toBe(batch.id);
     expect(found?.classTeacher?.id).toBe(teacher.id);
   });
 

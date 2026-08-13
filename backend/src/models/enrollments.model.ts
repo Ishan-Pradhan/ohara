@@ -15,7 +15,7 @@ import { ENROLLMENT_STATUSES } from '../constants/index.js';
 import type { EnrollmentStatus } from '../types/placement.types.js';
 import { User } from './users.model.js';
 import { Course } from './courses.model.js';
-import { AcademicYear } from './academicYears.model.js';
+import { Batch } from './batches.model.js';
 
 @Table({ tableName: 'Enrollments', timestamps: true })
 export class Enrollment extends Model {
@@ -40,13 +40,17 @@ export class Enrollment extends Model {
   @BelongsTo(() => Course)
   declare course?: Course;
 
-  @ForeignKey(() => AcademicYear)
+  /** The batch this enrollment belongs to — a Course is permanently attached
+   * to its Class and reused by every future batch that reaches it, so
+   * without this a new batch would inherit the previous batch's enrollment
+   * rows for the same course. Always the student's own (permanent) batch. */
+  @ForeignKey(() => Batch)
   @AllowNull(false)
   @Column(DataType.UUID)
-  declare academicYearId: string;
+  declare batchId: string;
 
-  @BelongsTo(() => AcademicYear)
-  declare academicYear?: AcademicYear;
+  @BelongsTo(() => Batch)
+  declare batch?: Batch;
 
   @AllowNull(false)
   @Default(ENROLLMENT_STATUSES.ACTIVE)

@@ -81,3 +81,16 @@ export const publishCourse = async (
   const res = await api.patch(`/courses/${courseId}/publish`, { isPublished });
   return res.data.data;
 };
+
+export interface CourseBatch {
+  id: string;
+  name: string;
+}
+
+/** Every batch that has ever had placement/enrollment history in this
+ * course's class, current and past — powers the teacher/admin batch picker
+ * for viewing completed-course history. */
+export const fetchCourseBatches = async (courseId: string): Promise<CourseBatch[]> => {
+  const res = await api.get(`/courses/${courseId}/batches`);
+  return res.data.data as CourseBatch[];
+};

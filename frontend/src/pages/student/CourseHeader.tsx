@@ -9,9 +9,18 @@ interface CourseHeaderProps {
   code: string;
   isPublished: boolean;
   teachers: { id: string; name: string }[];
+  isPastCourse?: boolean;
+  batchName?: string | null;
 }
 
-export const CourseHeader = ({ title, code, isPublished, teachers }: CourseHeaderProps) => (
+export const CourseHeader = ({
+  title,
+  code,
+  isPublished,
+  teachers,
+  isPastCourse,
+  batchName,
+}: CourseHeaderProps) => (
   <div className="mb-6">
     <Link
       to="/student/courses"
@@ -45,7 +54,11 @@ export const CourseHeader = ({ title, code, isPublished, teachers }: CourseHeade
           ) : null}
         </div>
       </div>
-      {!isPublished ? <Badge variant="warning">Not published yet</Badge> : null}
+      {isPastCourse ? (
+        <Badge variant="neutral">{batchName ? `Completed — ${batchName}` : 'Completed'}</Badge>
+      ) : !isPublished ? (
+        <Badge variant="warning">Not published yet</Badge>
+      ) : null}
     </div>
   </div>
 );

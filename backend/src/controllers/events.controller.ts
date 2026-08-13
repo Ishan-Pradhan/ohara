@@ -8,7 +8,7 @@ import { classMembershipRepository } from '../repositories/classMemberships.repo
 import { userRepository } from '../repositories/users.repository.js';
 import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
 import { serializeEvent, serializeBirthday } from '../serializers/events.serializer.js';
-import { USER_ROLES } from '../constants/index.js';
+import { USER_ROLES, INSTITUTION_TYPES } from '../constants/index.js';
 import type { EventAudience, EventType } from '../types/events.types.js';
 import type { InstitutionType } from '../types/institution.types.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -138,9 +138,11 @@ export const listMyEvents = asyncHandler(
       const classIds = [...new Set(taught.map((ct) => ct.course?.classId).filter((id): id is string => Boolean(id)))];
       const classes = await Promise.all(classIds.map((id) => classRepository.findByIdWithProgram(id)));
       const programIds = [...new Set(classes.map((c) => c?.programId).filter((id): id is string => Boolean(id)))];
-      const institutionTypes = [
-        ...new Set(classes.map((c) => c?.program?.institutionType).filter((t): t is InstitutionType => Boolean(t))),
-      ];
+      // Every program is university-type going forward (Program.institutionType
+      // was dropped — see 20260813130000), so any teacher with a real class is
+      // in the 'university' institution-type scope for event targeting.
+      const institutionTypes: InstitutionType[] =
+        classes.length > 0 ? [INSTITUTION_TYPES.UNIVERSITY] : [];
 
       const events = await eventRepository.findRelevantInRange({ institutionTypes, programIds, classIds }, from, to);
       return ok(res, events.map(serializeEvent), 'Events retrieved');
@@ -152,9 +154,9 @@ export const listMyEvents = asyncHandler(
     const events = membership?.section?.class
       ? await eventRepository.findRelevantInRange(
           {
-            institutionTypes: membership.section.class.program?.institutionType
-              ? [membership.section.class.program.institutionType]
-              : [],
+            // Same reasoning as the teacher branch above — every program is
+            // university-type now.
+            institutionTypes: [INSTITUTION_TYPES.UNIVERSITY],
             programIds: membership.section.class.programId ? [membership.section.class.programId] : [],
             classIds: [membership.section.classId],
           },

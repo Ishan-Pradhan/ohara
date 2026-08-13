@@ -16,7 +16,7 @@ import { QUIZ_STATUS } from '../constants/index.js';
 import type { QuizStatus } from '../types/quizzes.types.js';
 import { Course } from './courses.model.js';
 import { Question } from './questions.model.js';
-import { AcademicYear } from './academicYears.model.js';
+import { Batch } from './batches.model.js';
 
 @Table({ tableName: 'Quizzes', timestamps: true })
 export class Quiz extends Model {
@@ -33,14 +33,14 @@ export class Quiz extends Model {
   @BelongsTo(() => Course)
   declare course?: Course;
 
-  /** Same batch/term scoping as Assignment.academicYearId — see there. */
-  @ForeignKey(() => AcademicYear)
+  /** Same batch scoping as Assignment.batchId — see there. */
+  @ForeignKey(() => Batch)
   @AllowNull(false)
   @Column(DataType.UUID)
-  declare academicYearId: string;
+  declare batchId: string;
 
-  @BelongsTo(() => AcademicYear)
-  declare academicYear?: AcademicYear;
+  @BelongsTo(() => Batch)
+  declare batch?: Batch;
 
   @AllowNull(false)
   @Column(DataType.STRING)

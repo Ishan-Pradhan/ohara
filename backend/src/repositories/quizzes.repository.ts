@@ -7,15 +7,15 @@ export const quizRepository = {
     return await Quiz.create(data);
   },
 
-  /** academicYearId is required — see assignmentRepository.findAllByCourse
+  /** batchId is required — see assignmentRepository.findAllByCourse
    * for why (a Course is reused by every future batch reaching its Class). */
   findAllByCourse: async (
     courseId: string,
-    academicYearId: string,
+    batchId: string,
     status?: QuizStatus,
   ): Promise<Quiz[]> => {
     return await Quiz.findAll({
-      where: status ? { courseId, academicYearId, status } : { courseId, academicYearId },
+      where: status ? { courseId, batchId, status } : { courseId, batchId },
       order: [['createdAt', 'DESC']],
     });
   },

@@ -46,10 +46,10 @@ export const enrollInElective = asyncHandler(async (req: AuthRequest, res: Respo
     }
   }
 
-  const existing = await enrollmentRepository.findByStudentCourseYear(
+  const existing = await enrollmentRepository.findByStudentCourseBatch(
     studentId,
     courseId,
-    membership.academicYearId,
+    membership.batchId,
   );
 
   if (existing) {
@@ -63,7 +63,7 @@ export const enrollInElective = asyncHandler(async (req: AuthRequest, res: Respo
   const enrollment = await enrollmentRepository.create({
     studentId,
     courseId,
-    academicYearId: membership.academicYearId,
+    batchId: membership.batchId,
   });
 
   return ok(res, serializeEnrollment(enrollment), 'Enrolled', 201);
@@ -79,10 +79,10 @@ export const dropElective = asyncHandler(async (req: AuthRequest, res: Response)
     throw new ApiError(400, 'Compulsory courses cannot be dropped');
   }
 
-  const existing = await enrollmentRepository.findByStudentCourseYear(
+  const existing = await enrollmentRepository.findByStudentCourseBatch(
     studentId,
     courseId,
-    membership.academicYearId,
+    membership.batchId,
   );
   if (!existing || existing.status !== 'active') {
     throw new ApiError(404, 'Not currently enrolled in this course');

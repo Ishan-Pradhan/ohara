@@ -9,7 +9,6 @@ export type CourseType = (typeof COURSE_TYPES)[keyof typeof COURSE_TYPES];
 export interface ProgramAttributes {
   id: string;
   name: string;
-  institutionType: InstitutionType;
   description: string | null;
   affiliation: string | null;
   abbreviation: string | null;
@@ -26,7 +25,6 @@ export interface BatchAttributes {
   id: string;
   programId: string;
   name: string;
-  startAcademicYearId: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -71,7 +69,8 @@ export type AcademicYearCreationAttributes = Optional<
 export interface SectionAttributes {
   id: string;
   classId: string;
-  academicYearId: string;
+  batchId: string;
+  startDate: string;
   classTeacherId: string | null;
   name: string;
   capacity: number | null;

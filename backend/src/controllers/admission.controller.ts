@@ -80,7 +80,7 @@ export const admitStudent = asyncHandler(async (req: AuthRequest, res: Response)
       studentId: student.id,
       batchId,
       sectionId,
-      academicYearId: section.academicYearId,
+      classId: section.classId,
     },
     autoEnrollCourseIds,
   );

@@ -50,20 +50,20 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
 const setupTeacherWithPlacedStudent = async () => {
   const program = await createProgram({ name: 'Test Program' });
   const cls = await createClass({ programId: program.id, name: 'Semester 1' });
-  const section = await createSection({ classId: cls.id, name: 'A' });
-  const batch = await createBatch({ programId: program.id, startAcademicYearId: section.academicYearId });
+  const batch = await createBatch({ programId: program.id });
+  const section = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
   const course = await createCourse({ classId: cls.id, title: 'Software Engineering' });
 
   const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
   await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
 
   const student = await createStudentUser({ email: `student-${Date.now()}@example.com` });
-  await createEnrollment({ studentId: student.id, courseId: course.id, academicYearId: section.academicYearId });
+  await createEnrollment({ studentId: student.id, courseId: course.id, batchId: batch.id });
   await classMembershipRepository.create({
     studentId: student.id,
     sectionId: section.id,
     batchId: batch.id,
-    academicYearId: section.academicYearId,
+    classId: cls.id,
   });
 
   const teacherCookies = await signInAs(teacher.email, 'teacher');

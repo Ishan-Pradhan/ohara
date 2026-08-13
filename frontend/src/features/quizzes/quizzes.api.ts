@@ -16,8 +16,10 @@ import {
   type UpdateQuestionInput,
 } from './quizzes.schema.js';
 
-export const fetchQuizzes = async (courseId: string): Promise<Quiz[]> => {
-  const res = await api.get(`/courses/${courseId}/quizzes`);
+// batchId omitted -> the course's current batch. Given -> a specific past
+// batch's quizzes (viewing completed-course history).
+export const fetchQuizzes = async (courseId: string, batchId?: string): Promise<Quiz[]> => {
+  const res = await api.get(`/courses/${courseId}/quizzes`, { params: batchId ? { batchId } : undefined });
   return z.array(quizSchema).parse(res.data.data);
 };
 

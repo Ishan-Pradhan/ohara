@@ -13,7 +13,7 @@ import { quizAttemptRepository } from '../repositories/quizAttempts.repository.j
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { institutionWeeklyInsightRepository } from '../repositories/institutionWeeklyInsight.repository.js';
 import { computeCourseMetrics } from './classIntelligence.controller.js';
-import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { resolveCurrentBatchForCourseOrNull } from './courses.controller.js';
 import { generateJson } from '../services/llm.service.js';
 import { institutionWeeklySystemPrompt, institutionWeeklyUserPrompt } from '../prompts/institutionWeekly.prompt.js';
 import type { InstitutionWeeklyContext } from '../prompts/institutionWeekly.prompt.js';
@@ -23,18 +23,14 @@ import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 
 /** Institution-wide aggregation spans every course, some of which may not
- * have a current academic year configured yet for their term (e.g. a
- * freshly created program) — that's a per-course setup gap, not something
- * that should break the whole weekly summary, so it's skipped rather than
- * thrown. Single-course endpoints use resolveCurrentAcademicYearForCourse
- * directly and let that 400 reach the caller, since there it's actionable. */
-const resolveCurrentAcademicYearIdOrNull = async (courseId: string): Promise<string | null> => {
-  try {
-    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
-    return academicYear.id;
-  } catch {
-    return null;
-  }
+ * have any students currently placed or enrolled yet (e.g. a freshly
+ * created program) — that's a per-course setup gap, not something that
+ * should break the whole weekly summary, so it's skipped rather than
+ * thrown (resolveCurrentBatchForCourseOrNull already returns null for
+ * this rather than throwing). */
+const resolveCurrentBatchIdOrNull = async (courseId: string): Promise<string | null> => {
+  const batch = await resolveCurrentBatchForCourseOrNull(courseId);
+  return batch?.id ?? null;
 };
 
 function getWeekRange(): { start: Date; end: Date } {
@@ -94,9 +90,9 @@ const loadInstitutionWeeklyData = async (): Promise<InstitutionWeeklyContext> =>
   let totalLateSubs = 0;
   let totalMissing = 0;
   for (const course of allCourses) {
-    const academicYearId = await resolveCurrentAcademicYearIdOrNull(course.id);
-    if (!academicYearId) continue;
-    const assignments = await assignmentRepository.findAllByCourse(course.id, academicYearId);
+    const batchId = await resolveCurrentBatchIdOrNull(course.id);
+    if (!batchId) continue;
+    const assignments = await assignmentRepository.findAllByCourse(course.id, batchId);
     const weekAssignments = assignments.filter((a) => {
       const d = new Date(a.dueAt);
       return d >= start && d <= end;
@@ -118,9 +114,9 @@ const loadInstitutionWeeklyData = async (): Promise<InstitutionWeeklyContext> =>
   let quizScoreCount = 0;
   let totalQuizAvailable = 0;
   for (const course of allCourses) {
-    const academicYearId = await resolveCurrentAcademicYearIdOrNull(course.id);
-    if (!academicYearId) continue;
-    const quizzes = await quizRepository.findAllByCourse(course.id, academicYearId);
+    const batchId = await resolveCurrentBatchIdOrNull(course.id);
+    if (!batchId) continue;
+    const quizzes = await quizRepository.findAllByCourse(course.id, batchId);
     const weekQuizzes = quizzes.filter((q) => {
       const d = new Date(q.createdAt);
       return d >= start && d <= end;

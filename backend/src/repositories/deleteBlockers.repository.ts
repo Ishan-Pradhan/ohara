@@ -5,6 +5,7 @@ import { Course } from '../models/courses.model.js';
 import { Document } from '../models/documents.model.js';
 import { Enrollment } from '../models/enrollments.model.js';
 import { Event } from '../models/events.model.js';
+import { ExamTerm } from '../models/examTerms.model.js';
 import { Intervention } from '../models/intervention.model.js';
 import { QuizAttempt } from '../models/quizAttempts.model.js';
 import { Section } from '../models/sections.model.js';
@@ -107,53 +108,20 @@ export const deleteBlockersRepository = {
     return blockers;
   },
 
+  /** Sections, batches, class memberships, and enrollments no longer
+   * reference an academic year at all (see 20260813130000/20260813140000) —
+   * `exam_terms` is the only remaining thing that does. */
   academicYearBlockers: async (academicYearId: string): Promise<DeleteBlocker[]> => {
     const blockers: DeleteBlocker[] = [];
 
-    const sections = await Section.count({ where: { academicYearId } });
-    if (sections > 0) {
+    const examTerms = await ExamTerm.count({ where: { academicYearId } });
+    if (examTerms > 0) {
       blockers.push({
-        entity: 'section',
-        label: 'sections',
-        singular: 'section',
-        count: sections,
-        hint: 'Delete its sections (and the students placed in them) first.',
-        category: 'ownership',
-      });
-    }
-
-    const batches = await Batch.count({ where: { startAcademicYearId: academicYearId } });
-    if (batches > 0) {
-      blockers.push({
-        entity: 'batch',
-        label: 'batches',
-        singular: 'batch',
-        count: batches,
-        hint: 'Delete or re-date its batches first.',
-        category: 'ownership',
-      });
-    }
-
-    const memberships = await ClassMembership.count({ where: { academicYearId } });
-    if (memberships > 0) {
-      blockers.push({
-        entity: 'placement',
-        label: 'student placements',
-        singular: 'student placement',
-        count: memberships,
-        hint: 'Promote, transfer, or remove the students placed in this academic year first.',
-        category: 'ownership',
-      });
-    }
-
-    const enrollments = await Enrollment.count({ where: { academicYearId } });
-    if (enrollments > 0) {
-      blockers.push({
-        entity: 'enrollment',
-        label: 'course enrollments',
-        singular: 'course enrollment',
-        count: enrollments,
-        hint: 'Move the students in this academic year first — their course enrollments go with them.',
+        entity: 'exam_term',
+        label: 'exam terms',
+        singular: 'exam term',
+        count: examTerms,
+        hint: 'Delete its exam terms (and any marks recorded under them) first.',
         category: 'ownership',
       });
     }

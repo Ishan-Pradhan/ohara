@@ -57,7 +57,7 @@ export const getStudentDashboard = asyncHandler(
         enrollments.map(async (enrollment) => {
           const assignments = await assignmentRepository.findAllByCourse(
             enrollment.courseId,
-            enrollment.academicYearId,
+            enrollment.batchId,
           );
           const submissionsByAssignmentId = new Map(
             await Promise.all(
@@ -82,7 +82,7 @@ export const getStudentDashboard = asyncHandler(
         enrollments.map(async (enrollment) => {
           const quizzes = await quizRepository.findAllByCourse(
             enrollment.courseId,
-            enrollment.academicYearId,
+            enrollment.batchId,
             QUIZ_STATUS.PUBLISHED,
           );
           const attemptsByQuizId = new Map(
@@ -126,17 +126,14 @@ export const loadStudentPerformanceContext = async (studentId: string) => {
     };
   }
 
-  const enrollments = await enrollmentRepository.findActiveWithDetails(
-    studentId,
-    membership.academicYearId,
-  );
+  const enrollments = await enrollmentRepository.findActiveWithDetails(studentId);
 
   const [courseAssignments, courseGradebooks, courseAttendanceRecords] = await Promise.all([
     Promise.all(
       enrollments.map(async (enrollment) => {
         const assignments = await assignmentRepository.findAllByCourse(
           enrollment.courseId,
-          enrollment.academicYearId,
+          enrollment.batchId,
         );
         const submissionsByAssignmentId = new Map(
           await Promise.all(
@@ -239,7 +236,7 @@ export const generateStudentStudyPlan = asyncHandler(
 
         const assignments = await assignmentRepository.findAllByCourse(
           enrollment.courseId,
-          enrollment.academicYearId,
+          enrollment.batchId,
         );
         for (const assignment of assignments) {
           const submission = await submissionRepository.findByAssignmentAndStudent(
@@ -258,7 +255,7 @@ export const generateStudentStudyPlan = asyncHandler(
 
         const quizzes = await quizRepository.findAllByCourse(
           enrollment.courseId,
-          enrollment.academicYearId,
+          enrollment.batchId,
           QUIZ_STATUS.PUBLISHED,
         );
         for (const quiz of quizzes) {
@@ -282,7 +279,7 @@ export const generateStudentStudyPlan = asyncHandler(
       const enrolledCourses = context.enrollments.map((e) => ({
         courseId: e.courseId,
         courseTitle: e.course?.title ?? '',
-        academicYearId: e.academicYearId,
+        batchId: e.batchId,
       }));
       const courseEvidence = await conceptEvidenceRepository.findForStudent(studentId, enrolledCourses);
       const conceptInventory = buildConceptInventory(courseEvidence);

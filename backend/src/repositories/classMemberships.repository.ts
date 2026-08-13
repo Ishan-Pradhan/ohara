@@ -13,9 +13,8 @@ export const classMembershipRepository = {
   /**
    * Creates the placement and, if `autoEnrollCourseIds` is non-empty, bulk-creates one
    * `active` enrollment per course in the same transaction. `autoEnrollCourseIds` is resolved
-   * by the controller (courseRepository.findAll({classId}) when the program is a school)
-   * before calling this — the institutionType branch stays in the controller; this method only
-   * knows "create a membership, optionally with these enrollments, atomically."
+   * by the controller (courseRepository.findAll({classId}) when the target class has
+   * compulsory courses) before calling this.
    */
   create: async (
     data: ClassMembershipCreationAttributes,
@@ -29,7 +28,7 @@ export const classMembershipRepository = {
           (courseId) => ({
             studentId: data.studentId,
             courseId,
-            academicYearId: data.academicYearId,
+            batchId: data.batchId,
           }),
         );
         await enrollmentRepository.bulkCreate(enrollments, transaction);
@@ -42,22 +41,18 @@ export const classMembershipRepository = {
   findAll: async (options?: {
     studentId?: string;
     sectionId?: string;
-    academicYearId?: string;
+    classId?: string;
   }): Promise<ClassMembership[]> => {
     const where: Record<string, string> = {};
     if (options?.studentId) where.studentId = options.studentId;
     if (options?.sectionId) where.sectionId = options.sectionId;
-    if (options?.academicYearId) where.academicYearId = options.academicYearId;
+    if (options?.classId) where.classId = options.classId;
 
     return await ClassMembership.findAll({ where, order: [['createdAt', 'DESC']] });
   },
 
   /** A student's current placement is the head of their promotion chain — the
-   * one membership not yet superseded by a later promote()/graduate() call.
-   * This replaces matching against a global "current academic year" flag,
-   * which breaks once different programs run different term cadences (a
-   * school's annual year vs. a college's two semesters/year) — see
-   * docs/superpowers/specs/2026-08-05-semester-batch-model-design.md. */
+   * one membership not yet superseded by a later promote()/graduate() call. */
   findCurrent: async (studentId: string): Promise<ClassMembership | null> => {
     return await ClassMembership.findOne({
       where: { studentId, promotedToId: null },
@@ -66,7 +61,6 @@ export const classMembershipRepository = {
           association: 'section',
           include: [{ association: 'class', include: ['program'] }],
         },
-        'academicYear',
         'batch',
       ],
     });
@@ -76,7 +70,7 @@ export const classMembershipRepository = {
     return await ClassMembership.findByPk(id);
   },
 
-  /** Active (not yet promoted/retained/graduated out) headcount per section —
+  /** Active (not yet promoted/transferred/graduated out) headcount per section —
    * powers the fill-vs-capacity display in the Structure explorer and the
    * admission form's section picker. */
   countBySections: async (sectionIds: string[]): Promise<Record<string, number>> => {
@@ -105,20 +99,49 @@ export const classMembershipRepository = {
   findCurrentForBatch: async (batchId: string): Promise<{ classId: string; sectionId: string }[]> => {
     const memberships = await ClassMembership.findAll({
       where: { batchId, outcome: CLASS_MEMBERSHIP_OUTCOMES.ENROLLED },
-      attributes: ['sectionId'],
-      include: [{ association: 'section', attributes: ['classId'], required: true }],
+      attributes: ['sectionId', 'classId'],
     });
     const seen = new Set<string>();
     const result: { classId: string; sectionId: string }[] = [];
     for (const m of memberships) {
-      const classId = m.section?.classId;
-      if (!classId) continue;
-      const key = `${classId}:${m.sectionId}`;
+      const key = `${m.classId}:${m.sectionId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push({ classId, sectionId: m.sectionId });
+      result.push({ classId: m.classId, sectionId: m.sectionId });
     }
     return result;
+  },
+
+  /** Every batch currently placed in `classId` (`outcome: 'enrolled'`), most
+   * populated first. This is the direct, structural answer to "who's really
+   * here now" — it replaces the old year-matching fallback chain entirely
+   * (courses.controller.ts's `resolveCurrentBatchForCourse`,
+   * attendance.controller.ts's batch resolver): a batch's `outcome:
+   * 'enrolled'` memberships ARE its current placement, no inference needed.
+   * Usually one row; more than one only if a class currently holds students
+   * from more than one batch (promotion applied non-uniformly, or two
+   * batches' schedules happen to overlap here). */
+  countEnrolledByClassGroupedByBatch: async (
+    classId: string,
+  ): Promise<{ batchId: string; count: number }[]> => {
+    const rows = (await ClassMembership.findAll({
+      where: { classId, outcome: CLASS_MEMBERSHIP_OUTCOMES.ENROLLED },
+      attributes: ['batchId', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+      group: ['batchId'],
+      order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
+      raw: true,
+    })) as unknown as { batchId: string; count: string }[];
+
+    return rows.map((r) => ({ batchId: r.batchId, count: Number(r.count) }));
+  },
+
+  /** Does this batch have any placement history in this class at all —
+   * past or present? Powers courses.controller.ts's resolveBatchForCourse
+   * (validates a caller-supplied batchId isn't just made up), unlike
+   * countEnrolledByClassGroupedByBatch above which is current-only. */
+  existsForClassAndBatch: async (classId: string, batchId: string): Promise<boolean> => {
+    const found = await ClassMembership.findOne({ where: { classId, batchId } });
+    return found !== null;
   },
 
   updateSection: async (id: string, sectionId: string): Promise<ClassMembership | null> => {
@@ -130,8 +153,8 @@ export const classMembershipRepository = {
   },
 
   /** Atomically creates the new membership (+ auto-enroll) and closes out the old one.
-   * Also marks all of the student's active enrollments for the old academic year as
-   * `completed` so teachers in those courses no longer see the student on their roster. */
+   * Also marks all of the student's active enrollments for the old class as `completed`
+   * so teachers in those courses no longer see the student on their roster. */
   promote: async (
     oldMembershipId: string,
     newData: ClassMembershipCreationAttributes,
@@ -146,7 +169,7 @@ export const classMembershipRepository = {
           (courseId) => ({
             studentId: newData.studentId,
             courseId,
-            academicYearId: newData.academicYearId,
+            batchId: newData.batchId,
           }),
         );
         await enrollmentRepository.bulkCreate(enrollments, transaction);
@@ -158,10 +181,10 @@ export const classMembershipRepository = {
       }
 
       // Complete all active enrollments from the old semester so the student
-      // no longer appears on any teacher's course roster for that term.
+      // no longer appears on any teacher's course roster for that class.
       await enrollmentRepository.bulkComplete(
         oldMembership.studentId,
-        oldMembership.academicYearId,
+        oldMembership.classId,
         transaction,
       );
 
@@ -192,14 +215,16 @@ export const classMembershipRepository = {
 
   /**
    * Reassigns a student's current placement to an arbitrary section + batch —
-   * any program, class, or term (the correction tool for a mis-placement).
+   * any program, class, or batch (the correction tool for a mis-placement —
+   * distinct from promotion, which never changes a student's batch; this is
+   * the explicit admin override for fixing a mistake).
    *
-   * - **Same academic year/term:** the UNIQUE(studentId, academicYearId) index
-   *   forbids a second row, so the existing membership is moved in place and
-   *   its active enrollments are resynced to the target class's courses
-   *   (old year's enrollments completed, target class's compulsory courses
-   *   auto-enrolled).
-   * - **Different term:** mirrors `promote` — a new membership is opened,
+   * - **Same class:** the UNIQUE(studentId, classId) index forbids a second
+   *   row, so the existing membership is moved in place and its active
+   *   enrollments are resynced to the target section's batch (old
+   *   enrollments completed, target class's compulsory courses
+   *   auto-enrolled under the new batch).
+   * - **Different class:** mirrors `promote` — a new membership is opened,
    *   the old one is closed out with outcome `transferred` (readable history
    *   in the promotion chain), and its enrollments completed.
    */
@@ -214,21 +239,21 @@ export const classMembershipRepository = {
         throw new Error('Class membership disappeared mid-transaction');
       }
 
-      if (oldMembership.academicYearId === newData.academicYearId) {
+      if (oldMembership.classId === newData.classId) {
         oldMembership.sectionId = newData.sectionId;
         oldMembership.batchId = newData.batchId;
         await oldMembership.save({ transaction });
 
         await enrollmentRepository.bulkComplete(
           oldMembership.studentId,
-          oldMembership.academicYearId,
+          oldMembership.classId,
           transaction,
         );
         if (autoEnrollCourseIds.length > 0) {
           const enrollments = autoEnrollCourseIds.map((courseId) => ({
             studentId: oldMembership.studentId,
             courseId,
-            academicYearId: oldMembership.academicYearId,
+            batchId: newData.batchId,
           }));
           await enrollmentRepository.bulkCreate(enrollments, transaction, true);
         }
@@ -241,13 +266,13 @@ export const classMembershipRepository = {
         const enrollments = autoEnrollCourseIds.map((courseId) => ({
           studentId: newData.studentId,
           courseId,
-          academicYearId: newData.academicYearId,
+          batchId: newData.batchId,
         }));
         await enrollmentRepository.bulkCreate(enrollments, transaction);
       }
       await enrollmentRepository.bulkComplete(
         oldMembership.studentId,
-        oldMembership.academicYearId,
+        oldMembership.classId,
         transaction,
       );
       oldMembership.outcome = CLASS_MEMBERSHIP_OUTCOMES.TRANSFERRED;

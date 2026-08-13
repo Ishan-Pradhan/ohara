@@ -13,6 +13,9 @@ import { cn } from '../../lib/cn.js';
 
 interface StudentCourseSectionNavProps {
   courseId: string;
+  /** Content/Tutor/Study Tools are live-course features that don't apply
+   * (and stay 403'd server-side, on purpose) once a course is completed. */
+  isPastCourse?: boolean;
 }
 
 const navItemClass = ({ isActive }: { isActive: boolean }) =>
@@ -21,23 +24,27 @@ const navItemClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-surface-hover hover:text-fg',
   );
 
-export const StudentCourseSectionNav = ({ courseId }: StudentCourseSectionNavProps) => {
+export const StudentCourseSectionNav = ({ courseId, isPastCourse }: StudentCourseSectionNavProps) => {
   const base = `/student/courses/${courseId}`;
 
   return (
     <nav className="flex flex-col gap-0.5">
-      <NavLink to={`${base}/content`} end className={navItemClass}>
-        <BookOpen className="size-4.5 shrink-0" aria-hidden />
-        Content
-      </NavLink>
-      <NavLink to={`${base}/tutor`} end className={navItemClass}>
-        <Sparkles className="size-4.5 shrink-0" aria-hidden />
-        AI Tutor
-      </NavLink>
-      <NavLink to={`${base}/study-tools`} end className={navItemClass}>
-        <GraduationCap className="size-4.5 shrink-0" aria-hidden />
-        Study Tools
-      </NavLink>
+      {!isPastCourse ? (
+        <>
+          <NavLink to={`${base}/content`} end className={navItemClass}>
+            <BookOpen className="size-4.5 shrink-0" aria-hidden />
+            Content
+          </NavLink>
+          <NavLink to={`${base}/tutor`} end className={navItemClass}>
+            <Sparkles className="size-4.5 shrink-0" aria-hidden />
+            AI Tutor
+          </NavLink>
+          <NavLink to={`${base}/study-tools`} end className={navItemClass}>
+            <GraduationCap className="size-4.5 shrink-0" aria-hidden />
+            Study Tools
+          </NavLink>
+        </>
+      ) : null}
       <NavLink to={`${base}/assignments`} end className={navItemClass}>
         <ClipboardList className="size-4.5 shrink-0" aria-hidden />
         Assignments

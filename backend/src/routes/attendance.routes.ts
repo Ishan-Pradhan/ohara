@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyJWT, requireCourseTeacher, requireEnrolledStudent } from '../middlewares/auth.middleware.js';
+import { verifyJWT, requireCourseTeacher, requireCourseAccess } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import {
   createAttendanceSessionSchema,
@@ -53,6 +53,6 @@ router
 
 router
   .route('/:courseId/attendance/me')
-  .get(verifyJWT, requireEnrolledStudent, validate(getMyAttendanceSchema), getMyAttendance);
+  .get(verifyJWT, requireCourseAccess, validate(getMyAttendanceSchema), getMyAttendance);
 
 export default router;

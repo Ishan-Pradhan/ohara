@@ -18,18 +18,16 @@ import { ApiError } from '../utils/ApiError.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { deleteBlockersRepository } from '../repositories/deleteBlockers.repository.js';
 import { assertDeletable } from '../utils/deleteBlockers.utils.js';
-import { deriveClassTerm } from '../utils/academicTerm.utils.js';
 
 // ── PROGRAMS ────────────────────────────────────────────────────────────────
 
 export const createProgram = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { name, institutionType, description, affiliation, abbreviation } =
+    const { name, description, affiliation, abbreviation } =
       req.validated?.body as ProgramCreationAttributes;
 
     const program = await programRepository.create({
       name,
-      institutionType,
       description: description ?? null,
       affiliation: affiliation ?? null,
       abbreviation: abbreviation ?? null,
@@ -50,10 +48,7 @@ export const updateProgram = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
     const body = req.validated?.body as Partial<
-      Pick<
-        ProgramCreationAttributes,
-        'name' | 'institutionType' | 'description' | 'affiliation' | 'abbreviation'
-      >
+      Pick<ProgramCreationAttributes, 'name' | 'description' | 'affiliation' | 'abbreviation'>
     >;
 
     const program = await programRepository.update(id, body);
@@ -142,20 +137,14 @@ export const deleteClass = asyncHandler(
 
 export const createBatch = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { programId, name, startAcademicYearId } =
-      req.validated?.body as BatchCreationAttributes;
+    const { programId, name } = req.validated?.body as BatchCreationAttributes;
 
     const program = await programRepository.findById(programId);
     if (!program) {
       throw new ApiError(404, 'Program not found');
     }
 
-    const year = await academicYearRepository.findById(startAcademicYearId);
-    if (!year) {
-      throw new ApiError(404, 'Academic year not found');
-    }
-
-    const batch = await batchRepository.create({ programId, name, startAcademicYearId });
+    const batch = await batchRepository.create({ programId, name });
     return ok(res, serializeBatch(batch), 'Batch created', 201);
   },
 );
@@ -281,31 +270,20 @@ export const deleteAcademicYear = asyncHandler(
 
 export const createSection = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, academicYearId, name, classTeacherId, capacity } =
+    const { classId, batchId, startDate, name, classTeacherId, capacity } =
       req.validated?.body as SectionCreationAttributes;
 
-    const cls = await classRepository.findByIdWithProgram(classId);
-    if (!cls || !cls.program) {
+    const cls = await classRepository.findById(classId);
+    if (!cls) {
       throw new ApiError(404, 'Class not found');
     }
 
-    const year = await academicYearRepository.findById(academicYearId);
-    if (!year) {
-      throw new ApiError(404, 'Academic year not found');
+    const batch = await batchRepository.findById(batchId);
+    if (!batch) {
+      throw new ApiError(404, 'Batch not found');
     }
-
-    // The "show all years" override lets an admin pick any academic year,
-    // including one on the wrong odd/even cycle for this class — that's how
-    // a real admin ended up with a "Semester 1" section under an even-term
-    // year. Reject it here rather than let it silently corrupt promotion
-    // eligibility later (promotion checks the *target section's* academic
-    // year, not the class itself).
-    const requiredTerm = deriveClassTerm(cls.program.institutionType, cls.orderIndex);
-    if (year.term !== requiredTerm) {
-      throw new ApiError(
-        400,
-        `${cls.name} requires a '${requiredTerm}'-term academic year, but '${year.name}' is '${year.term}'.`,
-      );
+    if (batch.programId !== cls.programId) {
+      throw new ApiError(400, 'Batch must belong to the same program as the class');
     }
 
     if (classTeacherId) {
@@ -320,7 +298,8 @@ export const createSection = asyncHandler(
 
     const section = await sectionRepository.create({
       classId,
-      academicYearId,
+      batchId,
+      startDate,
       name,
       classTeacherId: classTeacherId ?? null,
       capacity: capacity ?? null,
@@ -332,12 +311,11 @@ export const createSection = asyncHandler(
 
 export const listSections = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, academicYearId, batchId } = req.validated?.query as {
+    const { classId, batchId } = req.validated?.query as {
       classId?: string;
-      academicYearId?: string;
       batchId?: string;
     };
-    const sections = await sectionRepository.findAll({ classId, academicYearId, batchId });
+    const sections = await sectionRepository.findAll({ classId, batchId });
     const counts = await classMembershipRepository.countBySections(sections.map((s) => s.id));
     return ok(
       res,
@@ -423,8 +401,8 @@ export const createCourse = asyncHandler(
     // When a compulsory course is added after students are already placed,
     // auto-enroll every currently-active student in the class so they're not
     // missed. `ignoreDuplicates` is safe here — the enrollment table has a
-    // UNIQUE(studentId, courseId, academicYearId) constraint, so any student
-    // who somehow already has a row for this course is silently skipped.
+    // UNIQUE(studentId, courseId, batchId) constraint, so any student who
+    // somehow already has a row for this course is silently skipped.
     if (courseType === 'compulsory') {
       const sections = await sectionRepository.findAll({ classId });
 
@@ -435,7 +413,7 @@ export const createCourse = asyncHandler(
               memberships.map((m) => ({
                 studentId: m.studentId,
                 courseId: course.id,
-                academicYearId: section.academicYearId,
+                batchId: section.batchId,
               })),
             ),
           ),

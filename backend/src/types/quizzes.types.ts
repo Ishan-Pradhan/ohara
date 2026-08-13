@@ -11,7 +11,7 @@ export interface McqAnswer {
 export interface QuizAttributes {
   id: string;
   courseId: string;
-  academicYearId: string;
+  batchId: string;
   title: string;
   status: QuizStatus;
   createdAt?: Date;

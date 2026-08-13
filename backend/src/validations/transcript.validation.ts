@@ -29,6 +29,8 @@ const transcriptSemesterSectionSchema = z.object({
   classId: z.uuid(),
   className: z.string(),
   orderIndex: z.number(),
+  batchName: z.string().nullable(),
+  sectionName: z.string().nullable(),
   examTerms: z.array(z.object({
     examTermId: z.uuid(),
     examTermName: z.string(),
@@ -48,7 +50,7 @@ const transcriptSchema = registry.register(
     programName: z.string(),
     className: z.string(),
     sectionName: z.string(),
-    academicYearName: z.string(),
+    batchName: z.string(),
     semesters: z.array(transcriptSemesterSectionSchema),
     overallPercentage: z.number().nullable(),
     overallGrade: z.string(),

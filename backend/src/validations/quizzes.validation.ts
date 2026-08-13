@@ -46,6 +46,9 @@ export const createQuizSchema = {
 
 export const listQuizzesSchema = {
   params: z.object({ courseId: z.uuid() }),
+  // Omitted -> the course's current batch (unchanged default). Given -> a
+  // specific past batch's quizzes, for viewing completed-course history.
+  query: z.object({ batchId: z.uuid().optional() }),
 };
 
 export const getQuizSchema = {
@@ -226,12 +229,14 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/quizzes',
   tags: ['Quizzes'],
-  request: { params: listQuizzesSchema.params },
+  request: { params: listQuizzesSchema.params, query: listQuizzesSchema.query },
   responses: {
     200: {
-      description: "A course's quizzes — teachers/admins see draft and published, students see published only",
+      description:
+        "A course's quizzes — teachers/admins see draft and published, students see published only. Optional batchId views a specific past batch's quizzes (completed-course history); omitted defaults to the current batch.",
       content: { 'application/json': { schema: envelope(z.array(quizSchema)) } },
     },
+    400: { description: "batchId given but has no history in this course's class" },
     401: unauthenticated,
     403: forbidden,
   },

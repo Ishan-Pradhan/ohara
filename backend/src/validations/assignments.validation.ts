@@ -39,6 +39,9 @@ export const updateAssignmentSchema = {
 
 export const listAssignmentsSchema = {
   params: z.object({ courseId: z.uuid() }),
+  // Omitted -> the course's current batch (unchanged default). Given -> a
+  // specific past batch's assignments, for viewing completed-course history.
+  query: z.object({ batchId: z.uuid().optional() }),
 };
 
 export const getAssignmentSchema = {
@@ -91,12 +94,14 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/assignments',
   tags: ['Assignments'],
-  request: { params: listAssignmentsSchema.params },
+  request: { params: listAssignmentsSchema.params, query: listAssignmentsSchema.query },
   responses: {
     200: {
-      description: "A course's assignments, soonest due date first",
+      description:
+        "A course's assignments, soonest due date first. Optional batchId views a specific past batch's assignments (completed-course history); omitted defaults to the current batch.",
       content: { 'application/json': { schema: envelope(z.array(assignmentSchema)) } },
     },
+    400: { description: "batchId given but has no history in this course's class" },
     401: unauthenticated,
     403: forbidden,
   },

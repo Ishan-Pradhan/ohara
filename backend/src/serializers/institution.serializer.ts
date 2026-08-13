@@ -10,7 +10,6 @@ import type { User } from '../models/users.model.js';
 export const serializeProgram = (p: Program) => ({
   id: p.id,
   name: p.name,
-  institutionType: p.institutionType,
   description: p.description,
   affiliation: p.affiliation,
   abbreviation: p.abbreviation,
@@ -21,7 +20,6 @@ export const serializeBatch = (b: Batch) => ({
   id: b.id,
   programId: b.programId,
   name: b.name,
-  startAcademicYearId: b.startAcademicYearId,
   createdAt: b.createdAt,
 });
 
@@ -46,7 +44,8 @@ export const serializeAcademicYear = (y: AcademicYear) => ({
 export const serializeSection = (s: Section, enrolledCount = 0) => ({
   id: s.id,
   classId: s.classId,
-  academicYearId: s.academicYearId,
+  batchId: s.batchId,
+  startDate: s.startDate,
   classTeacherId: s.classTeacherId,
   name: s.name,
   capacity: s.capacity,

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyJWT, requireCourseTeacher, requireEnrolledStudent } from '../middlewares/auth.middleware.js';
+import { verifyJWT, requireCourseTeacher, requireCourseAccess } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { getGradebookSchema, getMyGradesSchema } from '../validations/gradebook.validation.js';
 import { getGradebook, getMyGrades } from '../controllers/gradebook.controller.js';
@@ -15,6 +15,6 @@ router
 
 router
   .route('/:courseId/gradebook/me')
-  .get(verifyJWT, requireEnrolledStudent, validate(getMyGradesSchema), getMyGrades);
+  .get(verifyJWT, requireCourseAccess, validate(getMyGradesSchema), getMyGrades);
 
 export default router;

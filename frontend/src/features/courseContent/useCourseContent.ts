@@ -11,6 +11,7 @@ import {
   updateLesson,
   deleteLesson,
   publishCourse,
+  fetchCourseBatches,
 } from './courseContent.api.js';
 import type { CreateLessonInput, CreateModuleInput } from './courseContent.schema.js';
 
@@ -97,3 +98,14 @@ export const usePublishCourse = (courseId: string) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: COURSES_KEY }),
   });
 };
+
+export const courseBatchesKey = (courseId: string) => ['courseBatches', courseId] as const;
+
+/** Powers the teacher/admin batch dropdown for viewing a course's
+ * completed-course history. */
+export const useCourseBatches = (courseId: string) =>
+  useQuery({
+    queryKey: courseBatchesKey(courseId),
+    queryFn: () => fetchCourseBatches(courseId),
+    enabled: Boolean(courseId),
+  });

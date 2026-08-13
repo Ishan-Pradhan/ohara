@@ -28,6 +28,11 @@ interface AttendanceSectionProps {
   externalSectionId?: string;
   /** When true, the component is used inside a parent that has its own section selector (e.g. admin cascading filters). Hides the internal section selector entirely. */
   hasExternalSectionSelector?: boolean;
+  /** Omitted -> whichever batch is currently relevant (unchanged default).
+   * Given -> that specific batch's sections instead, for a teacher browsing
+   * a past batch's attendance (completed-course history). Only meaningful
+   * when the internal section selector is in play (uncontrolled mode). */
+  batchId?: string;
 }
 
 type SortKey = 'name' | 'percentage' | 'present' | 'late' | 'absent';
@@ -49,22 +54,22 @@ const StatTile = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSectionSelector }: AttendanceSectionProps) => {
-  const { data: sectionOptions, isLoading: sectionOptionsLoading } = useAttendanceSections(courseId);
+export const AttendanceSection = ({ courseId, externalSectionId, hasExternalSectionSelector, batchId }: AttendanceSectionProps) => {
+  const { data: sectionOptions, isLoading: sectionOptionsLoading } = useAttendanceSections(courseId, batchId);
   const [internalSectionId, setInternalSectionId] = useState('');
 
   // Determine the effective section ID and whether we control the selector
   const controlled = hasExternalSectionSelector || externalSectionId !== undefined;
   const selectedSectionId = controlled ? (externalSectionId || '') : internalSectionId;
 
-  // Switching subjects (courseId changes) reuses this same component
-  // instance rather than remounting it, so without this the previous
-  // course's selected section would linger — not matching any option in
-  // the new course's list, and blocking the auto-select below from ever
-  // running again since it only fires while internalSectionId is empty.
+  // Switching subjects (courseId changes) or batches reuses this same
+  // component instance rather than remounting it, so without this the
+  // previous selection would linger — not matching any option in the new
+  // list, and blocking the auto-select below from ever running again since
+  // it only fires while internalSectionId is empty.
   useEffect(() => {
     setInternalSectionId('');
-  }, [courseId]);
+  }, [courseId, batchId]);
 
   useEffect(() => {
     if (!controlled && !internalSectionId && sectionOptions && sectionOptions.length > 0) {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ArrowRight,
@@ -20,7 +20,6 @@ import {
   type Class,
 } from '../../../features/institution/institution.schema.js';
 import {
-  useAcademicYears,
   useBatches,
   useClasses,
   useCourses,
@@ -41,7 +40,6 @@ import { Button } from '../../../components/ui/Button.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Field } from '../../../components/ui/Field.js';
 import { Input } from '../../../components/ui/Input.js';
-import { Select } from '../../../components/ui/Select.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 import { Dialog, ConfirmDialog } from '../../../components/ui/Dialog.js';
@@ -72,7 +70,6 @@ export const ClassesExplorerPage = () => {
   const { data: classes, isLoading: classesLoading } = useClasses();
   const { data: sections } = useSections();
   const { data: courses } = useCourses();
-  const { data: years } = useAcademicYears();
   const createClass = useCreateClass();
   const updateClass = useUpdateClass();
   const deleteClass = useDeleteClass();
@@ -98,21 +95,15 @@ export const ClassesExplorerPage = () => {
   const {
     register: batchField,
     handleSubmit: handleBatchSubmit,
-    control: batchControl,
     reset: resetBatchForm,
     formState: { errors: batchErrors },
-  } = useForm<{ name: string; startAcademicYearId: string }>({
+  } = useForm<{ name: string }>({
     resolver: zodResolver(batchFormSchema),
   });
 
-  // Counts every section this class has ever had, across every academic
-  // year — not scoped to "the current year," which doesn't have a single
-  // correct value here: `is_current` is unique per *term* (odd/even/annual),
-  // not globally, and one program's classes span more than one term at once
-  // (Semester 1 odd, Semester 2 even, Semester 3 odd, all listed together).
-  // The previous version picked whichever `is_current` row happened to come
-  // first regardless of term, so every class of the *other* term showed 0
-  // sections even when it genuinely had some (fixed 2026-08-12).
+  // Counts every section this class has ever had, across every batch — not
+  // scoped to "the current batch," since browsing a class's past sections
+  // (old attendance, correcting a past transcript entry) is a real need.
   const sectionCount = (classId: string) =>
     sections?.filter((s) => s.classId === classId).length ?? 0;
   const courseCount = (classId: string) =>
@@ -168,21 +159,15 @@ export const ClassesExplorerPage = () => {
   const isPending = editing ? updateClass.isPending : createClass.isPending;
   const isLoading = programsLoading || classesLoading;
 
-  const yearOptions = (years ?? []).map((y) => ({
-    value: y.id,
-    label: `${y.name} (${y.term === 'odd' ? 'Odd semester' : y.term === 'even' ? 'Even semester' : 'Annual'})`,
-  }));
-  const yearName = (yearId: string) => years?.find((y) => y.id === yearId)?.name ?? '…';
-
   const openCreateBatch = () => {
     setEditingBatch(null);
-    resetBatchForm({ name: '', startAcademicYearId: '' });
+    resetBatchForm({ name: '' });
     setBatchDialogOpen(true);
   };
 
   const openEditBatch = (batch: Batch) => {
     setEditingBatch(batch);
-    resetBatchForm({ name: batch.name, startAcademicYearId: batch.startAcademicYearId });
+    resetBatchForm({ name: batch.name });
     setBatchDialogOpen(true);
   };
 
@@ -319,8 +304,8 @@ export const ClassesExplorerPage = () => {
             <div>
               <h2 className="text-base font-semibold text-fg">Batches</h2>
               <p className="text-sm text-muted">
-                Admission cohorts within this program, e.g. Batch 2028, anchored to a starting
-                academic year.
+                Admission cohorts within this program, e.g. Batch 2028 — fixed for a student's
+                entire time in the program, across every promotion.
               </p>
             </div>
             <Button onClick={openCreateBatch}>
@@ -366,10 +351,6 @@ export const ClassesExplorerPage = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-
-                  <p className="text-xs text-muted">
-                    Starts {yearName(batch.startAcademicYearId)}
-                  </p>
                 </Card>
               ))}
             </div>
@@ -443,28 +424,6 @@ export const ClassesExplorerPage = () => {
 
           <Field label="Name" htmlFor="batchName" error={batchErrors.name?.message}>
             <Input id="batchName" placeholder="e.g. Batch 2028" {...batchField('name')} />
-          </Field>
-
-          <Field
-            label="Starting academic year"
-            htmlFor="startAcademicYearId"
-            error={batchErrors.startAcademicYearId?.message}
-            hint={editingBatch ? "Can't be changed after the batch is created" : undefined}
-          >
-            <Controller
-              control={batchControl}
-              name="startAcademicYearId"
-              render={({ field: selectField }) => (
-                <Select
-                  id="startAcademicYearId"
-                  options={yearOptions}
-                  value={selectField.value}
-                  onValueChange={selectField.onChange}
-                  invalid={Boolean(batchErrors.startAcademicYearId)}
-                  placeholder="Select an academic year"
-                />
-              )}
-            />
           </Field>
 
           <div className="mt-2 flex justify-end gap-3">

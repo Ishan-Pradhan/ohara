@@ -56,7 +56,7 @@ export const TranscriptView = ({ studentId }: TranscriptViewProps) => {
             <div>
               <h2 className="text-xl font-bold text-fg">{reportCard.studentName}</h2>
               <p className="mt-0.5 text-sm text-muted">
-                {[reportCard.programName, reportCard.className, `Section ${reportCard.sectionName}`, reportCard.academicYearName]
+                {[reportCard.programName, reportCard.className, `Section ${reportCard.sectionName}`, reportCard.batchName]
                   .filter((v) => v && v !== '—')
                   .join(' · ')}
               </p>
@@ -126,7 +126,7 @@ export const TranscriptView = ({ studentId }: TranscriptViewProps) => {
               <div>
                 <h3 className="text-sm font-semibold text-fg">{sem.className}</h3>
                 <p className="mt-0.5 text-xs text-subtle">
-                  {[sem.batchName, sem.sectionName, sem.academicYearName]
+                  {[sem.batchName, sem.sectionName]
                     .filter((v) => v && v !== '—')
                     .join(' · ')}
                 </p>

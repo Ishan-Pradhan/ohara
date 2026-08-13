@@ -19,7 +19,6 @@ const {
   createProgram,
   createClass,
   createSection,
-  createAcademicYear,
   createCourse,
   createStudentUser,
   createTeacherUser,
@@ -147,12 +146,11 @@ describe('GET /dashboard/me/study-plan', () => {
 
   it('returns the active study plan after one has been generated', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true, term: 'odd' });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const student = await createStudentUser({ email: `s2-${Date.now()}@example.com` });
     const teacher = await createTeacherUser({ email: `t2-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
@@ -254,12 +252,11 @@ describe('POST /dashboard/me/study-plan', () => {
 
   it('generates a plan enriched with upcoming assessments and enrolled course data', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true, term: 'odd' });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, title: 'Chemistry' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, title: 'Chemistry' });
     const student = await createStudentUser({ email: `s-enr-${Date.now()}@example.com` });
     const teacher = await createTeacherUser({ email: `t-enr-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

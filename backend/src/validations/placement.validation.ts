@@ -18,7 +18,7 @@ export const listClassMembershipsSchema = {
   query: z.object({
     studentId: z.uuid().optional(),
     sectionId: z.uuid().optional(),
-    academicYearId: z.uuid().optional(),
+    classId: z.uuid().optional(),
   }),
 };
 
@@ -28,9 +28,9 @@ export const classMembershipSchema = registry.register(
     id: z.uuid(),
     studentId: z.uuid(),
     batchId: z.uuid(),
+    classId: z.uuid(),
     sectionId: z.uuid(),
-    academicYearId: z.uuid(),
-    outcome: z.enum(['enrolled', 'promoted', 'retained', 'graduated', 'transferred']),
+    outcome: z.enum(['enrolled', 'promoted', 'graduated', 'transferred']),
     promotedToId: z.uuid().nullable(),
     createdAt: z.iso.datetime(),
   }),
@@ -52,7 +52,7 @@ registry.registerPath({
     },
     400: {
       description:
-        'Validation failed, studentId is not a student, or already placed for this academic year',
+        'Validation failed, studentId is not a student, or already placed in that class',
     },
     401: unauthenticated,
     403: forbidden,
@@ -90,7 +90,7 @@ export const listEnrollmentsSchema = {
   query: z.object({
     studentId: z.uuid().optional(),
     courseId: z.uuid().optional(),
-    academicYearId: z.uuid().optional(),
+    batchId: z.uuid().optional(),
   }),
 };
 
@@ -100,7 +100,7 @@ export const enrollmentSchema = registry.register(
     id: z.uuid(),
     studentId: z.uuid(),
     courseId: z.uuid(),
-    academicYearId: z.uuid(),
+    batchId: z.uuid(),
     status: z.enum(['active', 'completed', 'dropped']),
     createdAt: z.iso.datetime(),
   }),
@@ -153,9 +153,11 @@ export const transferClassMembershipSchema = {
 };
 
 /** Full reassign — the student can be moved to any section (any program,
- * class, and academic year/term) and any batch of that new program. The old
- * placement is closed out with outcome 'transferred' and its active course
- * enrollments completed; the new class's compulsory courses are auto-enrolled. */
+ * class, and batch). The old placement is closed out with outcome
+ * 'transferred' and its active course enrollments completed; the new
+ * class's compulsory courses are auto-enrolled. This is the admin
+ * correction tool for a mis-placement, distinct from promotion — it's the
+ * one lifecycle action that can move a student to a different batch. */
 export const reassignClassMembershipSchema = {
   params: membershipIdParams.params,
   body: z.object({
@@ -180,7 +182,7 @@ registry.registerPath({
       content: { 'application/json': { schema: envelope(classMembershipSchema) } },
     },
     400: {
-      description: 'Validation failed, or membership is not for the current academic year',
+      description: 'Validation failed, or target section is not for the membership\'s own batch',
     },
     401: unauthenticated,
     403: forbidden,
@@ -214,12 +216,12 @@ registry.registerPath({
   },
 });
 
-// ── LIFECYCLE: OUTCOME (PROMOTE / RETAIN / GRADUATE) ─────────────────────────
+// ── LIFECYCLE: OUTCOME (PROMOTE / GRADUATE) ──────────────────────────────────
 
 export const setClassMembershipOutcomeSchema = {
   params: membershipIdParams.params,
   body: z.object({
-    outcome: z.enum(['promoted', 'retained', 'graduated']),
+    outcome: z.enum(['promoted', 'graduated']),
     targetSectionId: z.uuid().optional(),
   }),
 };
@@ -237,12 +239,12 @@ registry.registerPath({
   responses: {
     201: {
       description:
-        "Outcome recorded. For promoted/retained, a new class membership is created for the current academic year (auto-enrolling if the target program is school-type); for graduated, the student's status is set to graduated and no new membership is created",
+        "Outcome recorded. For promoted, a new class membership is created in the next class of the student's own batch, auto-enrolling its compulsory courses; for graduated, the student's status is set to graduated and no new membership is created",
       content: { 'application/json': { schema: envelope(classMembershipSchema) } },
     },
     400: {
       description:
-        'Validation failed, targetSectionId missing for promoted/retained, or membership is already for the current academic year',
+        'Validation failed, targetSectionId missing for promoted, or target section is not for the next class in the same program/batch',
     },
     401: unauthenticated,
     403: forbidden,
@@ -293,7 +295,9 @@ export const bulkPromoteSectionSchema = {
       .array(
         z.object({
           studentId: z.uuid(),
-          outcome: z.enum(['retained', 'graduated']),
+          outcome: z.enum(['promoted', 'graduated']),
+          // Only meaningful for outcome: 'promoted' — sends this student to a
+          // different section than the batch-wide default.
           targetSectionId: z.uuid().optional(),
         }),
       )

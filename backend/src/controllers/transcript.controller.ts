@@ -9,7 +9,6 @@ import { examMarkRepository } from '../repositories/examMarks.repository.js';
 import { courseTeacherRepository } from '../repositories/courseTeachers.repository.js';
 import { institutionProfileRepository } from '../repositories/institutionProfile.repository.js';
 import { sectionRepository } from '../repositories/sections.repository.js';
-import { academicYearRepository } from '../repositories/academicYears.repository.js';
 import { batchRepository } from '../repositories/batches.repository.js';
 import { buildReportCard } from '../serializers/examMark.serializer.js';
 import { generateReportCardPdf } from '../services/reportCardPdf.service.js';
@@ -43,7 +42,7 @@ const loadTranscript = async (studentId: string, caller: User) => {
     // marks.
     const [taught, enrollments] = await Promise.all([
       courseTeacherRepository.findByTeacherId(caller.id),
-      enrollmentRepository.findAll({ studentId, academicYearId: membership.academicYearId }),
+      enrollmentRepository.findAll({ studentId, batchId: membership.batchId }),
     ]);
     const taughtCourseIds = new Set(taught.map((t) => t.courseId));
     const isTeachingTeacher = enrollments.some((e) => taughtCourseIds.has(e.courseId));
@@ -55,7 +54,7 @@ const loadTranscript = async (studentId: string, caller: User) => {
   }
 
   // Build per-semester metadata from the student's historical memberships
-  const semesterMeta = new Map<string, { batchName: string | null; sectionName: string | null; academicYearName: string | null }>();
+  const semesterMeta = new Map<string, { batchName: string | null; sectionName: string | null }>();
   const classIds = new Set(marks.map((m) => m.course?.classId).filter((id): id is string => Boolean(id)));
   const memberships = await classMembershipRepository.findAll({ studentId });
 
@@ -69,14 +68,10 @@ const loadTranscript = async (studentId: string, caller: User) => {
       const batch = m.batchId
         ? await batchRepository.findAll().then((batches) => batches.find((b) => b.id === m.batchId))
         : null;
-      const academicYear = m.academicYearId
-        ? await academicYearRepository.findAll().then((years) => years.find((y) => y.id === m.academicYearId))
-        : null;
 
       semesterMeta.set(classId, {
         batchName: batch?.name ?? null,
         sectionName: section?.name ?? null,
-        academicYearName: academicYear?.name ?? null,
       });
       break;
     }
@@ -112,7 +107,7 @@ export const getTranscript = asyncHandler(
       programName: membership.section?.class?.program?.name ?? '—',
       className: membership.section?.class?.name ?? '—',
       sectionName: membership.section?.name ?? '—',
-      academicYearName: membership.academicYear?.name ?? '—',
+      batchName: membership.batch?.name ?? '—',
       semesters,
       overallPercentage,
       overallGrade,
@@ -140,7 +135,7 @@ export const getTranscriptPdf = asyncHandler(
       programName: membership.section?.class?.program?.name ?? '—',
       className: membership.section?.class?.name ?? '—',
       sectionName: membership.section?.name ?? '—',
-      academicYearName: membership.academicYear?.name ?? '—',
+      batchName: membership.batch?.name ?? '—',
       semesters,
       overallPercentage,
       overallGrade,

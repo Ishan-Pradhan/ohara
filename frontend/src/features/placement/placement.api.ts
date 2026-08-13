@@ -6,6 +6,7 @@ import {
   classMembershipSchema,
   electiveCourseSchema,
   enrollmentSchema,
+  pastCourseSchema,
   rosterEntrySchema,
   studentCourseAttendanceSchema,
   studentPlacementSchema,
@@ -17,6 +18,7 @@ import {
   type ElectiveCourse,
   type Enrollment,
   type OutcomeInput,
+  type PastCourse,
   type RosterEntry,
   type StudentCourseAttendance,
   type StudentPlacement,
@@ -59,6 +61,12 @@ export const setClassMembershipOutcome = async (
 export const fetchStudentPlacement = async (studentId: string): Promise<StudentPlacement> => {
   const res = await api.get(`/students/${studentId}/placement`);
   return studentPlacementSchema.parse(res.data.data);
+};
+
+/** The caller's own completed-course history — "My Courses" Past section. */
+export const fetchStudentPastCourses = async (studentId: string): Promise<PastCourse[]> => {
+  const res = await api.get(`/students/${studentId}/past-courses`);
+  return z.array(pastCourseSchema).parse(res.data.data);
 };
 
 /** Every course in the student's current placement, together — see

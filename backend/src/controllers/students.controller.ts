@@ -6,7 +6,7 @@ import { enrollmentRepository } from '../repositories/enrollments.repository.js'
 import { courseRepository } from '../repositories/courses.repository.js';
 import { attendanceRecordRepository } from '../repositories/attendanceRecords.repository.js';
 import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
-import { serializeStudentPlacement } from '../serializers/students.serializer.js';
+import { serializeStudentPlacement, serializeStudentPastCourses } from '../serializers/students.serializer.js';
 import { serializeElectiveCourse } from '../serializers/institution.serializer.js';
 import { buildAttendancePercentage } from '../serializers/attendance.serializer.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -39,10 +39,7 @@ export const getStudentPlacement = asyncHandler(
       throw new ApiError(404, 'Student is not currently placed');
     }
 
-    const enrollments = await enrollmentRepository.findActiveWithDetails(
-      studentId,
-      membership.academicYearId,
-    );
+    const enrollments = await enrollmentRepository.findActiveWithDetails(studentId);
 
     const isTeachingTeacher =
       user.role === 'teacher' &&
@@ -61,6 +58,27 @@ export const getStudentPlacement = asyncHandler(
       serializeStudentPlacement(membership, enrollments, student, profile),
       'Student placement retrieved',
     );
+  },
+);
+
+/** A student's own completed-course history ("My Courses" Past section —
+ * see docs/superpowers/specs/2026-08-13-completed-course-history-design.md).
+ * Self-only: admins/teachers have their own dedicated ways to browse a past
+ * batch (the Gradebook batch picker), so this doesn't need their three-way
+ * access pattern. */
+export const getStudentPastCourses = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { studentId } = req.validated?.params as { studentId: string };
+    const user = req.user;
+    if (!user) {
+      throw new ApiError(401, 'Unauthorized request');
+    }
+    if (user.id !== studentId) {
+      throw new ApiError(403, "Not authorized to view this student's past courses");
+    }
+
+    const enrollments = await enrollmentRepository.findCompletedWithDetails(studentId);
+    return ok(res, serializeStudentPastCourses(enrollments), 'Past courses retrieved');
   },
 );
 
@@ -88,10 +106,7 @@ export const getStudentElectives = asyncHandler(
     const electives = classCourses.filter((c) => c.courseType === 'elective');
     const counts = await enrollmentRepository.countByCourses(electives.map((c) => c.id));
 
-    const activeEnrollments = await enrollmentRepository.findActiveWithDetails(
-      studentId,
-      membership.academicYearId,
-    );
+    const activeEnrollments = await enrollmentRepository.findActiveWithDetails(studentId);
     const enrolledCourseIds = new Set(
       activeEnrollments.map((e) => e.course?.id).filter((id): id is string => Boolean(id)),
     );
@@ -134,10 +149,7 @@ export const getStudentAttendance = asyncHandler(
       throw new ApiError(404, 'Student is not currently placed');
     }
 
-    const enrollments = await enrollmentRepository.findActiveWithDetails(
-      studentId,
-      membership.academicYearId,
-    );
+    const enrollments = await enrollmentRepository.findActiveWithDetails(studentId);
 
     const isTeachingTeacher =
       user.role === 'teacher' &&

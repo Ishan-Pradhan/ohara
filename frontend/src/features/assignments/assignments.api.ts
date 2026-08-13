@@ -11,8 +11,10 @@ import {
   type Grade,
 } from './assignments.schema.js';
 
-export const fetchAssignments = async (courseId: string): Promise<Assignment[]> => {
-  const res = await api.get(`/courses/${courseId}/assignments`);
+// batchId omitted -> the course's current batch. Given -> a specific past
+// batch's assignments (viewing completed-course history).
+export const fetchAssignments = async (courseId: string, batchId?: string): Promise<Assignment[]> => {
+  const res = await api.get(`/courses/${courseId}/assignments`, { params: batchId ? { batchId } : undefined });
   return z.array(assignmentSchema).parse(res.data.data);
 };
 

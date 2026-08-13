@@ -21,9 +21,16 @@ import { ApiError } from '../utils/ApiError.js';
 export const getAtRiskDashboard = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const { sectionId } = (req.validated?.query ?? {}) as { sectionId?: string };
+    const { sectionId, batchId } = (req.validated?.query ?? {}) as {
+      sectionId?: string;
+      batchId?: string;
+    };
 
-    let metrics = await computeCourseMetrics(courseId);
+    // batchId omitted -> the course's current batch (unchanged default).
+    // Given -> a specific past batch's at-risk metrics (viewing
+    // completed-course history). sectionId stays a separate, optional
+    // narrowing filter for when a batch has more than one section.
+    let metrics = await computeCourseMetrics(courseId, batchId);
 
     // When a section is selected, filter to only students in that section
     if (sectionId) {
@@ -44,8 +51,9 @@ export const getAtRiskDashboard = asyncHandler(
 export const explainAtRisk = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId, studentId } = req.validated?.params as { courseId: string; studentId: string };
+    const { batchId } = (req.validated?.query ?? {}) as { batchId?: string };
 
-    const metrics = await computeCourseMetrics(courseId);
+    const metrics = await computeCourseMetrics(courseId, batchId);
     const studentMetrics = metrics.find((m) => m.studentId === studentId);
     if (!studentMetrics) {
       throw new ApiError(404, 'Student not found in this course');

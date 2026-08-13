@@ -9,7 +9,6 @@ import {
   useBatches,
   useBatchCurrentPlacement,
   useSections,
-  useAcademicYears,
 } from '../features/institution/useInstitution.js';
 import { useExamTerms } from '../features/examMarks/useExamMarks.js';
 import { useMyCourses } from '../features/teacher/useTeacher.js';
@@ -54,7 +53,6 @@ export const TranscriptPage = () => {
 /** Admin view: Program → Batch → Semester (Class) → Section → Exam Term → spreadsheet grid */
 const AdminBulkMarksWorkspace = () => {
   const { data: programs, isLoading: programsLoading } = usePrograms();
-  const { data: academicYears } = useAcademicYears();
 
   const [programId, setProgramId] = useState('');
   const [batchId, setBatchId] = useState('');
@@ -78,7 +76,6 @@ const AdminBulkMarksWorkspace = () => {
   );
   const { data: currentPlacement } = useBatchCurrentPlacement(batchId);
 
-  const yearById = new Map((academicYears ?? []).map((y) => [y.id, y]));
   const currentClassIds = new Set((currentPlacement ?? []).map((p) => p.classId));
   const currentSectionIds = new Set((currentPlacement ?? []).map((p) => p.sectionId));
 
@@ -97,30 +94,19 @@ const AdminBulkMarksWorkspace = () => {
     })
     .map((c) => ({ value: c.id, label: currentClassIds.has(c.id) ? `${c.name} (current)` : c.name }));
 
-  // A retained batch that repeated a semester shows up as two sections for
-  // the same class (one per academic-year attempt) — only then is the year
-  // worth showing, since batch and semester are already fixed by this point.
-  const sectionNameCounts = new Map<string, number>();
-  for (const s of sectionsForClass ?? []) {
-    sectionNameCounts.set(s.name, (sectionNameCounts.get(s.name) ?? 0) + 1);
-  }
+  // Sections are already scoped to this one (classId, batchId) pair, and
+  // (classId, batchId, name) is unique — no more same-named sections to
+  // disambiguate by year, unlike the old academic-year-keyed model.
   const sectionOptions = (sectionsForClass ?? [])
     .slice()
     .sort((a, b) => {
       const aCurrent = currentSectionIds.has(a.id) ? 1 : 0;
       const bCurrent = currentSectionIds.has(b.id) ? 1 : 0;
       if (aCurrent !== bCurrent) return bCurrent - aCurrent;
-      if (a.enrolledCount !== b.enrolledCount) return b.enrolledCount - a.enrolledCount;
-      const aYear = yearById.get(a.academicYearId)?.startDate ?? '';
-      const bYear = yearById.get(b.academicYearId)?.startDate ?? '';
-      return bYear.localeCompare(aYear);
+      return b.enrolledCount - a.enrolledCount;
     })
     .map((s) => {
       const labelParts = [`Section ${s.name}`];
-      if ((sectionNameCounts.get(s.name) ?? 0) > 1) {
-        const yearName = yearById.get(s.academicYearId)?.name;
-        if (yearName) labelParts.push(yearName);
-      }
       if (currentSectionIds.has(s.id)) labelParts.push('current');
       const headcount = s.enrolledCount > 0 ? `${s.enrolledCount} students` : 'empty';
       return { value: s.id, label: `${labelParts.join(' — ')} (${headcount})` };

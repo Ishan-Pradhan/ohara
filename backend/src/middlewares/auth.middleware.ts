@@ -180,7 +180,11 @@ export const requireCourseAccess = async (
   }
 
   if (user.role === 'student') {
-    const enrolled = await enrollmentRepository.isEnrolled(user.id, courseId);
+    // Read access survives promotion (active OR completed) — a student can
+    // still view their own past coursework after moving on. Writing
+    // (submit/attempt) stays gated by requireEnrolledStudent's stricter,
+    // active-only isEnrolled.
+    const enrolled = await enrollmentRepository.hasEverEnrolled(user.id, courseId);
     if (!enrolled) {
       throw new ApiError(403, 'Not enrolled in this course');
     }

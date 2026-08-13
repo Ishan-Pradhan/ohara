@@ -13,6 +13,9 @@ import { SectionStats } from './SectionStats.js';
 
 interface StudentQuizzesSectionProps {
   courseId: string;
+  /** Set when viewing a completed course — see StudentCoursePage. */
+  batchId?: string;
+  readOnly?: boolean;
 }
 
 interface Row {
@@ -61,8 +64,8 @@ const QuizRow = ({ courseId, row }: { courseId: string; row: Row }) => {
   );
 };
 
-export const StudentQuizzesSection = ({ courseId }: StudentQuizzesSectionProps) => {
-  const { data: quizzes, isLoading: quizzesLoading } = useQuizzes(courseId);
+export const StudentQuizzesSection = ({ courseId, batchId }: StudentQuizzesSectionProps) => {
+  const { data: quizzes, isLoading: quizzesLoading } = useQuizzes(courseId, batchId);
   const { data: gradeRow, isLoading: gradesLoading } = useMyGrades(courseId);
 
   if (quizzesLoading || gradesLoading) {

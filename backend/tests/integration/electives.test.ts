@@ -13,7 +13,6 @@ const { User } = await import('../../src/models/users.model.js');
 const {
   createSection,
   createStudentUser,
-  createAcademicYear,
   createProgram,
   createClass,
   createCourse,
@@ -69,11 +68,10 @@ afterAll(async () => {
 const setup = async () => {
   const adminCookies = await signInAs(unique('admin') + '@example.com', 'admin');
 
-  const program = await createProgram({ institutionType: 'college' });
+  const program = await createProgram();
   const currentClass = await createClass({ programId: program.id });
-  const year = await createAcademicYear({ isCurrent: true });
-  const section = await createSection({ classId: currentClass.id, academicYearId: year.id });
   const batch = await createBatch({ programId: program.id });
+  const section = await createSection({ classId: currentClass.id, batchId: batch.id });
 
   const { cookies: studentCookie, id: studentId } = await signInStudent(
     unique('student') + '@example.com',

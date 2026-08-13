@@ -15,7 +15,6 @@ const {
   createSection,
   createStudentUser,
   createTeacherUser,
-  createAcademicYear,
   createProgram,
   createClass,
   createCourse,
@@ -130,28 +129,25 @@ describe('POST /admin/class-memberships', () => {
       studentId: student.id,
       batchId: batch.id,
       sectionId: section.id,
-      academicYearId: section.academicYearId,
+      classId: cls.id,
       outcome: 'enrolled',
     });
   });
 
-  it('rejects placing the same student twice in the same academic year with 400', async () => {
+  it('rejects placing the same student twice in the same class with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear();
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id });
 
-    const programA = await createProgram();
-    const clsA = await createClass({ programId: programA.id });
-    const sectionA = await createSection({ classId: clsA.id, academicYearId: year.id });
-    const batchA = await createBatch({ programId: programA.id });
+    const batchA = await createBatch({ programId: program.id, name: 'A' });
+    const sectionA = await createSection({ classId: cls.id, batchId: batchA.id });
 
-    const programB = await createProgram();
-    const clsB = await createClass({ programId: programB.id });
+    const batchB = await createBatch({ programId: program.id, name: 'B' });
     const sectionB = await createSection({
-      classId: clsB.id,
-      academicYearId: year.id,
+      classId: cls.id,
+      batchId: batchB.id,
       name: 'B',
     });
-    const batchB = await createBatch({ programId: programB.id });
 
     const student = await createStudentUser();
 
@@ -259,9 +255,8 @@ describe('POST /admin/enrollments', () => {
     expect(res.status).toBe(403);
   });
 
-  it('rejects a student with no current-year placement with 404', async () => {
+  it('rejects a student with no current placement with 404', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    await createAcademicYear({ isCurrent: true });
     const course = await createCourse();
     const student = await createStudentUser();
 
@@ -275,14 +270,13 @@ describe('POST /admin/enrollments', () => {
 
   it('enrolls a placed student in a course', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     // Elective so placement doesn't auto-enroll it — this test is about the
     // explicit enrollment endpoint, not auto-enroll.
     const course = await createCourse({ classId: cls.id, courseType: 'elective' });
-    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     await request(app)
@@ -299,19 +293,18 @@ describe('POST /admin/enrollments', () => {
     expect(res.body.data).toMatchObject({
       studentId: student.id,
       courseId: course.id,
-      academicYearId: year.id,
+      batchId: batch.id,
       status: 'active',
     });
   });
 
   it('rejects enrolling the same student in the same course twice with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, courseType: 'elective' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, courseType: 'elective' });
     const student = await createStudentUser();
 
     await request(app)
@@ -354,13 +347,12 @@ describe('GET /admin/enrollments', () => {
 describe('POST /admin/class-memberships — auto-enroll behavior', () => {
   it('auto-enrolls the student in every course of the class for a school program', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'school' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear();
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     await createCourse({ classId: cls.id, title: 'Physics', code: `PHYS-${Date.now()}` });
     await createCourse({ classId: cls.id, title: 'Chemistry', code: `CHEM-${Date.now()}` });
-    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     await request(app)
@@ -378,10 +370,10 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
 
   it('auto-enrolls compulsory courses but not electives, for a college program', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear();
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     const compulsoryCourse = await createCourse({
       classId: cls.id,
       title: 'Physics',
@@ -394,7 +386,6 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
       code: `ART-${Date.now()}`,
       courseType: 'elective',
     });
-    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     const res = await request(app)
@@ -416,31 +407,27 @@ describe('POST /admin/class-memberships — auto-enroll behavior', () => {
 });
 
 describe('POST /admin/sections/:sectionId/promote and GET /admin/sections/:sectionId/roster', () => {
-  it('bulk-promotes a section, applying an override for one student', async () => {
+  it('bulk-promotes a section, applying a custom-target override for one student', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const newYear = await createAcademicYear();
-    const section = await createSection({ classId: classA.id, academicYearId: oldYear.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: classA.id, batchId: batch.id });
     const nextSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       name: 'B',
     });
-    // A same-class ("retained") target section — must be a *different*
-    // academic year from `section`, since ClassMemberships has a unique
-    // (studentId, academicYearId) index: promote() always inserts the new
-    // membership row before closing out the old one, so a retained target
-    // sharing the student's current academic year would collide with their
-    // own still-open row.
-    const retainedSection = await createSection({
-      classId: classA.id,
-      academicYearId: newYear.id,
+    // A second section under the *same* target class — the override lets one
+    // student promote into a different section than the batch-wide default
+    // (e.g. splitting a large section across two target sections), while
+    // still being a normal 'promoted' outcome, same batch, same next class.
+    const alternateSection = await createSection({
+      classId: classB.id,
+      batchId: batch.id,
       name: 'C',
     });
-    const batch = await createBatch({ programId: program.id });
     const studentA = await createStudentUser();
     const studentB = await createStudentUser();
 
@@ -459,7 +446,7 @@ describe('POST /admin/sections/:sectionId/promote and GET /admin/sections/:secti
       .send({
         defaultTargetSectionId: nextSection.id,
         overrides: [
-          { studentId: studentB.id, outcome: 'retained', targetSectionId: retainedSection.id },
+          { studentId: studentB.id, outcome: 'promoted', targetSectionId: alternateSection.id },
         ],
       });
 
@@ -470,7 +457,7 @@ describe('POST /admin/sections/:sectionId/promote and GET /admin/sections/:secti
     expect(byStudent[studentA.id].status).toBe('ok');
     expect(byStudent[studentA.id].membership.sectionId).toBe(nextSection.id);
     expect(byStudent[studentB.id].status).toBe('ok');
-    expect(byStudent[studentB.id].membership.sectionId).toBe(retainedSection.id);
+    expect(byStudent[studentB.id].membership.sectionId).toBe(alternateSection.id);
   });
 
   it('reports a per-student failure without aborting the rest of the batch', async () => {
@@ -478,15 +465,13 @@ describe('POST /admin/sections/:sectionId/promote and GET /admin/sections/:secti
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const newYear = await createAcademicYear();
-    const section = await createSection({ classId: classA.id, academicYearId: oldYear.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: classA.id, batchId: batch.id });
     const nextSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       name: 'B',
     });
-    const batch = await createBatch({ programId: program.id });
     const alreadyPromotedStudent = await createStudentUser();
     const stillCurrentStudent = await createStudentUser();
 

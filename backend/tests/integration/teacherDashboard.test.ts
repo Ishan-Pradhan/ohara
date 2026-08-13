@@ -19,7 +19,6 @@ const {
   createTeacherUser,
   createStudentUser,
   createEnrollment,
-  createAcademicYear,
 } = await import('../helpers/institution.js');
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
@@ -64,7 +63,6 @@ describe('GET /teacher/dashboard', () => {
   });
 
   it('never calls the LLM and returns null insights when none have been generated yet', async () => {
-    await createAcademicYear({ isCurrent: true });
     const course = await createCourse({ title: 'Physics' });
     const teacher = await createTeacherUser({ email: `t-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });

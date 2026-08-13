@@ -11,7 +11,7 @@ import { quizAttemptRepository } from '../repositories/quizAttempts.repository.j
 import { courseRepository } from '../repositories/courses.repository.js';
 import { courseWeeklyInsightRepository } from '../repositories/courseWeeklyInsight.repository.js';
 import { computeCourseMetrics } from './classIntelligence.controller.js';
-import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { resolveCurrentBatchForCourseOrNull } from './courses.controller.js';
 import { generateJson } from '../services/llm.service.js';
 import { weeklySummarySystemPrompt, weeklySummaryUserPrompt } from '../prompts/weeklySummary.prompt.js';
 import type { WeeklySummaryContext } from '../prompts/weeklySummary.prompt.js';
@@ -44,7 +44,7 @@ const loadWeeklySummaryData = async (
   if (!course) throw new ApiError(404, 'Course not found');
 
   const { start, end } = getWeekRange();
-  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+  const batch = await resolveCurrentBatchForCourseOrNull(courseId);
 
   const enrollments = await enrollmentRepository.findByCourseWithStudents(courseId);
   const enrollmentCount = enrollments.length;
@@ -71,7 +71,7 @@ const loadWeeklySummaryData = async (
     ? ((present + late) / totalAttendanceRecords) * 100
     : null;
 
-  const assignments = await assignmentRepository.findAllByCourse(courseId, academicYear.id);
+  const assignments = batch ? await assignmentRepository.findAllByCourse(courseId, batch.id) : [];
   const weekAssignments = assignments.filter((a) => {
     const d = new Date(a.dueAt);
     return d >= start && d <= end;
@@ -87,7 +87,7 @@ const loadWeeklySummaryData = async (
     notSubmitted += Math.max(0, enrollmentCount - subs.length);
   }
 
-  const quizzes = await quizRepository.findAllByCourse(courseId, academicYear.id);
+  const quizzes = batch ? await quizRepository.findAllByCourse(courseId, batch.id) : [];
   const weekQuizzes = quizzes.filter((q) => {
     const d = new Date(q.createdAt);
     return d >= start && d <= end;

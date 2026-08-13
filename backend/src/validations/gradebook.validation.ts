@@ -7,6 +7,9 @@ const studentOnly = { description: 'Caller is not a student enrolled in this cou
 
 export const getGradebookSchema = {
   params: z.object({ courseId: z.uuid() }),
+  // Omitted -> the course's current batch (unchanged default). Given -> a
+  // specific past batch's gradebook, for viewing completed-course history.
+  query: z.object({ batchId: z.uuid().optional() }),
 };
 
 export const getMyGradesSchema = {
@@ -49,10 +52,11 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/gradebook',
   tags: ['Gradebook'],
-  request: { params: getGradebookSchema.params },
+  request: { params: getGradebookSchema.params, query: getGradebookSchema.query },
   responses: {
     200: {
-      description: 'Every enrolled student x every assignment/published quiz, approved grades and auto-scored quiz attempts only (FR-30)',
+      description:
+        'Every enrolled student x every assignment/published quiz, approved grades and auto-scored quiz attempts only (FR-30). Optional batchId views a specific past batch\'s gradebook (completed-course history); omitted defaults to the current batch.',
       content: { 'application/json': { schema: envelope(gradebookSchema) } },
     },
     401: unauthenticated,

@@ -13,7 +13,6 @@ const { User } = await import('../../src/models/users.model.js');
 const {
   createStudentUser,
   createSection,
-  createAcademicYear,
   createProgram,
   createClass,
   createCourse,
@@ -285,13 +284,12 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
     expect(res.status).toBe(404);
   });
 
-  it('transfers a student to a new section in the current year', async () => {
+  it('transfers a student to a new section in the same batch', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear({ isCurrent: true });
     const cls = await createClass();
-    const sectionA = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
-    const sectionB = await createSection({ classId: cls.id, academicYearId: year.id, name: 'B' });
     const batch = await createBatch({ programId: cls.programId });
+    const sectionA = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
+    const sectionB = await createSection({ classId: cls.id, batchId: batch.id, name: 'B' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -310,10 +308,9 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
 
   it('rejects a non-existent target section with 404', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear({ isCurrent: true });
     const cls = await createClass();
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -334,13 +331,12 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
+    const batch = await createBatch({ programId: program.id });
     const oldSection = await createSection({
       classId: classA.id,
-      academicYearId: oldYear.id,
+      batchId: batch.id,
       name: 'A',
     });
-    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -348,10 +344,9 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    const newYear = await createAcademicYear({ isCurrent: true });
     const newSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       name: 'B',
     });
 
@@ -370,41 +365,40 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects transferring to a section in a different academic year with 400', async () => {
+  it('rejects transferring to a section under a different batch with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const currentYear = await createAcademicYear({ isCurrent: true });
     const cls = await createClass();
+    const batchA = await createBatch({ programId: cls.programId, name: 'A' });
     const currentSection = await createSection({
       classId: cls.id,
-      academicYearId: currentYear.id,
+      batchId: batchA.id,
       name: 'A',
     });
-    const batch = await createBatch({ programId: cls.programId });
-    const futureYear = await createAcademicYear({ isCurrent: false });
-    const futureSection = await createSection({ academicYearId: futureYear.id, name: 'B' });
+    const batchB = await createBatch({ programId: cls.programId, name: 'B' });
+    const otherBatchSection = await createSection({ classId: cls.id, batchId: batchB.id, name: 'B' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: currentSection.id, batchId: batch.id });
+      .send({ studentId: student.id, sectionId: currentSection.id, batchId: batchA.id });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/transfer`)
       .set('Cookie', cookies)
-      .send({ targetSectionId: futureSection.id });
+      .send({ targetSectionId: otherBatchSection.id });
 
     expect(res.status).toBe(400);
   });
 
   it('rejects transferring into a section belonging to a different class with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear({ isCurrent: true });
-    const classA = await createClass();
-    const classB = await createClass();
-    const sectionA = await createSection({ classId: classA.id, academicYearId: year.id, name: 'A' });
-    const sectionB = await createSection({ classId: classB.id, academicYearId: year.id, name: 'B' });
-    const batch = await createBatch({ programId: classA.programId });
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const batch = await createBatch({ programId: program.id });
+    const sectionA = await createSection({ classId: classA.id, batchId: batch.id, name: 'A' });
+    const sectionB = await createSection({ classId: classB.id, batchId: batch.id, name: 'B' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -422,11 +416,10 @@ describe('POST /admin/class-memberships/:id/transfer', () => {
 
   it('rejects transferring a membership for a student who is no longer active with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear({ isCurrent: true });
     const cls = await createClass();
-    const sectionA = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
-    const sectionB = await createSection({ classId: sectionA.classId, academicYearId: year.id, name: 'B' });
     const batch = await createBatch({ programId: cls.programId });
+    const sectionA = await createSection({ classId: cls.id, batchId: batch.id, name: 'A' });
+    const sectionB = await createSection({ classId: sectionA.classId, batchId: batch.id, name: 'B' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -464,16 +457,15 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
     expect(res.status).toBe(403);
   });
 
-  it('reassigns a student across program, class, term, and batch, preserving history as transferred', async () => {
+  it('reassigns a student across program, class, and batch, preserving history as transferred', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
 
-    // Old program/class/term/batch — placement auto-enrolls the compulsory course.
+    // Old program/class/batch — placement auto-enrolls the compulsory course.
     const oldProgram = await createProgram();
     const oldClass = await createClass({ programId: oldProgram.id, orderIndex: 1 });
-    const oldYear = await createAcademicYear();
-    const oldBatch = await createBatch({ programId: oldProgram.id, startAcademicYearId: oldYear.id });
+    const oldBatch = await createBatch({ programId: oldProgram.id });
     const oldCourse = await createCourse({ classId: oldClass.id });
-    const oldSection = await createSection({ classId: oldClass.id, academicYearId: oldYear.id, name: 'A' });
+    const oldSection = await createSection({ classId: oldClass.id, batchId: oldBatch.id, name: 'A' });
     const student = await createStudentUser();
     await request(app)
       .post('/api/v1/admin/class-memberships')
@@ -486,13 +478,12 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
       .query({ studentId: student.id });
     const oldMembershipId = beforeRes.body.data[0].id as string;
 
-    // New program/class/term/batch.
+    // New program/class/batch.
     const newProgram = await createProgram();
     const newClass = await createClass({ programId: newProgram.id, orderIndex: 1 });
-    const newYear = await createAcademicYear();
-    const newBatch = await createBatch({ programId: newProgram.id, startAcademicYearId: newYear.id });
+    const newBatch = await createBatch({ programId: newProgram.id });
     const newCourse = await createCourse({ classId: newClass.id });
-    const newSection = await createSection({ classId: newClass.id, academicYearId: newYear.id, name: 'B' });
+    const newSection = await createSection({ classId: newClass.id, batchId: newBatch.id, name: 'B' });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${oldMembershipId}/reassign`)
@@ -501,7 +492,7 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.sectionId).toBe(newSection.id);
-    expect(res.body.data.academicYearId).toBe(newYear.id);
+    expect(res.body.data.classId).toBe(newClass.id);
     expect(res.body.data.batchId).toBe(newBatch.id);
 
     const afterRes = await request(app)
@@ -529,14 +520,13 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
     expect(newEnroll.status).toBe('active');
   });
 
-  it('reassigns within the same academic year in place, keeping a single membership row', async () => {
+  it('reassigns within the same class in place, keeping a single membership row', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear();
     const cls = await createClass();
-    const sectionA = await createSection({ classId: cls.id, academicYearId: year.id, name: 'A' });
-    const sectionB = await createSection({ classId: cls.id, academicYearId: year.id, name: 'B' });
-    const batchA = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'A' });
-    const batchB = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'B' });
+    const batchA = await createBatch({ programId: cls.programId, name: 'A' });
+    const batchB = await createBatch({ programId: cls.programId, name: 'B' });
+    const sectionA = await createSection({ classId: cls.id, batchId: batchA.id, name: 'A' });
+    const sectionB = await createSection({ classId: cls.id, batchId: batchB.id, name: 'B' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -607,9 +597,8 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A' });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id, name: 'A' });
     const student = await createStudentUser();
 
     const placeRes = await request(app)
@@ -617,8 +606,7 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    const newYear = await createAcademicYear({ isCurrent: true });
-    const newSection = await createSection({ classId: classB.id, academicYearId: newYear.id, name: 'B' });
+    const newSection = await createSection({ classId: classB.id, batchId: batch.id, name: 'B' });
     await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
       .set('Cookie', cookies)
@@ -630,6 +618,43 @@ describe('POST /admin/class-memberships/:id/reassign', () => {
       .send({ targetSectionId: oldSection.id, targetBatchId: batch.id });
 
     expect(res.status).toBe(400);
+  });
+
+  it('rejects reassigning into a class the student already has a placement record in, with 400', async () => {
+    // A student can hold only one membership per class, ever — not just
+    // currently (see docs/SCHEMA.md's class_memberships entry). Reassign's
+    // cross-class branch would otherwise surface a raw DB unique-constraint
+    // error instead of an actionable one.
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram();
+    const classA = await createClass({ programId: program.id, orderIndex: 1 });
+    const classB = await createClass({ programId: program.id, orderIndex: 2 });
+    const batch = await createBatch({ programId: program.id });
+    const sectionA = await createSection({ classId: classA.id, batchId: batch.id, name: 'A' });
+    const sectionB = await createSection({ classId: classB.id, batchId: batch.id, name: 'B' });
+    const student = await createStudentUser();
+
+    const placeRes = await request(app)
+      .post('/api/v1/admin/class-memberships')
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batch.id });
+
+    // Promote A -> B normally — the current membership is now in classB.
+    const promoteRes = await request(app)
+      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
+      .set('Cookie', cookies)
+      .send({ outcome: 'promoted', targetSectionId: sectionB.id });
+    expect(promoteRes.status).toBe(201);
+
+    // Reassigning the current (classB) membership back into classA collides
+    // with the student's own superseded classA row.
+    const res = await request(app)
+      .post(`/api/v1/admin/class-memberships/${promoteRes.body.data.id}/reassign`)
+      .set('Cookie', cookies)
+      .send({ targetSectionId: sectionA.id, targetBatchId: batch.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/already has a placement record in that class/);
   });
 });
 
@@ -659,19 +684,16 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(res.status).toBe(404);
   });
 
-  it('rejects promoted/retained with no targetSectionId with 400', async () => {
+  it('rejects promoted with no targetSectionId with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const oldYear = await createAcademicYear();
     const cls = await createClass();
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: cls.programId });
+    const oldSection = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    await createAcademicYear({ isCurrent: true });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
@@ -681,24 +703,22 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(res.status).toBe(400);
   });
 
-  it('promotes a student to a new section in the new current year', async () => {
+  it('promotes a student to a new section in the same batch', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    const newYear = await createAcademicYear({ isCurrent: true });
     const newSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       name: 'B',
     });
 
@@ -709,7 +729,7 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.sectionId).toBe(newSection.id);
-    expect(res.body.data.academicYearId).toBe(newYear.id);
+    expect(res.body.data.classId).toBe(classB.id);
     expect(res.body.data.batchId).toBe(batch.id);
 
     const listRes = await request(app)
@@ -725,17 +745,14 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
 
   it('graduates a student and sets their user status', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const year = await createAcademicYear();
     const cls = await createClass();
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: section.id, batchId: batch.id });
-
-    await createAcademicYear({ isCurrent: true });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
@@ -749,24 +766,22 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(updatedUser?.status).toBe('graduated');
   });
 
-  it('auto-enrolls on promotion into a school-type program section', async () => {
+  it('auto-enrolls the target class\'s compulsory courses on promotion', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'school' });
+    const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    const newYear = await createAcademicYear({ isCurrent: true });
     const newSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       name: 'B',
     });
     await createCourse({ classId: classB.id, title: 'Physics', code: `PHYS-${Date.now()}` });
@@ -778,166 +793,37 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
 
     const enrollmentsRes = await request(app)
       .get('/api/v1/admin/enrollments')
-      .query({ studentId: student.id, academicYearId: newYear.id })
+      .query({ studentId: student.id, batchId: batch.id })
       .set('Cookie', cookies);
 
     expect(enrollmentsRes.body.data).toHaveLength(1);
   });
 
-  it('retains a student in a new section in the new current year', async () => {
-    const cookies = await signInAs('admin@example.com', 'admin');
-    const oldYear = await createAcademicYear();
-    const cls = await createClass();
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id });
-    const batch = await createBatch({ programId: cls.programId });
-    const student = await createStudentUser();
-    const placeRes = await request(app)
-      .post('/api/v1/admin/class-memberships')
-      .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    // Retention stays in the same class — a new section under that same class,
-    // typically in the next term/year.
-    const newYear = await createAcademicYear({ isCurrent: true });
-    const newSection = await createSection({
-      classId: cls.id,
-      academicYearId: newYear.id,
-      name: 'B',
-    });
-
-    const res = await request(app)
-      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
-      .set('Cookie', cookies)
-      .send({ outcome: 'retained', targetSectionId: newSection.id });
-
-    expect(res.status).toBe(201);
-    expect(res.body.data.sectionId).toBe(newSection.id);
-    expect(res.body.data.academicYearId).toBe(newYear.id);
-
-    const listRes = await request(app)
-      .get('/api/v1/admin/class-memberships')
-      .query({ studentId: student.id })
-      .set('Cookie', cookies);
-    const oldRow = listRes.body.data.find(
-      (m: { id: string }) => m.id === placeRes.body.data.id,
-    );
-    expect(oldRow.outcome).toBe('retained');
-    expect(oldRow.promotedToId).toBe(res.body.data.id);
-  });
-
-  it('allows promoting into a target section from a different academic year, as long as it is the next class in the same program', async () => {
-    // Placement is chain-derived now (promotedToId, not a global "current year"
-    // flag) — promotion no longer requires the target section's academic year
-    // to match any notion of "current".
+  it('rejects promoting into a target section belonging to a different batch, even if it is the correct next class, with 400', async () => {
+    // A student's batch never changes on promotion — the target section must
+    // belong to the same batch as the current placement.
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
-    const batch = await createBatch({ programId: program.id });
+    const batch = await createBatch({ programId: program.id, name: 'Own batch' });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    await createAcademicYear({ isCurrent: true }); // unrelated "current" year — irrelevant now
-    const staleYear = await createAcademicYear();
-    const staleSection = await createSection({
-      classId: classB.id,
-      academicYearId: staleYear.id,
-      name: 'B',
-    });
+    const otherBatch = await createBatch({ programId: program.id, name: 'Other batch' });
+    const wrongBatchSection = await createSection({ classId: classB.id, batchId: otherBatch.id, name: 'B' });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
       .set('Cookie', cookies)
-      .send({ outcome: 'promoted', targetSectionId: staleSection.id });
-
-    expect(res.status).toBe(201);
-    expect(res.body.data.sectionId).toBe(staleSection.id);
-  });
-
-  it('rejects promoting into a target section in the same academic year as the current placement, with 400', async () => {
-    // Real-world trigger: an admin creates the next class's section under the
-    // SAME academic_years row as the current one (hasn't created a new term
-    // yet). class_memberships has UNIQUE(studentId, academicYearId), and
-    // promote() inserts the new row before closing the old one, so without
-    // this guard the request fails with a raw, confusing Postgres unique-
-    // constraint error instead of an actionable ApiError.
-    const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram();
-    const classA = await createClass({ programId: program.id, orderIndex: 1 });
-    const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const sharedYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: sharedYear.id });
-    const batch = await createBatch({ programId: program.id });
-    const student = await createStudentUser();
-    const placeRes = await request(app)
-      .post('/api/v1/admin/class-memberships')
-      .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    const sameYearSection = await createSection({
-      classId: classB.id,
-      academicYearId: sharedYear.id,
-      name: 'B',
-    });
-
-    const res = await request(app)
-      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
-      .set('Cookie', cookies)
-      .send({ outcome: 'promoted', targetSectionId: sameYearSection.id });
+      .send({ outcome: 'promoted', targetSectionId: wrongBatchSection.id });
 
     expect(res.status).toBe(400);
-    expect(res.body.message).not.toMatch(/must be unique/i);
-  });
-
-  it('rejects promoting into a target section whose academic year the student already passed through earlier in their history, with 400', async () => {
-    // Real-world trigger (see justishan35's actual promotion failure): a
-    // student is promoted from class A -> class B -> and the target section
-    // for class C reuses class A's academic year (e.g. the next real term's
-    // academic year row hasn't been created yet, or was created with the
-    // wrong `term`). The current membership's academic year differs from the
-    // target, so the same-year guard above doesn't catch it, but
-    // class_memberships still has UNIQUE(studentId, academicYearId) against
-    // the student's full history, not just their current row.
-    const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram();
-    const classA = await createClass({ programId: program.id, orderIndex: 1 });
-    const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const classC = await createClass({ programId: program.id, orderIndex: 3 });
-    const yearA = await createAcademicYear();
-    const yearB = await createAcademicYear();
-    const sectionA = await createSection({ classId: classA.id, academicYearId: yearA.id });
-    const sectionB = await createSection({ classId: classB.id, academicYearId: yearB.id });
-    const reusedSectionC = await createSection({
-      classId: classC.id,
-      academicYearId: yearA.id,
-      name: 'B',
-    });
-    const batch = await createBatch({ programId: program.id });
-    const student = await createStudentUser();
-
-    const placeRes = await request(app)
-      .post('/api/v1/admin/class-memberships')
-      .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: sectionA.id, batchId: batch.id });
-
-    const promoteToB = await request(app)
-      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
-      .set('Cookie', cookies)
-      .send({ outcome: 'promoted', targetSectionId: sectionB.id });
-    expect(promoteToB.status).toBe(201);
-
-    const promoteToC = await request(app)
-      .post(`/api/v1/admin/class-memberships/${promoteToB.body.data.id}/outcome`)
-      .set('Cookie', cookies)
-      .send({ outcome: 'promoted', targetSectionId: reusedSectionC.id });
-
-    expect(promoteToC.status).toBe(400);
-    expect(promoteToC.body.message).not.toMatch(/must be unique/i);
+    expect(res.body.message).toMatch(/batch never changes on promotion/);
   });
 
   it('rejects promoting into a target section that is already at capacity, with 400', async () => {
@@ -945,16 +831,14 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const newYear = await createAcademicYear({ name: 'next' });
-    const sectionA1 = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A1' });
-    const sectionA2 = await createSection({ classId: classA.id, academicYearId: oldYear.id, name: 'A2' });
+    const batch = await createBatch({ programId: program.id });
+    const sectionA1 = await createSection({ classId: classA.id, batchId: batch.id, name: 'A1' });
+    const sectionA2 = await createSection({ classId: classA.id, batchId: batch.id, name: 'A2' });
     const fullTargetSection = await createSection({
       classId: classB.id,
-      academicYearId: newYear.id,
+      batchId: batch.id,
       capacity: 1,
     });
-    const batch = await createBatch({ programId: program.id });
 
     const studentAlreadyThere = await createStudentUser();
     const placeAlreadyThereRes = await request(app)
@@ -985,9 +869,8 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const cls = await createClass({ programId: program.id, orderIndex: 1 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
@@ -1012,9 +895,8 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     await createClass({ programId: program.id, orderIndex: 2 });
     const classC = await createClass({ programId: program.id, orderIndex: 3 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
@@ -1022,7 +904,7 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
     // classC is orderIndex 3 — skips over classB (orderIndex 2).
-    const skipSection = await createSection({ classId: classC.id, name: 'B' });
+    const skipSection = await createSection({ classId: classC.id, batchId: batch.id, name: 'B' });
 
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
@@ -1032,38 +914,13 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     expect(res.status).toBe(400);
   });
 
-  it('rejects retaining into a different class with 400', async () => {
-    const cookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram();
-    const classA = await createClass({ programId: program.id, orderIndex: 1 });
-    const classB = await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
-    const batch = await createBatch({ programId: program.id });
-    const student = await createStudentUser();
-    const placeRes = await request(app)
-      .post('/api/v1/admin/class-memberships')
-      .set('Cookie', cookies)
-      .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    const otherClassSection = await createSection({ classId: classB.id, name: 'B' });
-
-    const res = await request(app)
-      .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
-      .set('Cookie', cookies)
-      .send({ outcome: 'retained', targetSectionId: otherClassSection.id });
-
-    expect(res.status).toBe(400);
-  });
-
   it('rejects graduating a membership whose class is not the program\'s last class with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     await createClass({ programId: program.id, orderIndex: 2 });
-    const oldYear = await createAcademicYear();
-    const section = await createSection({ classId: classA.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
@@ -1084,23 +941,22 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
     const classA = await createClass({ programId: program.id, orderIndex: 1 });
     const classB = await createClass({ programId: program.id, orderIndex: 2 });
     const classC = await createClass({ programId: program.id, orderIndex: 3 });
-    const oldYear = await createAcademicYear();
-    const oldSection = await createSection({ classId: classA.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: program.id });
+    const oldSection = await createSection({ classId: classA.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
 
-    const sectionB = await createSection({ classId: classB.id, name: 'B' });
+    const sectionB = await createSection({ classId: classB.id, batchId: batch.id, name: 'B' });
     await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
       .set('Cookie', cookies)
       .send({ outcome: 'promoted', targetSectionId: sectionB.id });
 
     // Attempting to promote the same (now-superseded) membership again must be rejected.
-    const sectionC = await createSection({ classId: classC.id, name: 'C' });
+    const sectionC = await createSection({ classId: classC.id, batchId: batch.id, name: 'C' });
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
       .set('Cookie', cookies)
@@ -1111,17 +967,14 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
 
   it('rejects setting an outcome for a student who is no longer active with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const oldYear = await createAcademicYear();
     const cls = await createClass();
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: cls.programId });
+    const oldSection = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    await createAcademicYear({ isCurrent: true });
 
     await request(app)
       .patch(`/api/v1/admin/users/${student.id}/archive`)
@@ -1137,17 +990,14 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
 
   it('rejects setting an outcome on a membership that already recorded a graduation with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
-    const oldYear = await createAcademicYear();
     const cls = await createClass();
-    const oldSection = await createSection({ classId: cls.id, academicYearId: oldYear.id });
     const batch = await createBatch({ programId: cls.programId });
+    const oldSection = await createSection({ classId: cls.id, batchId: batch.id });
     const student = await createStudentUser();
     const placeRes = await request(app)
       .post('/api/v1/admin/class-memberships')
       .set('Cookie', cookies)
       .send({ studentId: student.id, sectionId: oldSection.id, batchId: batch.id });
-
-    await createAcademicYear({ isCurrent: true });
 
     const graduateRes = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
@@ -1155,7 +1005,7 @@ describe('POST /admin/class-memberships/:id/outcome', () => {
       .send({ outcome: 'graduated' });
     expect(graduateRes.status).toBe(201);
 
-    const newSection = await createSection({ academicYearId: oldYear.id, name: 'C' });
+    const newSection = await createSection({ batchId: batch.id, name: 'C' });
     const res = await request(app)
       .post(`/api/v1/admin/class-memberships/${placeRes.body.data.id}/outcome`)
       .set('Cookie', cookies)

@@ -20,6 +20,7 @@
     "db:seed": "sequelize-cli db:seed:all",
     "db:seed:demo": "tsx src/scripts/seedDemoData.ts",
     "db:seed:activity": "tsx src/scripts/seedActivityData.ts",
+    "db:reset:activity": "tsx src/scripts/resetActivityData.ts",
     "db:seed:events": "tsx src/scripts/seedCalendarEvents.ts"
   },
   "dependencies": {

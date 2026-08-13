@@ -36,10 +36,10 @@ export interface CourseConceptEvidence {
 export const conceptEvidenceRepository = {
   findForStudent: async (
     studentId: string,
-    enrolledCourses: ReadonlyArray<{ courseId: string; courseTitle: string; academicYearId: string }>,
+    enrolledCourses: ReadonlyArray<{ courseId: string; courseTitle: string; batchId: string }>,
   ): Promise<CourseConceptEvidence[]> => {
     return Promise.all(
-      enrolledCourses.map(async ({ courseId, courseTitle, academicYearId }) => {
+      enrolledCourses.map(async ({ courseId, courseTitle, batchId }) => {
         // --- 1. Collect keyTopics from all lessons in this course ---
         const modules = await Module.findAll({
           where: { courseId },
@@ -63,7 +63,7 @@ export const conceptEvidenceRepository = {
 
         // --- 2. Quiz performance for this student in this course ---
         const quizzes = await Quiz.findAll({
-          where: { courseId, academicYearId, status: QUIZ_STATUS.PUBLISHED },
+          where: { courseId, batchId, status: QUIZ_STATUS.PUBLISHED },
           attributes: ['id'],
         });
 

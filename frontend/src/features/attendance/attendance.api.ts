@@ -23,8 +23,10 @@ export const fetchAttendanceSessions = async (courseId: string, sectionId?: stri
   return z.array(attendanceSessionSummarySchema).parse(res.data.data);
 };
 
-export const fetchAttendanceSections = async (courseId: string): Promise<AttendanceSectionOption[]> => {
-  const res = await api.get(`/courses/${courseId}/attendance/sections`);
+// batchId omitted -> whichever batch is currently relevant. Given -> that
+// specific batch's sections (browsing completed-course history).
+export const fetchAttendanceSections = async (courseId: string, batchId?: string): Promise<AttendanceSectionOption[]> => {
+  const res = await api.get(`/courses/${courseId}/attendance/sections`, { params: batchId ? { batchId } : undefined });
   return z.array(attendanceSectionOptionSchema).parse(res.data.data);
 };
 

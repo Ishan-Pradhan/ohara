@@ -34,7 +34,6 @@ import { classMembershipRepository } from '../repositories/classMemberships.repo
 
 import { hashPassword } from '../utils/security.utils.js';
 import { CLASS_MEMBERSHIP_OUTCOMES } from '../constants/index.js';
-import type { InstitutionType } from '../types/institution.types.js';
 
 const DEMO_PASSWORD = 'DemoPass123!';
 const SECTION_CAPACITY = 30;
@@ -44,7 +43,6 @@ const STUDENTS_PER_BATCH = 18; // well under the 30-per-section cap
 
 const findOrCreateProgram = async (data: {
   name: string;
-  institutionType: InstitutionType;
   affiliation?: string;
   abbreviation?: string;
 }): Promise<Program> => {
@@ -52,7 +50,6 @@ const findOrCreateProgram = async (data: {
   if (existing) return existing;
   return programRepository.create({
     name: data.name,
-    institutionType: data.institutionType,
     affiliation: data.affiliation ?? null,
     abbreviation: data.abbreviation ?? null,
   });
@@ -76,20 +73,21 @@ const findOrCreateAcademicYear = async (data: {
   return academicYearRepository.create(data);
 };
 
-const findOrCreateBatch = async (programId: string, name: string, startAcademicYearId: string): Promise<Batch> => {
+const findOrCreateBatch = async (programId: string, name: string): Promise<Batch> => {
   const existing = await Batch.findOne({ where: { programId, name } });
   if (existing) return existing;
-  return batchRepository.create({ programId, name, startAcademicYearId });
+  return batchRepository.create({ programId, name });
 };
 
 const findOrCreateSection = async (
   classId: string,
-  academicYearId: string,
+  batchId: string,
   name: string,
+  startDate: string,
 ): Promise<Section> => {
-  const existing = await Section.findOne({ where: { classId, academicYearId, name } });
+  const existing = await Section.findOne({ where: { classId, batchId, name } });
   if (existing) return existing;
-  return sectionRepository.create({ classId, academicYearId, name, capacity: SECTION_CAPACITY });
+  return sectionRepository.create({ classId, batchId, name, startDate, capacity: SECTION_CAPACITY });
 };
 
 const findOrCreateCourse = async (data: {
@@ -119,17 +117,19 @@ const findOrCreateUser = async (data: {
   return { user, wasCreated: true };
 };
 
-// ── Semester -> academic-year mapping ───────────────────────────────────────
+// ── Semester -> calendar-date mapping (display/reporting only) ─────────────
 
-/** Semester N (1-indexed) of a batch that started in `startYear`'s odd term
- * lands in `startYear + floor((N-1)/2)`, alternating odd/even — semester 1
- * is odd, semester 2 is even, semester 3 is the next odd, and so on. Mirrors
- * deriveClassTerm's odd/even alternation, just walked forward per semester
- * instead of derived from a single orderIndex. */
-const yearNameForSemester = (startYear: number, semester: number): string => {
+/** Semester N (1-indexed) of a batch that started in `startYear` lands in
+ * `startYear + floor((N-1)/2)`, alternating a January start (odd semesters)
+ * and a July start (even semesters) — semester 1 starts odd, semester 2
+ * starts even, semester 3 the next odd, and so on. Used only for each
+ * section's `startDate` (display/reporting — see sections.model.ts), never
+ * to resolve "is this current." */
+const startDateForSemester = (startYear: number, semester: number): string => {
   const yearOffset = Math.floor((semester - 1) / 2);
-  const term = semester % 2 === 1 ? 'odd' : 'even';
-  return `${startYear + yearOffset} ${term}`;
+  const year = startYear + yearOffset;
+  const isOdd = semester % 2 === 1;
+  return isOdd ? `${year}-01-01` : `${year}-07-01`;
 };
 
 // ── Course name pools, per program flavor (3 per semester, 8 semesters) ────
@@ -262,7 +262,6 @@ const run = async () => {
     console.log(`\n=== ${plan.name} ===`);
     const program = await findOrCreateProgram({
       name: plan.name,
-      institutionType: 'university',
       affiliation: plan.affiliation,
       abbreviation: plan.abbreviation,
     });
@@ -319,10 +318,7 @@ const run = async () => {
 
     // Batches + students, each walked through their real promotion history.
     for (const batchPlan of BATCH_PLANS) {
-      const startYearId = yearIds.get(`${batchPlan.startYear} odd`);
-      if (!startYearId) throw new Error(`Missing start academic year for ${batchPlan.label}`);
-
-      const batch = await findOrCreateBatch(program.id, batchPlan.label, startYearId);
+      const batch = await findOrCreateBatch(program.id, batchPlan.label);
 
       for (let i = 0; i < STUDENTS_PER_BATCH; i++) {
         const email = `student.${plan.key}.${batchPlan.label}.${i + 1}@ohara.edu`;
@@ -336,16 +332,14 @@ const run = async () => {
         let currentMembershipId: string | null = null;
         for (let sem = 1; sem <= batchPlan.semestersReached; sem++) {
           const cls = classes[sem - 1]!;
-          const yearName = yearNameForSemester(batchPlan.startYear, sem);
-          const academicYearId = yearIds.get(yearName);
-          if (!academicYearId) throw new Error(`Missing academic year ${yearName} for ${plan.name} ${batchPlan.label}`);
+          const startDate = startDateForSemester(batchPlan.startYear, sem);
 
-          const section = await findOrCreateSection(cls.id, academicYearId, 'A');
+          const section = await findOrCreateSection(cls.id, batch.id, 'A', startDate);
           const compulsoryCourseIds = (coursesByClassId.get(cls.id) ?? []).map((c) => c.id);
 
           if (sem === 1) {
             const membership = await classMembershipRepository.create(
-              { studentId: student.id, batchId: batch.id, sectionId: section.id, academicYearId },
+              { studentId: student.id, batchId: batch.id, sectionId: section.id, classId: cls.id },
               compulsoryCourseIds,
             );
             currentMembershipId = membership.id;
@@ -357,7 +351,7 @@ const run = async () => {
             // of the final graduate() call below.
             const promoted = await classMembershipRepository.promote(
               currentMembershipId!,
-              { studentId: student.id, batchId: batch.id, sectionId: section.id, academicYearId },
+              { studentId: student.id, batchId: batch.id, sectionId: section.id, classId: cls.id },
               CLASS_MEMBERSHIP_OUTCOMES.PROMOTED,
               compulsoryCourseIds,
             );

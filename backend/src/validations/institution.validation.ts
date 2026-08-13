@@ -9,7 +9,6 @@ const forbidden = { description: 'Caller is not an admin' };
 export const createProgramSchema = {
   body: z.object({
     name: z.string().min(1, 'Name is required'),
-    institutionType: z.enum(['school', 'college', 'university']),
     description: z.string().optional(),
     affiliation: z.string().optional(),
     abbreviation: z.string().max(10).optional(),
@@ -21,7 +20,6 @@ export const programSchema = registry.register(
   z.object({
     id: z.uuid(),
     name: z.string(),
-    institutionType: z.enum(['school', 'college', 'university']),
     description: z.string().nullable(),
     affiliation: z.string().nullable(),
     abbreviation: z.string().nullable(),
@@ -71,7 +69,6 @@ export const updateProgramSchema = {
   params: idParams.params,
   body: z.object({
     name: z.string().min(1, 'Name is required').optional(),
-    institutionType: z.enum(['school', 'college', 'university']).optional(),
     description: z.string().optional(),
     affiliation: z.string().optional(),
     abbreviation: z.string().max(10).optional(),
@@ -234,7 +231,6 @@ export const createBatchSchema = {
   body: z.object({
     programId: z.uuid(),
     name: z.string().min(1, 'Name is required'),
-    startAcademicYearId: z.uuid(),
   }),
 };
 
@@ -250,7 +246,6 @@ export const batchSchema = registry.register(
     id: z.uuid(),
     programId: z.uuid(),
     name: z.string(),
-    startAcademicYearId: z.uuid(),
     createdAt: z.iso.datetime(),
   }),
 );
@@ -270,7 +265,7 @@ registry.registerPath({
     400: { description: 'Validation failed, or (programId, name) already in use' },
     401: unauthenticated,
     403: forbidden,
-    404: { description: 'Program or academic year not found' },
+    404: { description: 'Program not found' },
   },
 });
 
@@ -475,7 +470,7 @@ registry.registerPath({
     404: { description: 'Academic year not found' },
     409: {
       description:
-        'Academic year still has sections, placements, or enrollments — cannot delete',
+        'Academic year still has exam terms — cannot delete',
     },
   },
 });
@@ -485,7 +480,8 @@ registry.registerPath({
 export const createSectionSchema = {
   body: z.object({
     classId: z.uuid(),
-    academicYearId: z.uuid(),
+    batchId: z.uuid(),
+    startDate: z.iso.date(),
     name: z.string().min(1, 'Name is required'),
     classTeacherId: z.uuid().optional(),
     capacity: z.number().int().positive().optional(),
@@ -495,7 +491,6 @@ export const createSectionSchema = {
 export const listSectionsSchema = {
   query: z.object({
     classId: z.uuid().optional(),
-    academicYearId: z.uuid().optional(),
     batchId: z.uuid().optional(),
   }),
 };
@@ -505,7 +500,8 @@ export const sectionSchema = registry.register(
   z.object({
     id: z.uuid(),
     classId: z.uuid(),
-    academicYearId: z.uuid(),
+    batchId: z.uuid(),
+    startDate: z.iso.date(),
     classTeacherId: z.uuid().nullable(),
     name: z.string(),
     capacity: z.number().nullable(),
@@ -530,11 +526,11 @@ registry.registerPath({
     },
     400: {
       description:
-        'Validation failed, classTeacherId is not a teacher, or (classId, academicYearId, name) already in use',
+        'Validation failed, classTeacherId is not a teacher, batch does not belong to the class\'s program, or (classId, batchId, name) already in use',
     },
     401: unauthenticated,
     403: forbidden,
-    404: { description: 'Class, academic year, or teacher not found' },
+    404: { description: 'Class, batch, or teacher not found' },
   },
 });
 
@@ -583,7 +579,7 @@ registry.registerPath({
     },
     400: {
       description:
-        'Validation failed, classTeacherId is not a teacher, or (classId, academicYearId, name) already in use',
+        'Validation failed, classTeacherId is not a teacher, or (classId, batchId, name) already in use',
     },
     401: unauthenticated,
     403: forbidden,

@@ -95,7 +95,7 @@ router
 
 router
   .route('/:courseId/quizzes/:id/attempts/me')
-  .get(verifyJWT, requireEnrolledStudent, validate(getMyAttemptSchema), getMyAttempt);
+  .get(verifyJWT, requireCourseAccess, validate(getMyAttemptSchema), getMyAttempt);
 
 // LLM-backed — same limiter tier as AI grading (NFR-3/NFR-8).
 router

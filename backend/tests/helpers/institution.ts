@@ -13,19 +13,17 @@ import type { AcademicYear } from '../../src/models/academicYears.model.js';
 import type { Section } from '../../src/models/sections.model.js';
 import type { Course } from '../../src/models/courses.model.js';
 import type { Enrollment } from '../../src/models/enrollments.model.js';
-import type { InstitutionType, CourseType } from '../../src/types/institution.types.js';
+import type { CourseType } from '../../src/types/institution.types.js';
 import { hashPassword } from '../../src/utils/security.utils.js';
 
 export const createProgram = async (
   overrides: Partial<{
     name: string;
-    institutionType: InstitutionType;
     description: string | null;
   }> = {},
 ): Promise<Program> => {
   return programRepository.create({
     name: overrides.name ?? 'Test Program',
-    institutionType: overrides.institutionType ?? 'school',
     description: overrides.description ?? null,
   });
 };
@@ -43,20 +41,13 @@ export const createClass = async (
 };
 
 export const createBatch = async (
-  overrides: Partial<{
-    programId: string;
-    name: string;
-    startAcademicYearId: string;
-  }> = {},
+  overrides: Partial<{ programId: string; name: string }> = {},
 ): Promise<Batch> => {
   const programId = overrides.programId ?? (await createProgram()).id;
-  const startAcademicYearId =
-    overrides.startAcademicYearId ?? (await createAcademicYear()).id;
 
   return batchRepository.create({
     programId,
     name: overrides.name ?? '26/27',
-    startAcademicYearId,
   });
 };
 
@@ -94,19 +85,20 @@ export const createTeacherUser = async (
 export const createSection = async (
   overrides: Partial<{
     classId: string;
-    academicYearId: string;
+    batchId: string;
+    startDate: string;
     classTeacherId: string | null;
     name: string;
     capacity: number | null;
   }> = {},
 ): Promise<Section> => {
   const classId = overrides.classId ?? (await createClass()).id;
-  const academicYearId =
-    overrides.academicYearId ?? (await createAcademicYear()).id;
+  const batchId = overrides.batchId ?? (await createBatch()).id;
 
   return sectionRepository.create({
     classId,
-    academicYearId,
+    batchId,
+    startDate: overrides.startDate ?? '2025-06-01',
     classTeacherId: overrides.classTeacherId ?? null,
     name: overrides.name ?? 'A',
     capacity: overrides.capacity ?? null,
@@ -147,11 +139,11 @@ export const createCourse = async (
 };
 
 export const createEnrollment = async (
-  overrides: Partial<{ studentId: string; courseId: string; academicYearId: string }> = {},
+  overrides: Partial<{ studentId: string; courseId: string; batchId: string }> = {},
 ): Promise<Enrollment> => {
-  const academicYearId = overrides.academicYearId ?? (await createAcademicYear()).id;
+  const batchId = overrides.batchId ?? (await createBatch()).id;
   const courseId = overrides.courseId ?? (await createCourse()).id;
   const studentId = overrides.studentId ?? (await createStudentUser()).id;
 
-  return enrollmentRepository.create({ studentId, courseId, academicYearId });
+  return enrollmentRepository.create({ studentId, courseId, batchId });
 };

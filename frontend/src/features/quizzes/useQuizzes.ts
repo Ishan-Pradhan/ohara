@@ -26,17 +26,18 @@ import type {
   UpdateQuestionInput,
 } from './quizzes.schema.js';
 
-export const quizzesKey = (courseId: string) => ['quizzes', courseId] as const;
+export const quizzesKey = (courseId: string, batchId?: string) =>
+  ['quizzes', courseId, batchId ?? null] as const;
 export const quizKey = (courseId: string, id: string) => ['quiz', courseId, id] as const;
 export const attemptsKey = (courseId: string, quizId: string) =>
   ['quizAttempts', courseId, quizId] as const;
 export const myAttemptKey = (courseId: string, quizId: string) =>
   ['myQuizAttempt', courseId, quizId] as const;
 
-export const useQuizzes = (courseId: string) =>
+export const useQuizzes = (courseId: string, batchId?: string) =>
   useQuery({
-    queryKey: quizzesKey(courseId),
-    queryFn: () => fetchQuizzes(courseId),
+    queryKey: quizzesKey(courseId, batchId),
+    queryFn: () => fetchQuizzes(courseId, batchId),
     enabled: Boolean(courseId),
   });
 
@@ -47,11 +48,15 @@ export const useQuiz = (courseId: string, id: string) =>
     enabled: Boolean(courseId) && Boolean(id),
   });
 
+// Mutations only ever touch the current batch (see resolveBatchForCourse in
+// courses.controller.ts — you can't create/edit/delete onto a past batch),
+// but invalidate the whole ['quizzes', courseId] prefix regardless of
+// batchId, so any cached historical view for this course also refreshes.
 export const useGenerateQuiz = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: GenerateQuizInput) => generateQuiz(courseId, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: quizzesKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quizzes', courseId] }),
   });
 };
 
@@ -59,7 +64,7 @@ export const useCreateQuiz = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateQuizInput) => createQuiz(courseId, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: quizzesKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quizzes', courseId] }),
   });
 };
 
@@ -67,7 +72,7 @@ export const useDeleteQuiz = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteQuiz(courseId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: quizzesKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quizzes', courseId] }),
   });
 };
 
@@ -77,7 +82,7 @@ export const usePublishQuiz = (courseId: string) => {
     mutationFn: ({ id, status }: { id: string; status: 'draft' | 'published' }) =>
       publishQuiz(courseId, id, status),
     onSuccess: (_data, { id }) => {
-      qc.invalidateQueries({ queryKey: quizzesKey(courseId) });
+      qc.invalidateQueries({ queryKey: ['quizzes', courseId] });
       qc.invalidateQueries({ queryKey: quizKey(courseId, id) });
     },
   });

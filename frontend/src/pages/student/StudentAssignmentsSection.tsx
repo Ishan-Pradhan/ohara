@@ -13,6 +13,9 @@ import { SectionStats } from './SectionStats.js';
 
 interface StudentAssignmentsSectionProps {
   courseId: string;
+  /** Set when viewing a completed course — see StudentCoursePage. */
+  batchId?: string;
+  readOnly?: boolean;
 }
 
 type Bucket = 'overdue' | 'open' | 'awaiting_grade' | 'graded';
@@ -62,8 +65,8 @@ const AssignmentRow = ({ courseId, row }: { courseId: string; row: Row }) => {
   );
 };
 
-export const StudentAssignmentsSection = ({ courseId }: StudentAssignmentsSectionProps) => {
-  const { data: assignments, isLoading: assignmentsLoading } = useAssignments(courseId);
+export const StudentAssignmentsSection = ({ courseId, batchId }: StudentAssignmentsSectionProps) => {
+  const { data: assignments, isLoading: assignmentsLoading } = useAssignments(courseId, batchId);
   const { data: gradeRow, isLoading: gradesLoading } = useMyGrades(courseId);
 
   if (assignmentsLoading || gradesLoading) {

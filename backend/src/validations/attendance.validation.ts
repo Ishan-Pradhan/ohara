@@ -27,6 +27,10 @@ export const getAttendanceRosterSchema = {
 
 export const listAttendanceSectionsSchema = {
   params: z.object({ courseId: z.uuid() }),
+  // batchId omitted -> whichever batch is currently relevant (unchanged
+  // default). Given -> that specific batch's sections, for browsing a past
+  // batch's attendance (completed-course history).
+  query: z.object({ batchId: z.uuid().optional() }),
 };
 
 export const listAttendanceSessionsSchema = {
@@ -100,10 +104,10 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/attendance/sections',
   tags: ['Attendance'],
-  request: { params: listAttendanceSectionsSchema.params },
+  request: { params: listAttendanceSectionsSchema.params, query: listAttendanceSectionsSchema.query },
   responses: {
     200: {
-      description: "This course's class's sections for whichever academic year is currently relevant — what a \"take attendance\" screen should offer",
+      description: "This course's class's sections. Omitted batchId -> whichever batch is currently relevant (what a \"take attendance\" screen should offer); given batchId -> that specific batch's sections (browsing completed-course history).",
       content: { 'application/json': { schema: envelope(z.array(attendanceSectionOptionSchema)) } },
     },
     401: unauthenticated,

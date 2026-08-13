@@ -3,6 +3,7 @@ import { CalendarCheck } from 'lucide-react';
 
 import { useCurrentUser } from '../features/auth/useAuth.js';
 import { useMyCourses } from '../features/teacher/useTeacher.js';
+import { useCourseBatches } from '../features/courseContent/useCourseContent.js';
 import {
   usePrograms,
   useClasses,
@@ -10,7 +11,6 @@ import {
   useBatchCurrentPlacement,
   useSections,
   useCourses,
-  useAcademicYears,
 } from '../features/institution/useInstitution.js';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PageHeader } from '../components/layout/PageHeader.js';
@@ -33,7 +33,6 @@ export const AttendancePage = () => {
 const AdminAttendanceView = () => {
   const { data: programs, isLoading: programsLoading } = usePrograms();
   const { data: allCourses } = useCourses();
-  const { data: academicYears } = useAcademicYears();
 
   const [programId, setProgramId] = useState('');
   const [batchId, setBatchId] = useState('');
@@ -58,7 +57,6 @@ const AdminAttendanceView = () => {
   );
   const { data: currentPlacement } = useBatchCurrentPlacement(batchId);
 
-  const yearById = new Map((academicYears ?? []).map((y) => [y.id, y]));
   const currentClassIds = new Set((currentPlacement ?? []).map((p) => p.classId));
   const currentSectionIds = new Set((currentPlacement ?? []).map((p) => p.sectionId));
 
@@ -80,36 +78,19 @@ const AdminAttendanceView = () => {
     })
     .map((c) => ({ value: c.id, label: currentClassIds.has(c.id) ? `${c.name} (current)` : c.name }));
 
-  // A retained batch that repeated a semester shows up as two sections for
-  // the same class (one per academic-year attempt) — only then is the year
-  // worth showing, since batch and semester are already fixed by this point.
-  const sectionNameCounts = new Map<string, number>();
-  for (const s of sectionsForClass ?? []) {
-    sectionNameCounts.set(s.name, (sectionNameCounts.get(s.name) ?? 0) + 1);
-  }
+  // Sections are already scoped to this one (classId, batchId) pair, and
+  // (classId, batchId, name) is unique — no more same-named sections to
+  // disambiguate by year, unlike the old academic-year-keyed model.
   const sectionOptions = (sectionsForClass ?? [])
     .slice()
     .sort((a, b) => {
       const aCurrent = currentSectionIds.has(a.id) ? 1 : 0;
       const bCurrent = currentSectionIds.has(b.id) ? 1 : 0;
       if (aCurrent !== bCurrent) return bCurrent - aCurrent;
-      // Neither section has this batch's real current placement (fresh
-      // batch, nobody placed here yet). Prefer the newer academic year over
-      // raw headcount — otherwise an older section a batch was never
-      // formally promoted/graduated out of (left sitting at a nonzero
-      // enrolledCount) permanently outranks a genuinely current, empty one.
-      // Same principle as resolveRelevantAttendanceYear's backend fix.
-      const aYear = yearById.get(a.academicYearId)?.startDate ?? '';
-      const bYear = yearById.get(b.academicYearId)?.startDate ?? '';
-      if (aYear !== bYear) return bYear.localeCompare(aYear);
-      return b.enrolledCount - a.enrolledCount;
+      return a.name.localeCompare(b.name);
     })
     .map((s) => {
       const labelParts = [`Section ${s.name}`];
-      if ((sectionNameCounts.get(s.name) ?? 0) > 1) {
-        const yearName = yearById.get(s.academicYearId)?.name;
-        if (yearName) labelParts.push(yearName);
-      }
       if (currentSectionIds.has(s.id)) labelParts.push('current');
       const headcount = s.enrolledCount > 0 ? `${s.enrolledCount} students` : 'empty';
       return { value: s.id, label: `${labelParts.join(' — ')} (${headcount})` };
@@ -211,7 +192,12 @@ const AdminAttendanceView = () => {
 
         {/* Attendance section */}
         {courseId ? (
-          <AttendanceSection courseId={courseId} externalSectionId={sectionId || undefined} hasExternalSectionSelector />
+          <AttendanceSection
+            courseId={courseId}
+            externalSectionId={sectionId || undefined}
+            hasExternalSectionSelector
+            batchId={batchId || undefined}
+          />
         ) : (
           <EmptyState
             icon={CalendarCheck}
@@ -224,10 +210,22 @@ const AdminAttendanceView = () => {
   );
 };
 
-/** Teacher view: course switcher with program/batch context */
+/** Teacher view: course switcher with program/batch context, plus a batch
+ * dropdown (shown only once a course has more than one batch in its
+ * history) for viewing a past batch's attendance instead of the current
+ * one — same pattern as GradebookPage/AtRiskPage's teacher views. */
 const TeacherAttendanceView = () => {
   const { data: courses, isLoading } = useMyCourses();
   const [courseId, setCourseId] = useState('');
+  const [batchId, setBatchId] = useState('');
+
+  const { data: courseBatches } = useCourseBatches(courseId);
+  const batchOptions = (courseBatches ?? []).map((b) => ({ value: b.id, label: b.name }));
+
+  const onSelectCourse = (id: string) => {
+    setCourseId(id);
+    setBatchId('');
+  };
 
   return (
     <AppShell>
@@ -239,8 +237,21 @@ const TeacherAttendanceView = () => {
         <EmptyState icon={CalendarCheck} title="No courses yet" description="Attendance will appear here once you have a course." />
       ) : (
         <div className="flex flex-col gap-4">
-          <TeacherCourseNav courses={courses} onSelect={setCourseId} />
-          {courseId ? <AttendanceSection courseId={courseId} /> : null}
+          <TeacherCourseNav courses={courses} onSelect={onSelectCourse} />
+
+          {courseId && batchOptions.length > 1 ? (
+            <div className="flex flex-col gap-1.5 sm:w-56">
+              <label className="text-xs font-medium text-muted uppercase tracking-wide">Batch</label>
+              <Select
+                value={batchId}
+                onValueChange={setBatchId}
+                options={batchOptions}
+                placeholder="Current batch"
+              />
+            </div>
+          ) : null}
+
+          {courseId ? <AttendanceSection courseId={courseId} batchId={batchId || undefined} /> : null}
         </div>
       )}
     </AppShell>

@@ -16,17 +16,18 @@ import {
 } from './assignments.api.js';
 import type { CreateAssignmentInput } from './assignments.schema.js';
 
-export const assignmentsKey = (courseId: string) => ['assignments', courseId] as const;
+export const assignmentsKey = (courseId: string, batchId?: string) =>
+  ['assignments', courseId, batchId ?? null] as const;
 export const assignmentKey = (courseId: string, id: string) => ['assignment', courseId, id] as const;
 export const submissionsKey = (courseId: string, assignmentId: string) =>
   ['submissions', courseId, assignmentId] as const;
 export const mySubmissionKey = (courseId: string, assignmentId: string) =>
   ['mySubmission', courseId, assignmentId] as const;
 
-export const useAssignments = (courseId: string) =>
+export const useAssignments = (courseId: string, batchId?: string) =>
   useQuery({
-    queryKey: assignmentsKey(courseId),
-    queryFn: () => fetchAssignments(courseId),
+    queryKey: assignmentsKey(courseId, batchId),
+    queryFn: () => fetchAssignments(courseId, batchId),
     enabled: Boolean(courseId),
   });
 
@@ -37,11 +38,15 @@ export const useAssignment = (courseId: string, id: string) =>
     enabled: Boolean(courseId) && Boolean(id),
   });
 
+// Mutations only ever touch the current batch (see resolveBatchForCourse in
+// courses.controller.ts — you can't create/edit/delete onto a past batch),
+// but invalidate the whole ['assignments', courseId] prefix regardless of
+// batchId, so any cached historical view for this course also refreshes.
 export const useCreateAssignment = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateAssignmentInput) => createAssignment(courseId, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: assignmentsKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assignments', courseId] }),
   });
 };
 
@@ -50,7 +55,7 @@ export const useUpdateAssignment = (courseId: string) => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<CreateAssignmentInput> }) =>
       updateAssignment(courseId, id, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: assignmentsKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assignments', courseId] }),
   });
 };
 
@@ -58,7 +63,7 @@ export const useDeleteAssignment = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteAssignment(courseId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: assignmentsKey(courseId) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['assignments', courseId] }),
   });
 };
 

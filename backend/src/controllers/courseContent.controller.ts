@@ -8,6 +8,8 @@ import { moduleRepository } from '../repositories/modules.repository.js';
 import { lessonRepository } from '../repositories/lessons.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeModule, serializeLesson } from '../serializers/courseContent.serializer.js';
+import { serializeBatch } from '../serializers/institution.serializer.js';
+import { listBatchesForCourse } from './courses.controller.js';
 import { extractText } from '../services/pdf.service.js';
 import { generateJson } from '../services/llm.service.js';
 import { retrieveKnowledgeBaseMaterial } from './documents.controller.js';
@@ -426,5 +428,16 @@ export const publishCourse = asyncHandler(
     }
 
     return ok(res, { id: course.id, isPublished: course.isPublished }, 'Course publish state updated');
+  },
+);
+
+/** Powers the teacher/admin batch picker for viewing a course's
+ * completed-course history (Gradebook/Assignments/Quizzes' batchId query
+ * param) — see docs/superpowers/specs/2026-08-13-completed-course-history-design.md. */
+export const listCourseBatches = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { courseId } = req.validated?.params as { courseId: string };
+    const batches = await listBatchesForCourse(courseId);
+    return ok(res, batches.map(serializeBatch), 'Batches retrieved');
   },
 );

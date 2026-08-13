@@ -9,7 +9,7 @@ import { quizAttemptRepository } from '../repositories/quizAttempts.repository.j
 import { quizAnswerGradeRepository } from '../repositories/quizAnswerGrades.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { buildGradebook } from '../serializers/gradebook.serializer.js';
-import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { resolveCurrentBatchForCourseOrNull, resolveBatchForCourse } from './courses.controller.js';
 import { QUIZ_STATUS, QUESTION_TYPES, GRADE_STATUS } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -17,15 +17,25 @@ import { ApiError } from '../utils/ApiError.js';
 
 /** Gathers every input buildGradebook needs, then hands off to that pure
  * function — this is the only place that queries the DB for the gradebook.
- * Scoped to the course's current academic year: a Course is reused by every
- * future batch reaching its Class, so without this a new batch's gradebook
- * would include the previous batch's assignments/quizzes too. */
-export const loadGradebook = async (courseId: string) => {
-  const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+ * Scoped to one batch: a Course is reused by every future batch reaching its
+ * Class, so without this a batch's gradebook would include other batches'
+ * assignments/quizzes too. `batchId` omitted -> the course's *current* batch
+ * (unchanged default behavior; no batch resolved yet just means an empty
+ * gradebook, not an error — a course with no one in it yet is a normal
+ * state to view). `batchId` given -> that specific batch's gradebook, past
+ * or present — the roster comes from that batch's own enrollments (any
+ * status), not just 'active', since a past batch is by definition no longer
+ * active. See docs/superpowers/specs/2026-08-13-completed-course-history-design.md. */
+export const loadGradebook = async (courseId: string, batchId?: string) => {
+  const batch = batchId
+    ? await resolveBatchForCourse(courseId, batchId)
+    : await resolveCurrentBatchForCourseOrNull(courseId);
   const [assignments, quizzes, roster] = await Promise.all([
-    assignmentRepository.findAllByCourse(courseId, academicYear.id),
-    quizRepository.findAllByCourse(courseId, academicYear.id, QUIZ_STATUS.PUBLISHED),
-    enrollmentRepository.findByCourseWithStudents(courseId),
+    batch ? assignmentRepository.findAllByCourse(courseId, batch.id) : Promise.resolve([]),
+    batch ? quizRepository.findAllByCourse(courseId, batch.id, QUIZ_STATUS.PUBLISHED) : Promise.resolve([]),
+    batchId
+      ? enrollmentRepository.findByCourseAndBatchWithStudents(courseId, batchId)
+      : enrollmentRepository.findByCourseWithStudents(courseId),
   ]);
 
   const assignmentInputs = await Promise.all(
@@ -80,7 +90,8 @@ export const loadGradebook = async (courseId: string) => {
 export const getGradebook = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
-    const gradebook = await loadGradebook(courseId);
+    const { batchId } = (req.validated?.query as { batchId?: string }) ?? {};
+    const gradebook = await loadGradebook(courseId, batchId);
     return ok(res, gradebook, 'Gradebook retrieved');
   },
 );
@@ -93,7 +104,15 @@ export const getMyGrades = asyncHandler(
       throw new ApiError(401, 'Unauthorized');
     }
 
-    const gradebook = await loadGradebook(courseId);
+    // A student's own batch for this course — not "whichever batch is
+    // currently enrolled," which would be wrong once this student has been
+    // promoted out and a newer batch has taken their place in the course.
+    const [enrollment] = await enrollmentRepository.findAll({ studentId, courseId });
+    if (!enrollment) {
+      throw new ApiError(404, 'Not enrolled in this course');
+    }
+
+    const gradebook = await loadGradebook(courseId, enrollment.batchId);
     const row = gradebook.rows.find((r) => r.studentId === studentId) ?? null;
     return ok(res, row, 'Grades retrieved');
   },

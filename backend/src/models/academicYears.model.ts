@@ -7,10 +7,7 @@ import {
   Default,
   AllowNull,
   PrimaryKey,
-  HasMany,
 } from 'sequelize-typescript';
-
-import { Section } from './sections.model.js';
 
 @Table({ tableName: 'AcademicYears', timestamps: true })
 export class AcademicYear extends Model {
@@ -44,7 +41,4 @@ export class AcademicYear extends Model {
   @Default('annual')
   @Column(DataType.ENUM('odd', 'even', 'annual'))
   declare term: 'odd' | 'even' | 'annual';
-
-  @HasMany(() => Section)
-  declare sections?: Section[];
 }

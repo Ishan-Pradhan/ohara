@@ -1,6 +1,6 @@
 /**
  * Second-pass demo seeder: transcripts (exam marks), attendance, assignments
- * + submissions + grades, and quizzes + attempts + grades — for the 220
+ * + submissions + grades, and quizzes + attempts + grades — for the
  * students created by seedDemoData.ts. Same rules as that script: goes
  * through the real repositories, never raw inserts for anything the app
  * itself validates, and is scoped ONLY to seeded demo students (email LIKE
@@ -13,8 +13,15 @@
  *     transcript entry (ExamMark). No attendance/assignments/quizzes for
  *     these — that's this-semester activity, not history.
  *   - outcome = 'enrolled' = the student's CURRENT, in-progress semester ->
- *     gets attendance sessions, an assignment, and a quiz. No exam marks
- *     yet — they haven't sat that semester's final.
+ *     gets attendance sessions, plus 3 assignments and 3 quizzes each
+ *     (ASSIGNMENT_PLANS / QUIZ_PLANS below) spanning "wrapped up and graded"
+ *     -> "mid-semester, partially graded" -> "not due/just released yet", so
+ *     gradebook/at-risk/dashboards see realistic in-progress data instead of
+ *     one flat state. No exam marks yet — they haven't sat that semester's
+ *     final.
+ *
+ * Idempotent per (course, title): safe to re-run, and safe to run again
+ * after `resetActivityData.ts` has cleared out assignments/quizzes.
  *
  * Run with: npx tsx src/scripts/seedActivityData.ts
  */
@@ -84,33 +91,44 @@ const weekdaysBetween = (start: Date, end: Date): Date[] => {
 const ACTIVITY_WINDOW_START = new Date('2026-05-18'); // ~3 months of "this semester so far"
 const ACTIVITY_WINDOW_END = new Date('2026-08-10'); // just before "today" (2026-08-12)
 
+// Assignments/quizzes are dated relative to the actual wall-clock "today" (not
+// the fixed ACTIVITY_WINDOW_* above) so the seed stays realistic — "overdue"
+// and "upcoming" items are always genuinely overdue/upcoming — no matter when
+// this script is re-run.
+const TODAY = new Date();
+const addDays = (base: Date, days: number): Date => {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
 // ── Transcripts: ExamTerm per academic year + ExamMark per completed course ─
 
 const ensureExamTerms = async (adminId: string): Promise<Map<string, string>> => {
   const years = await AcademicYear.findAll({
     where: { name: { [Op.in]: ['2023 odd', '2023 even', '2024 odd', '2024 even', '2025 odd', '2025 even', '2026 odd', '2026 even'] } },
   });
-  const termIdByYearId = new Map<string, string>();
+  const termIdByYearName = new Map<string, string>();
   for (const year of years) {
     const name = `${year.name} Final Examination`;
     let term = await ExamTerm.findOne({ where: { academicYearId: year.id } });
     if (!term) {
       term = await examTermRepository.create({ name, academicYearId: year.id, createdBy: adminId });
     }
-    termIdByYearId.set(year.id, term.id);
+    termIdByYearName.set(year.name, term.id);
   }
-  return termIdByYearId;
+  return termIdByYearName;
 };
 
 const seedTranscripts = async (adminId: string) => {
   console.log('\n--- Transcripts (ExamTerm + ExamMark) ---');
-  const termIdByYearId = await ensureExamTerms(adminId);
+  const termIdByYearName = await ensureExamTerms(adminId);
 
   const completed = await ClassMembership.findAll({
     where: { outcome: { [Op.in]: ['promoted', 'graduated'] } },
     include: [
       { model: User, as: 'student', where: { email: { [Op.like]: DEMO_EMAIL_PATTERN } }, attributes: ['id'] },
-      { model: Section, as: 'section', attributes: ['classId'] },
+      { model: Section, as: 'section', attributes: ['classId', 'startDate'] },
     ],
   });
   console.log(`Completed semester placements to grade: ${completed.length}`);
@@ -129,9 +147,16 @@ const seedTranscripts = async (adminId: string) => {
   let created = 0;
   let skipped = 0;
   for (const membership of completed) {
-    const examTermId = termIdByYearId.get(membership.academicYearId);
+    const section = membership.section as unknown as { classId: string; startDate: string };
+    // Sections no longer reference an AcademicYear (see 20260813130000) — its
+    // `startDate` (backfilled from that migration) still lets us reconstruct
+    // which academic year this membership's semester historically fell in.
+    const startYear = Number(section.startDate.slice(0, 4));
+    const startMonth = Number(section.startDate.slice(5, 7));
+    const yearName = `${startYear} ${startMonth <= 6 ? 'odd' : 'even'}`;
+    const examTermId = termIdByYearName.get(yearName);
     if (!examTermId) continue;
-    const classId = (membership.section as unknown as { classId: string }).classId;
+    const classId = section.classId;
     const courses = await getCourses(classId);
     if (courses.length === 0) continue;
 
@@ -167,6 +192,7 @@ interface ActiveGroup {
   courseId: string;
   courseTitle: string;
   sectionId: string;
+  batchId: string;
   teacherId: string | null;
   studentIds: string[];
 }
@@ -180,20 +206,25 @@ const loadActiveGroups = async (): Promise<ActiveGroup[]> => {
     ],
   });
 
-  const studentIdsBySectionId = new Map<string, { sectionId: string; classId: string; studentIds: string[] }>();
+  const studentIdsBySectionId = new Map<
+    string,
+    { sectionId: string; classId: string; batchId: string; studentIds: string[] }
+  >();
   for (const m of enrolled) {
     const section = m.section as unknown as { id: string; classId: string };
-    const bucket = studentIdsBySectionId.get(section.id) ?? { sectionId: section.id, classId: section.classId, studentIds: [] };
+    const bucket =
+      studentIdsBySectionId.get(section.id) ??
+      { sectionId: section.id, classId: section.classId, batchId: m.batchId, studentIds: [] };
     bucket.studentIds.push(m.studentId);
     studentIdsBySectionId.set(section.id, bucket);
   }
 
   const groups: ActiveGroup[] = [];
-  for (const { sectionId, classId, studentIds } of studentIdsBySectionId.values()) {
+  for (const { sectionId, classId, batchId, studentIds } of studentIdsBySectionId.values()) {
     const courses = await Course.findAll({ where: { classId } });
     for (const course of courses) {
       const ct = await CourseTeacher.findOne({ where: { courseId: course.id } });
-      groups.push({ courseId: course.id, courseTitle: course.title, sectionId, teacherId: ct?.teacherId ?? null, studentIds });
+      groups.push({ courseId: course.id, courseTitle: course.title, sectionId, batchId, teacherId: ct?.teacherId ?? null, studentIds });
     }
   }
   return groups;
@@ -244,59 +275,107 @@ const RUBRIC: RubricCriterion[] = [
   { criterion: 'Examples and application', maxPoints: 30, description: 'Uses relevant examples to support points' },
 ];
 
-const seedAssignments = async (groups: ActiveGroup[], academicYearId: string, adminId: string) => {
+// Three assignments per active course, spanning "fully wrapped up" ->
+// "actively being graded" -> "not due yet" so gradebook/at-risk/dashboard
+// views all have something realistic to show, not just one flat state.
+interface AssignmentPlan {
+  title: (courseTitle: string) => string;
+  prompt: (courseTitle: string) => string;
+  dueOffsetDays: number; // relative to TODAY; negative = past
+  submissionRate: number; // fraction of the roster that has submitted
+  gradedRate: number; // fraction of submissions that have a grade at all
+  approvedRate: number; // fraction of graded submissions that are approved (rest are draft)
+}
+
+const ASSIGNMENT_PLANS: AssignmentPlan[] = [
+  {
+    title: (c) => `Assignment 1: ${c} Fundamentals Review`,
+    prompt: (c) => `Write a short report covering the foundational concepts of ${c} introduced early this semester, with at least one worked example.`,
+    dueOffsetDays: -70,
+    submissionRate: 1.0,
+    gradedRate: 1.0,
+    approvedRate: 0.85,
+  },
+  {
+    title: (c) => `Assignment 2: ${c} Applied Problem Set`,
+    prompt: (c) => `Apply what you've learned in ${c} so far to the attached problem set. Show your working, not just final answers.`,
+    dueOffsetDays: -30,
+    submissionRate: 0.9,
+    gradedRate: 0.65,
+    approvedRate: 0.55,
+  },
+  {
+    title: (c) => `Assignment 3: ${c} Case Study Report`,
+    prompt: (c) => `Analyze the assigned case study through the lens of ${c} and submit a structured report with your recommendations.`,
+    dueOffsetDays: 4, // not due yet
+    submissionRate: 0.2, // a few early birds
+    gradedRate: 0, // nothing to grade yet — it isn't due
+    approvedRate: 0,
+  },
+];
+
+const seedAssignments = async (groups: ActiveGroup[], adminId: string) => {
   console.log('\n--- Assignments + Submissions + Grades ---');
   let assignmentsCreated = 0;
   let submissionsCreated = 0;
   let gradesCreated = 0;
 
   for (const group of groups) {
-    const existing = await Assignment.findOne({ where: { courseId: group.courseId } });
-    if (existing) continue; // already seeded this course
+    for (const plan of ASSIGNMENT_PLANS) {
+      const title = plan.title(group.courseTitle);
+      const existing = await Assignment.findOne({ where: { courseId: group.courseId, title } });
+      if (existing) continue; // already seeded this course+assignment
 
-    const dueAt = new Date(ACTIVITY_WINDOW_END);
-    dueAt.setDate(dueAt.getDate() - 7);
-    const assignment = await assignmentRepository.create({
-      courseId: group.courseId,
-      academicYearId,
-      title: `Assignment 1: ${group.courseTitle} Report`,
-      prompt: `Write a short report covering the key concepts of ${group.courseTitle} discussed so far this semester, with at least one worked example.`,
-      rubric: RUBRIC,
-      dueAt,
-    });
-    assignmentsCreated++;
-
-    for (const studentId of group.studentIds) {
-      const ability = abilityOf(studentId);
-      const isLate = Math.random() < 0.12;
-      const submittedAt = new Date(dueAt);
-      submittedAt.setDate(submittedAt.getDate() + (isLate ? Math.ceil(randomBetween(1, 3)) : -Math.ceil(randomBetween(0, 4))));
-
-      const submission = await submissionRepository.create({
-        assignmentId: assignment.id,
-        studentId,
-        content: `(Seeded demo submission for "${assignment.title}".)`,
-        isLate,
-        submittedAt,
+      const dueAt = addDays(TODAY, plan.dueOffsetDays);
+      const assignment = await assignmentRepository.create({
+        courseId: group.courseId,
+        batchId: group.batchId,
+        title,
+        prompt: plan.prompt(group.courseTitle),
+        rubric: RUBRIC,
+        dueAt,
       });
-      submissionsCreated++;
+      assignmentsCreated++;
 
-      const criterionFeedback: CriterionFeedback[] = RUBRIC.map((c) => {
-        const awardedPoints = Math.round(Math.min(c.maxPoints, Math.max(0, c.maxPoints * (ability + randomBetween(-0.15, 0.1)))));
-        return { criterion: c.criterion, maxPoints: c.maxPoints, awardedPoints, feedback: 'Good work overall — see rubric for detail.' };
-      });
-      const score = criterionFeedback.reduce((sum, c) => sum + c.awardedPoints, 0);
-      const approved = Math.random() < 0.7;
+      for (const studentId of group.studentIds) {
+        if (Math.random() >= plan.submissionRate) continue; // never submitted
 
-      await gradeRepository.create({
-        submissionId: submission.id,
-        score,
-        criterionFeedback,
-        overallFeedback: 'Solid submission — keep developing your examples.',
-        status: approved ? GRADE_STATUS.APPROVED : GRADE_STATUS.DRAFT,
-        approvedBy: approved ? (group.teacherId ?? adminId) : null,
-      });
-      gradesCreated++;
+        const ability = abilityOf(studentId);
+        const isLate = dueAt < TODAY && Math.random() < 0.12;
+        const submittedAt = isLate
+          ? addDays(dueAt, Math.ceil(randomBetween(1, 3)))
+          : addDays(dueAt, -Math.ceil(randomBetween(1, 5)));
+        // Never fabricate a submission time in the future.
+        if (submittedAt > TODAY) submittedAt.setTime(TODAY.getTime());
+
+        const submission = await submissionRepository.create({
+          assignmentId: assignment.id,
+          studentId,
+          content: `(Seeded demo submission for "${assignment.title}".)`,
+          isLate,
+          submittedAt,
+        });
+        submissionsCreated++;
+
+        if (Math.random() >= plan.gradedRate) continue; // submitted, not graded yet
+
+        const criterionFeedback: CriterionFeedback[] = RUBRIC.map((c) => {
+          const awardedPoints = Math.round(Math.min(c.maxPoints, Math.max(0, c.maxPoints * (ability + randomBetween(-0.15, 0.1)))));
+          return { criterion: c.criterion, maxPoints: c.maxPoints, awardedPoints, feedback: 'Good work overall — see rubric for detail.' };
+        });
+        const score = criterionFeedback.reduce((sum, c) => sum + c.awardedPoints, 0);
+        const approved = Math.random() < plan.approvedRate;
+
+        await gradeRepository.create({
+          submissionId: submission.id,
+          score,
+          criterionFeedback,
+          overallFeedback: 'Solid submission — keep developing your examples.',
+          status: approved ? GRADE_STATUS.APPROVED : GRADE_STATUS.DRAFT,
+          approvedBy: approved ? (group.teacherId ?? adminId) : null,
+        });
+        gradesCreated++;
+      }
     }
   }
   console.log(`Assignments: ${assignmentsCreated}, submissions: ${submissionsCreated}, grades: ${gradesCreated}`);
@@ -304,102 +383,132 @@ const seedAssignments = async (groups: ActiveGroup[], academicYearId: string, ad
 
 // ── Quizzes + attempts + (short-answer) grades ─────────────────────────
 
-const seedQuizzes = async (groups: ActiveGroup[], academicYearId: string, adminId: string) => {
+// Same "wrapped up -> mid-semester -> just released" spread as assignments.
+interface QuizPlan {
+  titleSuffix: string;
+  attemptOffsetDays: number; // center of the attempt window, relative to TODAY
+  attemptRate: number; // fraction of the roster that has attempted it
+  gradedRate: number; // fraction of short-answer responses that have been graded
+  approvedRate: number; // fraction of graded short answers that are approved
+}
+
+const QUIZ_PLANS: QuizPlan[] = [
+  { titleSuffix: 'Quiz 1', attemptOffsetDays: -65, attemptRate: 1.0, gradedRate: 1.0, approvedRate: 0.8 },
+  { titleSuffix: 'Quiz 2', attemptOffsetDays: -25, attemptRate: 0.85, gradedRate: 0.6, approvedRate: 0.5 },
+  { titleSuffix: 'Quiz 3', attemptOffsetDays: -2, attemptRate: 0.25, gradedRate: 0, approvedRate: 0 },
+];
+
+const attemptDateNear = (offsetDays: number): Date => {
+  const windowStart = addDays(TODAY, offsetDays - 4);
+  const windowEndRaw = addDays(TODAY, offsetDays + 4);
+  const windowEnd = windowEndRaw > TODAY ? TODAY : windowEndRaw;
+  const days = weekdaysBetween(windowStart, windowEnd);
+  return days.length > 0 ? pick(days) : addDays(TODAY, offsetDays);
+};
+
+const seedQuizzes = async (groups: ActiveGroup[], adminId: string) => {
   console.log('\n--- Quizzes + Attempts + Grades ---');
   let quizzesCreated = 0;
   let attemptsCreated = 0;
   let answerGradesCreated = 0;
 
+  const mcqOptions = [
+    'It is a foundational concept covered in this course',
+    'It is unrelated to the course syllabus',
+    'It only applies to advanced electives',
+    'It was deprecated in modern practice',
+  ];
+  const correctIndex = 0; // first option is always the "right" one for scoring purposes
+
   for (const group of groups) {
-    const existing = await Quiz.findOne({ where: { courseId: group.courseId } });
-    if (existing) continue;
+    for (const plan of QUIZ_PLANS) {
+      const title = `${group.courseTitle} ${plan.titleSuffix}`;
+      const existing = await Quiz.findOne({ where: { courseId: group.courseId, title } });
+      if (existing) continue; // already seeded this course+quiz
 
-    const quiz = await quizRepository.create({
-      courseId: group.courseId,
-      academicYearId,
-      title: `${group.courseTitle} Quiz 1`,
-      status: QUIZ_STATUS.PUBLISHED,
-    });
-    quizzesCreated++;
-
-    const mcqOptions = [
-      'It is a foundational concept covered in this course',
-      'It is unrelated to the course syllabus',
-      'It only applies to advanced electives',
-      'It was deprecated in modern practice',
-    ];
-    const correctIndex = 0; // first option is always the "right" one for scoring purposes
-
-    const questions = [
-      ...Array.from({ length: 3 }, (_, i) => ({
-        type: QUESTION_TYPES.MCQ,
-        prompt: `Regarding a core topic in ${group.courseTitle}, which statement is correct? (Q${i + 1})`,
-        options: mcqOptions,
-        answer: { correctIndex },
-        points: 2,
-        orderIndex: i,
-      })),
-      ...Array.from({ length: 2 }, (_, i) => ({
-        type: QUESTION_TYPES.SHORT_ANSWER,
-        prompt: `Briefly explain a key concept from ${group.courseTitle} in your own words. (Q${i + 4})`,
-        options: null,
-        answer: null,
-        points: 3,
-        orderIndex: i + 3,
-      })),
-    ];
-
-    const createdQuestions = [];
-    for (const q of questions) {
-      createdQuestions.push(await questionRepository.create({ quizId: quiz.id, ...q }));
-    }
-    const maxScore = createdQuestions.reduce((sum, q) => sum + q.points, 0);
-    const mcqQuestions = createdQuestions.filter((q) => q.type === QUESTION_TYPES.MCQ);
-    const shortAnswerQuestions = createdQuestions.filter((q) => q.type === QUESTION_TYPES.SHORT_ANSWER);
-
-    for (const studentId of group.studentIds) {
-      const ability = abilityOf(studentId);
-      const responses: QuizResponse[] = [];
-      let mcqScore = 0;
-      for (const q of mcqQuestions) {
-        const correct = Math.random() < ability;
-        const chosen = correct ? (q.answer as { correctIndex: number }).correctIndex : (((q.answer as { correctIndex: number }).correctIndex + 1) % mcqOptions.length);
-        responses.push({ questionId: q.id, answer: chosen });
-        if (correct) mcqScore += q.points;
-      }
-      for (const q of shortAnswerQuestions) {
-        responses.push({ questionId: q.id, answer: `(Seeded demo answer touching on the core idea of ${group.courseTitle}.)` });
-      }
-
-      // Short-answer awarded points, pre-computed so the attempt's stored
-      // score matches what the gradebook will later read from
-      // QuizAnswerGrade rows — same relationship loadGradebook relies on.
-      const shortAnswerAwards = shortAnswerQuestions.map((q) => Math.round(Math.min(q.points, Math.max(0, q.points * (ability + randomBetween(-0.2, 0.15))))));
-      const shortAnswerScore = shortAnswerAwards.reduce((a, b) => a + b, 0);
-
-      const attempt = await quizAttemptRepository.create({
-        quizId: quiz.id,
-        studentId,
-        responses,
-        score: mcqScore + shortAnswerScore,
-        maxScore,
-        submittedAt: pick(weekdaysBetween(ACTIVITY_WINDOW_START, ACTIVITY_WINDOW_END)),
+      const quiz = await quizRepository.create({
+        courseId: group.courseId,
+        batchId: group.batchId,
+        title,
+        status: QUIZ_STATUS.PUBLISHED,
       });
-      attemptsCreated++;
+      quizzesCreated++;
 
-      for (let i = 0; i < shortAnswerQuestions.length; i++) {
-        const q = shortAnswerQuestions[i]!;
-        const approved = Math.random() < 0.6;
-        await quizAnswerGradeRepository.create({
-          attemptId: attempt.id,
-          questionId: q.id,
-          awardedPoints: shortAnswerAwards[i]!,
-          maxPoints: q.points,
-          feedback: 'Reasonable explanation.',
-          status: approved ? GRADE_STATUS.APPROVED : GRADE_STATUS.DRAFT,
-          approvedBy: approved ? (group.teacherId ?? adminId) : null,
+      const questions = [
+        ...Array.from({ length: 3 }, (_, i) => ({
+          type: QUESTION_TYPES.MCQ,
+          prompt: `Regarding a core topic in ${group.courseTitle}, which statement is correct? (Q${i + 1})`,
+          options: mcqOptions,
+          answer: { correctIndex },
+          points: 2,
+          orderIndex: i,
+        })),
+        ...Array.from({ length: 2 }, (_, i) => ({
+          type: QUESTION_TYPES.SHORT_ANSWER,
+          prompt: `Briefly explain a key concept from ${group.courseTitle} in your own words. (Q${i + 4})`,
+          options: null,
+          answer: null,
+          points: 3,
+          orderIndex: i + 3,
+        })),
+      ];
+
+      const createdQuestions = [];
+      for (const q of questions) {
+        createdQuestions.push(await questionRepository.create({ quizId: quiz.id, ...q }));
+      }
+      const maxScore = createdQuestions.reduce((sum, q) => sum + q.points, 0);
+      const mcqQuestions = createdQuestions.filter((q) => q.type === QUESTION_TYPES.MCQ);
+      const shortAnswerQuestions = createdQuestions.filter((q) => q.type === QUESTION_TYPES.SHORT_ANSWER);
+
+      for (const studentId of group.studentIds) {
+        if (Math.random() >= plan.attemptRate) continue; // hasn't attempted this one
+
+        const ability = abilityOf(studentId);
+        const responses: QuizResponse[] = [];
+        let mcqScore = 0;
+        for (const q of mcqQuestions) {
+          const correct = Math.random() < ability;
+          const chosen = correct ? (q.answer as { correctIndex: number }).correctIndex : (((q.answer as { correctIndex: number }).correctIndex + 1) % mcqOptions.length);
+          responses.push({ questionId: q.id, answer: chosen });
+          if (correct) mcqScore += q.points;
+        }
+        for (const q of shortAnswerQuestions) {
+          responses.push({ questionId: q.id, answer: `(Seeded demo answer touching on the core idea of ${group.courseTitle}.)` });
+        }
+
+        // Short-answer awarded points, pre-computed so the attempt's stored
+        // score matches what the gradebook will later read from
+        // QuizAnswerGrade rows — same relationship loadGradebook relies on.
+        const shortAnswerAwards = shortAnswerQuestions.map((q) => Math.round(Math.min(q.points, Math.max(0, q.points * (ability + randomBetween(-0.2, 0.15))))));
+        const shortAnswerScore = shortAnswerAwards.reduce((a, b) => a + b, 0);
+
+        const attempt = await quizAttemptRepository.create({
+          quizId: quiz.id,
+          studentId,
+          responses,
+          score: mcqScore + shortAnswerScore,
+          maxScore,
+          submittedAt: attemptDateNear(plan.attemptOffsetDays),
         });
-        answerGradesCreated++;
+        attemptsCreated++;
+
+        if (Math.random() >= plan.gradedRate) continue; // attempted, short answers not graded yet
+
+        for (let i = 0; i < shortAnswerQuestions.length; i++) {
+          const q = shortAnswerQuestions[i]!;
+          const approved = Math.random() < plan.approvedRate;
+          await quizAnswerGradeRepository.create({
+            attemptId: attempt.id,
+            questionId: q.id,
+            awardedPoints: shortAnswerAwards[i]!,
+            maxPoints: q.points,
+            feedback: 'Reasonable explanation.',
+            status: approved ? GRADE_STATUS.APPROVED : GRADE_STATUS.DRAFT,
+            approvedBy: approved ? (group.teacherId ?? adminId) : null,
+          });
+          answerGradesCreated++;
+        }
       }
     }
   }
@@ -419,12 +528,10 @@ const run = async () => {
 
   const groups = await loadActiveGroups();
   console.log(`\nActive (course, section) groups this semester: ${groups.length}`);
-  const currentYear = await AcademicYear.findOne({ where: { name: '2027 odd' } });
-  if (!currentYear) throw new Error('"2027 odd" academic year not found — run seedDemoData.ts first.');
 
   await seedAttendance(groups, admin.id);
-  await seedAssignments(groups, currentYear.id, admin.id);
-  await seedQuizzes(groups, currentYear.id, admin.id);
+  await seedAssignments(groups, admin.id);
+  await seedQuizzes(groups, admin.id);
 
   console.log('\nDone.');
   process.exit(0);

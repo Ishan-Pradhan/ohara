@@ -14,7 +14,6 @@ const {
   createProgram,
   createClass,
   createSection,
-  createAcademicYear,
   createCourse,
   createStudentUser,
   createTeacherUser,
@@ -81,12 +80,11 @@ describe('GET /students/:studentId/placement', () => {
 
   it("allows an admin to view any student's placement, identity, and KYC profile", async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id, title: 'Physics' });
     const student = await createStudentUser({ name: 'Ada Lovelace' });
     await studentProfileRepository.upsert(student.id, {
       parentName: 'Lord Byron',
@@ -122,12 +120,11 @@ describe('GET /students/:studentId/placement', () => {
 
   it("returns null profile fields when the student has no StudentProfile row", async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    const program = await createProgram({ institutionType: 'college' });
+    const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser();
 
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
@@ -150,10 +147,9 @@ describe('GET /students/:studentId/placement', () => {
   it('allows a student to view their own placement', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser({ email: 'self@example.com' });
 
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
@@ -174,10 +170,9 @@ describe('GET /students/:studentId/placement', () => {
   it('rejects an unrelated student with 403', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser();
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
@@ -193,10 +188,9 @@ describe('GET /students/:studentId/placement', () => {
   it('allows a teacher of an enrolled course to view the placement', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser();
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
@@ -219,10 +213,9 @@ describe('GET /students/:studentId/placement', () => {
   it("rejects a teacher who does not teach any of the student's courses with 403", async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser();
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
@@ -241,7 +234,6 @@ describe('GET /students/:studentId/placement', () => {
 
   it('returns 404 when the student has no current-year placement', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    await createAcademicYear({ isCurrent: true });
     const student = await createStudentUser();
 
     const res = await request(app)
@@ -263,11 +255,10 @@ describe('GET /students/:studentId/attendance', () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram();
     const cls = await createClass({ programId: program.id });
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const batch = await createBatch({ programId: program.id });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
     const physics = await createCourse({ classId: cls.id, title: 'Physics', code: `PHY-${Date.now()}` });
     const chemistry = await createCourse({ classId: cls.id, title: 'Chemistry', code: `CHM-${Date.now()}` });
-    const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser({ email: `att-${Date.now()}@example.com` });
     const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
     await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: physics.id });
@@ -311,10 +302,9 @@ describe('GET /students/:studentId/attendance', () => {
   it('rejects an unrelated student with 403', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
-    const year = await createAcademicYear({ isCurrent: true });
-    const section = await createSection({ classId: cls.id, academicYearId: year.id });
-    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: cls.programId });
+    const section = await createSection({ classId: cls.id, batchId: batch.id });
+    const course = await createCourse({ classId: cls.id });
     const student = await createStudentUser();
     await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
 
@@ -329,7 +319,6 @@ describe('GET /students/:studentId/attendance', () => {
 
   it('returns 404 when the student has no current-year placement', async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
-    await createAcademicYear({ isCurrent: true });
     const student = await createStudentUser();
 
     const res = await request(app)

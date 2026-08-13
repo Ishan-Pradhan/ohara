@@ -5,7 +5,7 @@ import { assignmentRepository } from '../repositories/assignments.repository.js'
 import { submissionRepository } from '../repositories/submissions.repository.js';
 import { quizRepository } from '../repositories/quizzes.repository.js';
 import { quizAttemptRepository } from '../repositories/quizAttempts.repository.js';
-import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { resolveCurrentBatchForCourseOrNull } from './courses.controller.js';
 import { QUIZ_STATUS } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -22,10 +22,10 @@ export const getGradeTrends = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId } = req.validated?.params as { courseId: string };
 
-    const academicYear = await resolveCurrentAcademicYearForCourse(courseId);
+    const batch = await resolveCurrentBatchForCourseOrNull(courseId);
     const [assignments, quizzes] = await Promise.all([
-      assignmentRepository.findAllByCourse(courseId, academicYear.id),
-      quizRepository.findAllByCourse(courseId, academicYear.id, QUIZ_STATUS.PUBLISHED),
+      batch ? assignmentRepository.findAllByCourse(courseId, batch.id) : Promise.resolve([]),
+      batch ? quizRepository.findAllByCourse(courseId, batch.id, QUIZ_STATUS.PUBLISHED) : Promise.resolve([]),
     ]);
 
     const points: GradeTrendPoint[] = [];

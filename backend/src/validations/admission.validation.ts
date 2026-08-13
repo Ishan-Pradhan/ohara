@@ -31,7 +31,7 @@ export const admittedStudentSchema = z.object({
     id: z.string(),
     studentId: z.string(),
     sectionId: z.string(),
-    academicYearId: z.string(),
+    classId: z.string(),
   }),
 });
 
