@@ -12,6 +12,7 @@ import {
   type Teacher,
 } from './users.schema.js';
 import { paginationMetaSchema, type PaginationMeta } from '../../schemas/pagination.schema.js';
+import { teacherCourseSchema, type TeacherCourse } from '../teacher/teacher.schema.js';
 
 /** Teachers, for assignment pickers (section class teacher, course teachers).
  * Small institutions won't have enough teachers to need pagination here. */
@@ -52,4 +53,18 @@ export const inviteUsersBatch = async (
 ): Promise<BatchInviteResult> => {
   const res = await api.post('/admin/users/batch', input);
   return batchInviteResultSchema.parse(res.data.data);
+};
+
+/** Powers the Staff detail page (any role — teacher or admin). */
+export const fetchUserById = async (id: string): Promise<AdminUser> => {
+  const res = await api.get(`/admin/users/${id}`);
+  return adminUserSchema.parse(res.data.data);
+};
+
+/** Same shape a teacher's own GET /teacher/courses returns — an admin
+ * looking up an arbitrary teacher's courses by id. Only meaningful for
+ * role: 'teacher' users (backend 400s otherwise). */
+export const fetchStaffCourses = async (id: string): Promise<TeacherCourse[]> => {
+  const res = await api.get(`/admin/users/${id}/courses`);
+  return z.array(teacherCourseSchema).parse(res.data.data);
 };

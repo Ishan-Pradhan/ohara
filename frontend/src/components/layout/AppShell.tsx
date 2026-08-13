@@ -85,6 +85,7 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/teacher/courses', label: 'My Courses', icon: BookOpen, roles: ['teacher'] },
       { to: '/teacher/students', label: 'My Students', icon: GraduationCap, roles: ['teacher'] },
+      { to: '/teacher/profile', label: 'My Profile', icon: User, roles: ['teacher'] },
     ],
   },
   {

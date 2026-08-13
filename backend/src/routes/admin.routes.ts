@@ -3,6 +3,8 @@ import {
   blockAndUnblockUser,
   createStaff,
   getAllUsers,
+  getUserById,
+  getStaffCourses,
   getUserStats,
   archiveUser,
   restoreUser,
@@ -32,6 +34,7 @@ import { USER_ROLES } from '../constants/index.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import {
   getAllUsersSchema,
+  getUserSchema,
   toggleBlockUserSchema,
   archiveUserSchema,
   restoreUserSchema,
@@ -202,11 +205,26 @@ router
 
 router
   .route('/users/:id')
+  .get(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(getUserSchema),
+    getUserById,
+  )
   .delete(
     verifyJWT,
     requireRole(USER_ROLES.ADMIN),
     validate(hardDeleteUserSchema),
     hardDeleteUser,
+  );
+
+router
+  .route('/users/:id/courses')
+  .get(
+    verifyJWT,
+    requireRole(USER_ROLES.ADMIN),
+    validate(getUserSchema),
+    getStaffCourses,
   );
 
 router

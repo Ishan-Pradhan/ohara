@@ -18,6 +18,10 @@ export const getAllUsersSchema = {
   }),
 };
 
+export const getUserSchema = {
+  params: z.object({ id: uuid }),
+};
+
 export const archiveUserSchema = {
   params: z.object({ id: uuid }),
 };
@@ -80,6 +84,22 @@ import { envelope, userPublicSchema } from './user.response.js';
 
 const forbidden = { description: 'Caller is not an admin' };
 const unauthenticated = { description: 'Not authenticated' };
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/users/{id}',
+  tags: ['Admin'],
+  request: { params: getUserSchema.params },
+  responses: {
+    200: {
+      description: 'A single user — powers the Staff detail page (any role)',
+      content: { 'application/json': { schema: envelope(userPublicSchema) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'User not found' },
+  },
+});
 
 registry.registerPath({
   method: 'get',

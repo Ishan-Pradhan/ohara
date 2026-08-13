@@ -23,8 +23,10 @@ import { ApiError } from '../utils/ApiError.js';
 
 // ── MY COURSES ────────────────────────────────────────────────────────────
 
-export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const teacherId = req.user!.id;
+/** Shared by listMyCourses (self, any teacher) and admin.controller.ts's
+ * getStaffCourses (admin looking up an arbitrary teacher by id) — same
+ * per-course class/program/batch enrichment either way. */
+export const loadTeacherCourses = async (teacherId: string) => {
   const assignments = await courseTeacherRepository.findByTeacherId(teacherId);
   const rawCourses = assignments
     .map((a) => a.course)
@@ -32,7 +34,7 @@ export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response
 
   // Small N (a teacher's own course list), so a per-course class/program/batch
   // lookup is simpler than adding a bulk-join method for a one-place need.
-  const courses = await Promise.all(
+  return await Promise.all(
     rawCourses.map(async (course) => {
       const cls = await classRepository.findById(course.classId);
       const program = cls ? await programRepository.findById(cls.programId) : null;
@@ -59,7 +61,10 @@ export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response
       };
     }),
   );
+};
 
+export const listMyCourses = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const courses = await loadTeacherCourses(req.user!.id);
   return ok(res, courses, 'Courses retrieved');
 });
 

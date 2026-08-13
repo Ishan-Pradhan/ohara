@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ban, Mail, MoreVertical, Plus, ShieldCheck, UserCog } from 'lucide-react';
@@ -88,13 +88,16 @@ const StaffTable = ({
               {people.map((person: AdminUser) => (
                 <TableRow key={person.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
+                    <Link
+                      to={`/admin/staff/${person.id}`}
+                      className="flex items-center gap-3 hover:underline"
+                    >
                       <Avatar name={person.name} src={person.avatarUrl} size="sm" />
                       <div className="min-w-0">
                         <p className="truncate font-medium text-fg">{person.name}</p>
                         <p className="truncate text-xs text-muted">{person.email}</p>
                       </div>
-                    </div>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">

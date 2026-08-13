@@ -29,6 +29,7 @@ import { StudentsPage } from './pages/admin/StudentsPage.js';
 import { AdmitStudentPage } from './pages/admin/AdmitStudentPage.js';
 import { StudentDetailPage } from './pages/admin/StudentDetailPage.js';
 import { StaffPage } from './pages/admin/StaffPage.js';
+import { StaffDetailPage } from './pages/admin/StaffDetailPage.js';
 import { SettingsPage } from './pages/admin/SettingsPage.js';
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage.js';
 import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
@@ -36,6 +37,7 @@ import { TeacherCoursePage } from './pages/teacher/TeacherCoursePage.js';
 import { TeacherCourseRedirect } from './pages/teacher/TeacherCourseRedirect.js';
 import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
 import { MyStudentsPage } from './pages/teacher/MyStudentsPage.js';
+import { MyProfilePage } from './pages/teacher/MyProfilePage.js';
 import { MyStudentDetailPage } from './pages/teacher/MyStudentDetailPage.js';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage.js';
 import { StudentCoursePage } from './pages/student/StudentCoursePage.js';
@@ -167,6 +169,7 @@ export const router = createBrowserRouter([
   adminRoute('/admin/students/admit', <AdmitStudentPage />),
   adminRoute('/admin/students/:studentId', <StudentDetailPage />),
   adminRoute('/admin/staff', <StaffPage />),
+  adminRoute('/admin/staff/:id', <StaffDetailPage />),
   adminRoute('/admin/settings', <SettingsPage />),
   adminRoute('/admin/analytics', <AdminAnalyticsPage />),
   teacherRoute('/teacher/courses', <MyCoursesPage />),
@@ -176,6 +179,7 @@ export const router = createBrowserRouter([
   teacherRoute('/teacher/courses/:courseId/:section', <TeacherCoursePage />),
   teacherRoute('/teacher/students', <MyStudentsPage />),
   teacherRoute('/teacher/students/:studentId', <MyStudentDetailPage />),
+  teacherRoute('/teacher/profile', <MyProfilePage />),
   studentRoute('/student/courses', <StudentCoursesPage />),
   studentRoute('/student/study-plan', <StudentStudyPlanPage />),
   studentRoute('/student/profile', <StudentProfilePage />),

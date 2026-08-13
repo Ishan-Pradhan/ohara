@@ -21,6 +21,39 @@ import { sendStaffInviteEmail } from '../services/email.service.js';
 import { deleteBlockersRepository } from '../repositories/deleteBlockers.repository.js';
 import { assertDeletable } from '../utils/deleteBlockers.utils.js';
 import { logger } from '../utils/logger.js';
+import { loadTeacherCourses } from './teacher.controller.js';
+
+// GET ONE USER (ADMIN ONLY) — powers the Staff detail page (any role); the
+// student equivalent is served by /students/:studentId/placement instead,
+// which returns the richer academic-placement shape.
+export const getUserById = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+    return ok(res, serializeUser(user), 'User retrieved');
+  },
+);
+
+// GET A TEACHER'S COURSES (ADMIN ONLY) — same shape listMyCourses returns
+// for a teacher's own /teacher/courses, just looked up by id instead of the
+// caller's own session.
+export const getStaffCourses = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new ApiError(404, 'User not found');
+    }
+    if (user.role !== 'teacher') {
+      throw new ApiError(400, 'Only teacher accounts have courses');
+    }
+    const courses = await loadTeacherCourses(id);
+    return ok(res, courses, 'Courses retrieved');
+  },
+);
 
 //    GET ALL USERS (ADMIN ONLY)
 export const getAllUsers = asyncHandler(

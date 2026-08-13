@@ -19,6 +19,9 @@ const {
   createTeacherUser,
   createBatch,
 } = await import('../helpers/institution.js');
+const { courseTeacherRepository } = await import(
+  '../../src/repositories/courseTeachers.repository.js'
+);
 
 const PASSWORD = 'hunter2secret';
 
@@ -249,6 +252,87 @@ describe('PATCH /admin/toggle-block/:id', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'blocked-teacher@example.com', password: PASSWORD });
     expect(loginRes.status).toBe(403);
+  });
+});
+
+describe('GET /admin/users/:id', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const teacher = await createTeacherUser();
+    const res = await request(app).get(`/api/v1/admin/users/${teacher.id}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const otherTeacher = await createTeacherUser();
+    const res = await request(app)
+      .get(`/api/v1/admin/users/${otherTeacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent user with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .get('/api/v1/admin/users/00000000-0000-0000-0000-000000000000')
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns a staff account's detail — powers the Staff detail page", async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser({ email: 'jane-teacher@example.com', name: 'Jane Teacher' });
+    const res = await request(app)
+      .get(`/api/v1/admin/users/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      id: teacher.id,
+      name: 'Jane Teacher',
+      email: 'jane-teacher@example.com',
+      role: 'teacher',
+    });
+    expect(res.body.data).not.toHaveProperty('password');
+  });
+});
+
+describe('GET /admin/users/:id/courses', () => {
+  it('rejects an unauthenticated caller with 401', async () => {
+    const teacher = await createTeacherUser();
+    const res = await request(app).get(`/api/v1/admin/users/${teacher.id}/courses`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const otherTeacher = await createTeacherUser();
+    const res = await request(app)
+      .get(`/api/v1/admin/users/${otherTeacher.id}/courses`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-teacher account with 400', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const student = await createStudentUser();
+    const res = await request(app)
+      .get(`/api/v1/admin/users/${student.id}/courses`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns a teacher's assigned courses, same shape as their own GET /teacher/courses", async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+    const course = await createCourse({ title: 'Digital Logic', code: 'CS201' });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+
+    const res = await request(app)
+      .get(`/api/v1/admin/users/${teacher.id}/courses`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0]).toMatchObject({ id: course.id, title: 'Digital Logic', code: 'CS201' });
   });
 });
 
