@@ -17,6 +17,10 @@ export const markNotificationReadSchema = {
   params: z.object({ id: z.uuid() }),
 };
 
+export const deleteNotificationSchema = {
+  params: z.object({ id: z.uuid() }),
+};
+
 const notificationSchema = registry.register(
   'Notification',
   z.object({
@@ -92,6 +96,29 @@ registry.registerPath({
   tags: ['Notifications'],
   responses: {
     200: { description: "Every one of the caller's unread notifications marked as read" },
+    401: unauthenticated,
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/notifications/{id}',
+  tags: ['Notifications'],
+  request: { params: deleteNotificationSchema.params },
+  responses: {
+    200: { description: 'Notification deleted' },
+    401: unauthenticated,
+    403: { description: 'Notification does not belong to the caller' },
+    404: { description: 'Notification not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/notifications',
+  tags: ['Notifications'],
+  responses: {
+    200: { description: "Every one of the caller's notifications deleted" },
     401: unauthenticated,
   },
 });

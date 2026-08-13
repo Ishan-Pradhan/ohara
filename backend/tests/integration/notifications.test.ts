@@ -245,4 +245,101 @@ describe('Notifications', () => {
     const res = await request(app).get('/api/v1/notifications');
     expect(res.status).toBe(401);
   });
+
+  describe('DELETE /notifications/:id', () => {
+    it("deletes the caller's own notification", async () => {
+      const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
+      await request(app)
+        .post(`/api/v1/courses/${course.id}/assignments`)
+        .set('Cookie', teacherCookies)
+        .send({
+          title: 'Essay 1',
+          prompt: 'Explain photosynthesis.',
+          rubric: RUBRIC,
+          dueAt: new Date(Date.now() + 3600_000).toISOString(),
+        });
+
+      const listRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
+      const notificationId = listRes.body.data.items[0].id;
+
+      await request(app)
+        .delete(`/api/v1/notifications/${notificationId}`)
+        .set('Cookie', studentCookies)
+        .expect(200);
+
+      const afterRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
+      expect(afterRes.body.data.items).toHaveLength(0);
+    });
+
+    it("rejects deleting another user's notification with 403", async () => {
+      const { course, teacherCookies, studentCookies } = await setupCourseWithTeacherAndStudent();
+      await request(app)
+        .post(`/api/v1/courses/${course.id}/assignments`)
+        .set('Cookie', teacherCookies)
+        .send({
+          title: 'Essay 1',
+          prompt: 'Explain photosynthesis.',
+          rubric: RUBRIC,
+          dueAt: new Date(Date.now() + 3600_000).toISOString(),
+        });
+
+      const listRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
+      const notificationId = listRes.body.data.items[0].id;
+
+      const otherStudent = await createStudentUser({ email: `other-${Date.now()}@example.com` });
+      const otherCookies = await signInAs(otherStudent.email, 'student');
+
+      const res = await request(app)
+        .delete(`/api/v1/notifications/${notificationId}`)
+        .set('Cookie', otherCookies);
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 404 for a nonexistent notification', async () => {
+      const student = await createStudentUser({ email: `nonexistent-${Date.now()}@example.com` });
+      const studentCookies = await signInAs(student.email, 'student');
+
+      const res = await request(app)
+        .delete('/api/v1/notifications/00000000-0000-0000-0000-000000000000')
+        .set('Cookie', studentCookies);
+      expect(res.status).toBe(404);
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app).delete(
+        '/api/v1/notifications/00000000-0000-0000-0000-000000000000',
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('DELETE /notifications', () => {
+    it("deletes all of the caller's notifications without touching another user's", async () => {
+      const student = await createStudentUser({ email: `clearall-${Date.now()}@example.com` });
+      const studentCookies = await signInAs(student.email, 'student');
+      const otherStudent = await createStudentUser({ email: `untouched-${Date.now()}@example.com` });
+      const otherCookies = await signInAs(otherStudent.email, 'student');
+
+      await notificationRepository.bulkCreate([
+        { userId: student.id, type: 'assignment_created', title: 'A' },
+        { userId: student.id, type: 'assignment_created', title: 'B' },
+      ]);
+      await notificationRepository.bulkCreate([
+        { userId: otherStudent.id, type: 'assignment_created', title: 'C' },
+      ]);
+
+      await request(app).delete('/api/v1/notifications').set('Cookie', studentCookies).expect(200);
+
+      const afterRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
+      expect(afterRes.body.data.items).toHaveLength(0);
+
+      const otherRes = await request(app).get('/api/v1/notifications').set('Cookie', otherCookies);
+      expect(otherRes.body.data.items).toHaveLength(1);
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app).delete('/api/v1/notifications');
+      expect(res.status).toBe(401);
+    });
+  });
 });

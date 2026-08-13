@@ -5,6 +5,8 @@ import {
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
+  deleteAllNotifications,
 } from './notifications.api.js';
 
 // Bell dropdown (recent-20 preview) and the full paginated page share the
@@ -58,6 +60,28 @@ export const useMarkAllNotificationsRead = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: markAllNotificationsRead,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_PREFIX });
+      void queryClient.invalidateQueries({ queryKey: unreadCountKey });
+    },
+  });
+};
+
+export const useDeleteNotification = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteNotification,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_PREFIX });
+      void queryClient.invalidateQueries({ queryKey: unreadCountKey });
+    },
+  });
+};
+
+export const useDeleteAllNotifications = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteAllNotifications,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_PREFIX });
       void queryClient.invalidateQueries({ queryKey: unreadCountKey });

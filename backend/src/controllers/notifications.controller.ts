@@ -79,3 +79,35 @@ export const markAllNotificationsRead = asyncHandler(
     return ok(res, null, 'All notifications marked as read');
   },
 );
+
+export const deleteNotification = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new ApiError(401, 'Unauthorized');
+    }
+    const { id } = req.validated?.params as { id: string };
+
+    const existing = await notificationRepository.findById(id);
+    if (!existing) {
+      throw new ApiError(404, 'Notification not found');
+    }
+    if (existing.userId !== userId) {
+      throw new ApiError(403, 'Notification does not belong to the caller');
+    }
+
+    await notificationRepository.delete(id);
+    return ok(res, null, 'Notification deleted');
+  },
+);
+
+export const deleteAllNotifications = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new ApiError(401, 'Unauthorized');
+    }
+    await notificationRepository.deleteAll(userId);
+    return ok(res, null, 'All notifications deleted');
+  },
+);

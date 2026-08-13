@@ -41,4 +41,13 @@ export const notificationRepository = {
   markAllRead: async (userId: string): Promise<void> => {
     await Notification.update({ isRead: true }, { where: { userId, isRead: false } });
   },
+
+  delete: async (id: string): Promise<boolean> => {
+    const deleted = await Notification.destroy({ where: { id } });
+    return deleted > 0;
+  },
+
+  deleteAll: async (userId: string): Promise<void> => {
+    await Notification.destroy({ where: { userId } });
+  },
 };

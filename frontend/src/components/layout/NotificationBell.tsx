@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
@@ -7,8 +8,10 @@ import {
   useUnreadNotificationCount,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
+  useDeleteAllNotifications,
 } from '../../features/notifications/useNotifications.js';
 import type { Notification } from '../../features/notifications/notifications.schema.js';
+import { ConfirmDialog } from '../ui/Dialog.js';
 import { cn } from '../../lib/cn.js';
 
 const timeAgo = (iso: string): string => {
@@ -28,6 +31,8 @@ export const NotificationBell = () => {
   const { data: notifications, isLoading } = useNotifications(true);
   const { mutate: markRead } = useMarkNotificationRead();
   const { mutate: markAllRead } = useMarkAllNotificationsRead();
+  const deleteAll = useDeleteAllNotifications();
+  const [confirmingClearAll, setConfirmingClearAll] = useState(false);
 
   const handleSelect = (notification: Notification) => {
     if (!notification.isRead) markRead(notification.id);
@@ -57,16 +62,28 @@ export const NotificationBell = () => {
             <span className="text-xs font-semibold uppercase tracking-wide text-subtle">
               Notifications
             </span>
-            {unreadCount > 0 ? (
-              <button
-                type="button"
-                onClick={() => markAllRead()}
-                className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                <CheckCheck className="size-3.5" aria-hidden />
-                Mark all read
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => markAllRead()}
+                  className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <CheckCheck className="size-3.5" aria-hidden />
+                  Mark all read
+                </button>
+              ) : null}
+              {notifications && notifications.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClearAll(true)}
+                  className="flex items-center gap-1 text-xs font-medium text-muted hover:text-danger hover:underline"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Clear all
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto">
@@ -113,6 +130,17 @@ export const NotificationBell = () => {
           </RadixDropdown.Item>
         </RadixDropdown.Content>
       </RadixDropdown.Portal>
+
+      <ConfirmDialog
+        open={confirmingClearAll}
+        onOpenChange={setConfirmingClearAll}
+        title="Clear all notifications?"
+        description="This permanently deletes every notification and can't be undone."
+        confirmLabel="Clear all"
+        destructive
+        loading={deleteAll.isPending}
+        onConfirm={() => deleteAll.mutate(undefined, { onSuccess: () => setConfirmingClearAll(false) })}
+      />
     </RadixDropdown.Root>
   );
 };

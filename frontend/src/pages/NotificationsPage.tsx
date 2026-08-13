@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, Trash2 } from 'lucide-react';
 
 import {
   usePagedNotifications,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   useUnreadNotificationCount,
+  useDeleteNotification,
+  useDeleteAllNotifications,
 } from '../features/notifications/useNotifications.js';
 import type { Notification } from '../features/notifications/notifications.schema.js';
 import { AppShell } from '../components/layout/AppShell.js';
@@ -15,6 +18,7 @@ import { Card } from '../components/ui/Card.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { Pagination } from '../components/ui/Pagination.js';
+import { ConfirmDialog } from '../components/ui/Dialog.js';
 import { cn } from '../lib/cn.js';
 
 const timeAgo = (iso: string): string => {
@@ -46,6 +50,10 @@ export const NotificationsPage = () => {
   const { data: unreadCount = 0 } = useUnreadNotificationCount(true);
   const { mutate: markRead } = useMarkNotificationRead();
   const { mutate: markAllRead } = useMarkAllNotificationsRead();
+  const deleteNotification = useDeleteNotification();
+  const deleteAll = useDeleteAllNotifications();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmingClearAll, setConfirmingClearAll] = useState(false);
 
   const notifications = data?.items ?? [];
 
@@ -60,12 +68,20 @@ export const NotificationsPage = () => {
         title="Notifications"
         description="Everything sent to you, newest first."
         actions={
-          unreadCount > 0 ? (
-            <Button variant="secondary" onClick={() => markAllRead()}>
-              <CheckCheck className="size-4" aria-hidden />
-              Mark all read
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 ? (
+              <Button variant="secondary" onClick={() => markAllRead()}>
+                <CheckCheck className="size-4" aria-hidden />
+                Mark all read
+              </Button>
+            ) : null}
+            {notifications.length > 0 ? (
+              <Button variant="secondary" onClick={() => setConfirmingClearAll(true)}>
+                <Trash2 className="size-4" aria-hidden />
+                Clear all
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
@@ -107,9 +123,22 @@ export const NotificationsPage = () => {
                   ) : null}
                   <p className="mt-1 text-xs text-subtle">{timeAgo(notification.createdAt)}</p>
                 </div>
-                {!notification.isRead ? (
-                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-                ) : null}
+                <div className="flex shrink-0 items-center gap-2">
+                  {!notification.isRead ? (
+                    <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label={`Delete "${notification.title}"`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingId(notification.id);
+                    }}
+                    className="rounded-control p-1 text-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                </div>
               </div>
             </Card>
           ))}
@@ -121,6 +150,31 @@ export const NotificationsPage = () => {
           <Pagination meta={data.meta} onPageChange={setPage} />
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(deletingId)}
+        onOpenChange={(open) => !open && setDeletingId(null)}
+        title="Delete this notification?"
+        description="This permanently deletes the notification and can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleteNotification.isPending}
+        onConfirm={() => {
+          if (!deletingId) return;
+          deleteNotification.mutate(deletingId, { onSuccess: () => setDeletingId(null) });
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmingClearAll}
+        onOpenChange={setConfirmingClearAll}
+        title="Clear all notifications?"
+        description="This permanently deletes every notification and can't be undone."
+        confirmLabel="Clear all"
+        destructive
+        loading={deleteAll.isPending}
+        onConfirm={() => deleteAll.mutate(undefined, { onSuccess: () => setConfirmingClearAll(false) })}
+      />
     </AppShell>
   );
 };
