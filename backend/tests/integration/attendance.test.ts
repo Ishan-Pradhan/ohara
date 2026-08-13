@@ -531,4 +531,55 @@ describe('Attendance', () => {
       .set('Cookie', studentCookies);
     expect(res.body.data).toEqual({ total: 0, present: 0, absent: 0, late: 0, percentage: null });
   });
+
+  it('offers the newer batch\'s section during a promotion window, even while the outgoing batch still has more currently-enrolled stragglers', async () => {
+    // Reproduces the "stuck on the old batch" bug: a new intake starts
+    // being placed into a class before every straggler of the outgoing
+    // batch has finished being promoted out, so for a while the class holds
+    // `enrolled` memberships from both batches at once. Picking whichever
+    // batch has more currently-enrolled members (the old heuristic) keeps
+    // pointing at the outgoing batch until its headcount finally drops below
+    // the new one — which can take a while. Recency should win instead.
+    const program = await createProgram();
+    const cls = await createClass({ programId: program.id, orderIndex: 1 });
+
+    const oldBatch = await createBatch({ programId: program.id, name: 'Outgoing' });
+    const oldSection = await createSection({ classId: cls.id, batchId: oldBatch.id, name: 'A' });
+    const stragglers = await Promise.all(
+      Array.from({ length: 3 }, (_, i) =>
+        createStudentUser({ email: `straggler-${i}-${Date.now()}@example.com` }),
+      ),
+    );
+
+    const newBatch = await createBatch({ programId: program.id, name: 'Incoming' });
+    const newSection = await createSection({ classId: cls.id, batchId: newBatch.id, name: 'A' });
+    const incoming = await createStudentUser({ email: `incoming-${Date.now()}@example.com` });
+
+    const course = await createCourse({ classId: cls.id });
+    const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+
+    // Old batch: 3 stragglers still `enrolled` in the class (outnumbering the
+    // new batch's 1 so far).
+    await Promise.all(
+      stragglers.map((s) =>
+        classMembershipRepository.create(
+          { studentId: s.id, sectionId: oldSection.id, batchId: oldBatch.id, classId: cls.id },
+          [course.id],
+        ),
+      ),
+    );
+    // New batch: just 1 freshly-placed student, `enrolled`.
+    await classMembershipRepository.create(
+      { studentId: incoming.id, sectionId: newSection.id, batchId: newBatch.id, classId: cls.id },
+      [course.id],
+    );
+
+    const teacherCookies = await signInAs(teacher.email, 'teacher');
+    const res = await request(app)
+      .get(`/api/v1/courses/${course.id}/attendance/sections`)
+      .set('Cookie', teacherCookies);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([{ id: newSection.id, name: 'A' }]);
+  });
 });

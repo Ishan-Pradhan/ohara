@@ -26,29 +26,23 @@ const findOwnedSession = async (courseId: string, id: string) => {
   return session;
 };
 
-/** A class meeting is always for one specific section — a course can be
- * taught to several sections of the same class, so "everyone enrolled in
- * the course" would leak other sections' students into a session. Roster =
- * enrolled in this course AND currently placed in this section. */
-const getSectionCourseRoster = async (courseId: string, sectionId: string) => {
-  const [enrollments, members] = await Promise.all([
-    enrollmentRepository.findByCourseWithStudents(courseId),
-    classMembershipRepository.findBySectionWithStudents(sectionId),
-  ]);
-  const sectionStudentIds = new Set(members.map((m) => m.studentId));
-  return enrollments.filter((e) => sectionStudentIds.has(e.studentId));
-};
-
-/** Read-only counterpart to getSectionCourseRoster, for VIEWING a section's
- * attendance rather than taking/editing it. Once a specific sectionId is
- * given there's no ambiguity left to resolve — a Section is permanently
- * tied to one (class, batch) cohort and is never reused — so this is that
- * section's true historical roster: every student who was EVER enrolled in
- * this course under that section's own batch and placed in that exact
- * section, any outcome (enrolled/promoted/transferred/graduated), not just
- * currently-active/enrolled. getSectionCourseRoster stays current-only for
- * assertRosterCoverage, where "currently placed" is the actual write-path
- * requirement. See docs/superpowers/specs/2026-08-13-completed-course-history-design.md. */
+/** A Section is permanently tied to one (class, batch) cohort and is never
+ * reused by a later intake, so once a specific sectionId is given there's no
+ * "mixing cohorts" ambiguity left to resolve — this is that section's true
+ * roster: every student who was EVER enrolled in this course under that
+ * section's own batch and placed in that exact section, any outcome
+ * (enrolled/promoted/transferred/graduated), not just currently-active. Used
+ * for viewing (getAttendanceSummary's per-section mode) *and* for
+ * taking/editing attendance (getAttendanceRoster, assertRosterCoverage
+ * below) — a section that's already been fully promoted/graduated out still
+ * needs to accept edits to the sessions recorded while it was active, and a
+ * currently-active section's departed individual members still need their
+ * historical sessions editable too. Restricting either of those to
+ * currently-`enrolled`-only used to reject every edit to a since-superseded
+ * section's sessions as "not enrolled" — the roster shown and the roster
+ * validated against must always be the same list, or a student visible in
+ * the form gets rejected the moment it's saved. See
+ * docs/superpowers/specs/2026-08-13-completed-course-history-design.md. */
 const getSectionCourseRosterEver = async (courseId: string, sectionId: string) => {
   const section = await sectionRepository.findById(sectionId);
   if (!section) return [];
@@ -62,13 +56,16 @@ const getSectionCourseRosterEver = async (courseId: string, sectionId: string) =
 
 /** Every record's studentId must belong to the course+section roster —
  * never trust the client to only send enrolled, correctly-sectioned
- * students. */
+ * students. Matches getSectionCourseRosterEver (not a currently-enrolled-only
+ * check) so a session can still be taken/edited for a section whose cohort
+ * has since been promoted/transferred/graduated out — exactly the same
+ * roster getAttendanceRoster shows the teacher to build the form from. */
 const assertRosterCoverage = async (
   courseId: string,
   sectionId: string,
   records: { studentId: string; status: AttendanceStatus }[],
 ) => {
-  const roster = await getSectionCourseRoster(courseId, sectionId);
+  const roster = await getSectionCourseRosterEver(courseId, sectionId);
   const rosterIds = new Set(roster.map((e) => e.studentId));
   for (const r of records) {
     if (!rosterIds.has(r.studentId)) {
@@ -89,10 +86,12 @@ const assertRosterCoverage = async (
  * **Rewritten 2026-08-13** for the batch-permanent placement model: a batch's
  * `class_memberships.outcome = 'enrolled'` rows now ARE its current
  * placement, directly — no more year-matching heuristics. Ranking:
- *   1. whichever batch (among those with sections for this class) has the
- *      most currently-`enrolled` students — the common case, and
- *      unambiguous now that `(classId, batchId, name)` is unique, so there's
- *      no more "two sections sharing a name across years" to disambiguate
+ *   1. whichever batch (among those with sections for this class) currently
+ *      has `enrolled` students — resolved by
+ *      `classMembershipRepository.findCurrentBatchIdForClass` (the same
+ *      resolver courses.controller.ts's resolveCurrentBatchForCourseOrNull
+ *      uses, so the two can't disagree; see its doc comment for why recency,
+ *      not headcount, breaks the tie when two batches are both present)
  *   2. if nobody is currently enrolled anywhere in this class yet (a brand
  *      new class, or between batches), fall back to the most recently
  *      created section's batch, so a teacher still has something to start
@@ -107,9 +106,9 @@ export const resolveRelevantAttendanceBatch = async (
     return { targetBatchId: undefined, allClassSections: [] };
   }
 
-  const candidates = await classMembershipRepository.countEnrolledByClassGroupedByBatch(classId);
-  if (candidates.length > 0) {
-    return { targetBatchId: candidates[0]!.batchId, allClassSections };
+  const currentBatchId = await classMembershipRepository.findCurrentBatchIdForClass(classId);
+  if (currentBatchId) {
+    return { targetBatchId: currentBatchId, allClassSections };
   }
 
   const mostRecentSection = [...allClassSections].sort(

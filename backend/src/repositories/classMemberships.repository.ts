@@ -1,5 +1,6 @@
 import { sequelize } from '../config/db.js';
 import { ClassMembership } from '../models/classMemberships.model.js';
+import { Batch } from '../models/batches.model.js';
 import { enrollmentRepository } from './enrollments.repository.js';
 import { userRepository } from './users.repository.js';
 import { CLASS_MEMBERSHIP_OUTCOMES } from '../constants/index.js';
@@ -133,6 +134,38 @@ export const classMembershipRepository = {
     })) as unknown as { batchId: string; count: string }[];
 
     return rows.map((r) => ({ batchId: r.batchId, count: Number(r.count) }));
+  },
+
+  /** Resolves the same "who's really here now" question as
+   * countEnrolledByClassGroupedByBatch above, but as a single winner —
+   * courses.controller.ts's resolveCurrentBatchForCourseOrNull and
+   * attendance.controller.ts's resolveRelevantAttendanceBatch both need to
+   * agree on exactly one answer, so this is the one place that decides it,
+   * rather than each re-implementing the same tiebreak.
+   *
+   * During a promotion window a class can legitimately hold `enrolled` rows
+   * from two batches at once: the outgoing batch's not-yet-promoted
+   * stragglers, and the incoming batch's freshly-placed students. The
+   * outgoing batch is usually still the larger of the two until promotion
+   * finishes catching up, so picking "most populated" (as
+   * countEnrolledByClassGroupedByBatch's own ordering does) keeps pointing
+   * at the batch that's on its way out — it looks "stuck" on the old batch
+   * for as long as the transition takes. Recency is the more useful signal
+   * here: prefer whichever candidate batch was created most recently, since
+   * a newer batch coexisting with an older one in the same class is by
+   * definition the incoming one. */
+  findCurrentBatchIdForClass: async (classId: string): Promise<string | null> => {
+    const candidates = await classMembershipRepository.countEnrolledByClassGroupedByBatch(classId);
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0]!.batchId;
+
+    const batches = await Batch.findAll({ where: { id: candidates.map((c) => c.batchId) } });
+    const newest = [...batches].sort(
+      (a, b) =>
+        new Date(b.createdAt as unknown as string).getTime() -
+        new Date(a.createdAt as unknown as string).getTime(),
+    )[0];
+    return newest?.id ?? candidates[0]!.batchId;
   },
 
   /** Does this batch have any placement history in this class at all —

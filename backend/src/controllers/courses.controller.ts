@@ -20,9 +20,11 @@ import { ApiError } from '../utils/ApiError.js';
  * (majority-vote-by-enrollment-year, then whichever year is globally
  * `is_current`). Two tiers, both structural, neither guesses at a calendar:
  *   1. which batch currently has `outcome: 'enrolled'` members in this
- *      class, most populated first — the normal case. Usually resolves to
- *      exactly one batch; more than one only if this class currently holds
- *      students from more than one batch (promotion applied non-uniformly).
+ *      class — resolved by classMembershipRepository.findCurrentBatchIdForClass
+ *      (most recently created batch wins when more than one is present, see
+ *      its own doc comment). Usually resolves to exactly one batch; more
+ *      than one only if this class currently holds students from more than
+ *      one batch (promotion applied non-uniformly).
  *   2. a student can be enrolled in a course without a formal section
  *      placement (electives added ad hoc, or a course used before any
  *      section exists yet) — when tier 1 finds nothing, fall back to
@@ -39,12 +41,9 @@ export const resolveCurrentBatchForCourseOrNull = async (courseId: string): Prom
     throw new ApiError(404, 'Course not found');
   }
 
-  const candidates = await classMembershipRepository.countEnrolledByClassGroupedByBatch(
-    course.classId,
-  );
-  if (candidates.length > 0) {
-    // Already sorted most-populated-first by the repository.
-    const batch = await batchRepository.findById(candidates[0]!.batchId);
+  const currentBatchId = await classMembershipRepository.findCurrentBatchIdForClass(course.classId);
+  if (currentBatchId) {
+    const batch = await batchRepository.findById(currentBatchId);
     if (batch) return batch;
   }
 
