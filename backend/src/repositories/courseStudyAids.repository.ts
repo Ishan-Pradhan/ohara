@@ -16,4 +16,10 @@ export const courseStudyAidRepository = {
   create: async (data: CourseStudyAidCreationAttributes): Promise<CourseStudyAid> => {
     return await CourseStudyAid.create(data);
   },
+
+  /** Clears the cached aid so the next generate call falls through to the
+   * LLM instead of returning stale content — the "Regenerate" path. */
+  delete: async (courseId: string, lessonId: string | null, type: StudyAidType): Promise<void> => {
+    await CourseStudyAid.destroy({ where: { courseId, lessonId, type } });
+  },
 };

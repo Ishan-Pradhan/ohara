@@ -152,12 +152,16 @@ export const getSummary = asyncHandler(async (req: AuthRequest, res: Response) =
 
 export const generateSummary = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { courseId } = req.validated?.params as { courseId: string };
-  const { lessonId } = req.validated?.body as { lessonId?: string };
+  const { lessonId, regenerate } = req.validated?.body as { lessonId?: string; regenerate?: boolean };
   const userId = req.user!.id;
 
-  const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.SUMMARY);
-  if (cached) {
-    return ok(res, serializeCourseStudyAid(cached), 'Summary retrieved');
+  if (regenerate) {
+    await courseStudyAidRepository.delete(courseId, lessonId ?? null, STUDY_AID_TYPES.SUMMARY);
+  } else {
+    const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.SUMMARY);
+    if (cached) {
+      return ok(res, serializeCourseStudyAid(cached), 'Summary retrieved');
+    }
   }
 
   const course = await getCourseOrThrow(courseId);
@@ -212,12 +216,16 @@ export const getFlashcards = asyncHandler(async (req: AuthRequest, res: Response
 
 export const generateFlashcards = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { courseId } = req.validated?.params as { courseId: string };
-  const { lessonId } = req.validated?.body as { lessonId?: string };
+  const { lessonId, regenerate } = req.validated?.body as { lessonId?: string; regenerate?: boolean };
   const userId = req.user!.id;
 
-  const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.FLASHCARDS);
-  if (cached) {
-    return ok(res, serializeCourseStudyAid(cached), 'Flashcards retrieved');
+  if (regenerate) {
+    await courseStudyAidRepository.delete(courseId, lessonId ?? null, STUDY_AID_TYPES.FLASHCARDS);
+  } else {
+    const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.FLASHCARDS);
+    if (cached) {
+      return ok(res, serializeCourseStudyAid(cached), 'Flashcards retrieved');
+    }
   }
 
   const course = await getCourseOrThrow(courseId);

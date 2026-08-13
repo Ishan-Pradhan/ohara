@@ -683,3 +683,149 @@ describe('Tutor endpoints', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('DELETE /courses/:courseId/tutor/conversations/:conversationId', () => {
+  it('deletes the conversation and cascades its messages', async () => {
+    const course = await createCourse();
+    const cookies = await signInEnrolledStudent('delete-convo@example.com', course.id);
+    const user = await User.findOne({ where: { email: 'delete-convo@example.com' } });
+
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: user!.id,
+      title: 'To be deleted',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: 'user',
+      type: 'text',
+      content: 'Hello',
+    });
+
+    const res = await request(app)
+      .delete(`/api/v1/courses/${course.id}/tutor/conversations/${conversation.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    expect(await tutorConversationRepository.findById(conversation.id)).toBeNull();
+    expect(await tutorMessageRepository.findAllByConversation(conversation.id)).toHaveLength(0);
+  });
+
+  it("404s deleting another student's conversation", async () => {
+    const course = await createCourse();
+    const owner = await createStudentUser({ email: `owner-${Date.now()}@example.com` });
+    await createEnrollment({ studentId: owner.id, courseId: course.id });
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: owner.id,
+      title: "Someone else's conversation",
+    });
+
+    const outsiderCookies = await signInEnrolledStudent('outsider-delete@example.com', course.id);
+    const res = await request(app)
+      .delete(`/api/v1/courses/${course.id}/tutor/conversations/${conversation.id}`)
+      .set('Cookie', outsiderCookies);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /courses/:courseId/tutor/conversations/:conversationId/messages/:messageId', () => {
+  it('deletes the most recent message', async () => {
+    const course = await createCourse();
+    const cookies = await signInEnrolledStudent('delete-msg@example.com', course.id);
+    const user = await User.findOne({ where: { email: 'delete-msg@example.com' } });
+
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: user!.id,
+      title: 'Conversation',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: 'user',
+      type: 'text',
+      content: 'First message',
+    });
+    const latest = await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 1,
+      role: 'assistant',
+      type: 'text',
+      content: 'Second message',
+    });
+
+    const res = await request(app)
+      .delete(
+        `/api/v1/courses/${course.id}/tutor/conversations/${conversation.id}/messages/${latest.id}`,
+      )
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    const remaining = await tutorMessageRepository.findAllByConversation(conversation.id);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.content).toBe('First message');
+  });
+
+  it('rejects deleting a message that is not the latest, with 400', async () => {
+    const course = await createCourse();
+    const cookies = await signInEnrolledStudent('delete-msg-middle@example.com', course.id);
+    const user = await User.findOne({ where: { email: 'delete-msg-middle@example.com' } });
+
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: user!.id,
+      title: 'Conversation',
+    });
+    const first = await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: 'user',
+      type: 'text',
+      content: 'First message',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 1,
+      role: 'assistant',
+      type: 'text',
+      content: 'Second message',
+    });
+
+    const res = await request(app)
+      .delete(
+        `/api/v1/courses/${course.id}/tutor/conversations/${conversation.id}/messages/${first.id}`,
+      )
+      .set('Cookie', cookies);
+    expect(res.status).toBe(400);
+
+    expect(await tutorMessageRepository.findAllByConversation(conversation.id)).toHaveLength(2);
+  });
+
+  it("404s deleting a message in another student's conversation", async () => {
+    const course = await createCourse();
+    const owner = await createStudentUser({ email: `msg-owner-${Date.now()}@example.com` });
+    await createEnrollment({ studentId: owner.id, courseId: course.id });
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: owner.id,
+      title: "Someone else's conversation",
+    });
+    const message = await tutorMessageRepository.create({
+      conversationId: conversation.id,
+      seq: 0,
+      role: 'user',
+      type: 'text',
+      content: 'Hello',
+    });
+
+    const outsiderCookies = await signInEnrolledStudent('outsider-msg-delete@example.com', course.id);
+    const res = await request(app)
+      .delete(
+        `/api/v1/courses/${course.id}/tutor/conversations/${conversation.id}/messages/${message.id}`,
+      )
+      .set('Cookie', outsiderCookies);
+    expect(res.status).toBe(404);
+  });
+});

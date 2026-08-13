@@ -46,3 +46,17 @@ export const sendMessage = async (
   );
   return sendMessageResultSchema.parse(res.data.data);
 };
+
+export const deleteConversation = async (courseId: string, conversationId: string): Promise<void> => {
+  await api.delete(`/courses/${courseId}/tutor/conversations/${conversationId}`);
+};
+
+/** Only the most recent message in a conversation can be deleted — see
+ * backend/src/repositories/tutorMessages.repository.ts's isLatest. */
+export const deleteMessage = async (
+  courseId: string,
+  conversationId: string,
+  messageId: string,
+): Promise<void> => {
+  await api.delete(`/courses/${courseId}/tutor/conversations/${conversationId}/messages/${messageId}`);
+};

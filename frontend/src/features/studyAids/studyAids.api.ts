@@ -28,8 +28,15 @@ export const fetchSummary = (courseId: string, lessonId?: string): Promise<Summa
     return summaryAidSchema.parse(res.data.data);
   });
 
-export const generateSummary = async (courseId: string, lessonId?: string): Promise<SummaryAid> => {
-  const res = await api.post(`/courses/${courseId}/study-aids/summary`, lessonId ? { lessonId } : {});
+export const generateSummary = async (
+  courseId: string,
+  lessonId?: string,
+  regenerate?: boolean,
+): Promise<SummaryAid> => {
+  const res = await api.post(`/courses/${courseId}/study-aids/summary`, {
+    ...(lessonId ? { lessonId } : {}),
+    ...(regenerate ? { regenerate } : {}),
+  });
   return summaryAidSchema.parse(res.data.data);
 };
 
@@ -44,8 +51,12 @@ export const fetchFlashcards = (courseId: string, lessonId?: string): Promise<Fl
 export const generateFlashcards = async (
   courseId: string,
   lessonId?: string,
+  regenerate?: boolean,
 ): Promise<FlashcardsAid> => {
-  const res = await api.post(`/courses/${courseId}/study-aids/flashcards`, lessonId ? { lessonId } : {});
+  const res = await api.post(`/courses/${courseId}/study-aids/flashcards`, {
+    ...(lessonId ? { lessonId } : {}),
+    ...(regenerate ? { regenerate } : {}),
+  });
   return flashcardsAidSchema.parse(res.data.data);
 };
 

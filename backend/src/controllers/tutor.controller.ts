@@ -89,6 +89,42 @@ export const listMessages = asyncHandler(async (req: AuthRequest, res: Response)
   return ok(res, messages.map(serializeTutorMessage), 'Messages retrieved');
 });
 
+export const deleteConversation = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { courseId, conversationId } = req.validated?.params as {
+    courseId: string;
+    conversationId: string;
+  };
+  await findOwnedConversation(conversationId, req.user!.id, courseId);
+
+  await tutorConversationRepository.delete(conversationId);
+  return ok(res, null, 'Conversation deleted');
+});
+
+/** Only the most recent message in a conversation can be deleted — see
+ * tutorMessages.repository.ts's isLatest for why (protects the agent
+ * loop's resumable history from a mid-sequence gap). */
+export const deleteMessage = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { courseId, conversationId, messageId } = req.validated?.params as {
+    courseId: string;
+    conversationId: string;
+    messageId: string;
+  };
+  await findOwnedConversation(conversationId, req.user!.id, courseId);
+
+  const message = await tutorMessageRepository.findById(messageId);
+  if (!message || message.conversationId !== conversationId) {
+    throw new ApiError(404, 'Message not found');
+  }
+
+  const isLatest = await tutorMessageRepository.isLatest(conversationId, messageId);
+  if (!isLatest) {
+    throw new ApiError(400, 'Only the most recent message in a conversation can be deleted');
+  }
+
+  await tutorMessageRepository.delete(messageId);
+  return ok(res, null, 'Message deleted');
+});
+
 export const sendMessage = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { courseId, conversationId } = req.validated?.params as {
     courseId: string;

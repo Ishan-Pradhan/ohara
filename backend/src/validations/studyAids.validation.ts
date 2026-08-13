@@ -28,7 +28,9 @@ export const getStudyAidSchema = {
 
 export const generateStudyAidSchema = {
   params: z.object({ courseId: z.uuid() }),
-  body: z.object({ lessonId: z.uuid().optional() }),
+  // regenerate: true bypasses the cache and always calls the LLM again,
+  // overwriting the previously-cached aid — the "Regenerate" button.
+  body: z.object({ lessonId: z.uuid().optional(), regenerate: z.boolean().optional() }),
 };
 
 export const explainConceptSchema = {

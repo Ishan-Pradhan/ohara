@@ -37,4 +37,11 @@ export const tutorConversationRepository = {
     if (!conversation) return null;
     return await conversation.update({ title });
   },
+
+  /** Messages cascade at the DB level (ON DELETE CASCADE) — the
+   * conversation is the aggregate root for its own message history. */
+  delete: async (id: string): Promise<boolean> => {
+    const deleted = await TutorConversation.destroy({ where: { id } });
+    return deleted > 0;
+  },
 };

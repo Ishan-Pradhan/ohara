@@ -1,7 +1,8 @@
-import { Sparkles } from 'lucide-react';
+import { RotateCw, Sparkles } from 'lucide-react';
 
 import { useSummary, useGenerateSummary } from '../../features/studyAids/useStudyAids.js';
 import { ApiError } from '../../lib/apiError.js';
+import { toast } from '../../lib/toast.js';
 import { Card } from '../ui/Card.js';
 import { Button } from '../ui/Button.js';
 import { Skeleton } from '../ui/Skeleton.js';
@@ -37,7 +38,7 @@ export const SummarySection = ({ courseId, lessonId }: SummarySectionProps) => {
               : "Generate an AI summary of this course's material."
           }
           action={
-            <Button size="sm" loading={generate.isPending} onClick={() => generate.mutate()}>
+            <Button size="sm" loading={generate.isPending} onClick={() => generate.mutate(undefined)}>
               <Sparkles className="size-4" aria-hidden />
               Generate summary
             </Button>
@@ -54,8 +55,23 @@ export const SummarySection = ({ courseId, lessonId }: SummarySectionProps) => {
     );
   }
 
+  const onRegenerate = async () => {
+    try {
+      await generate.mutateAsync(true);
+      toast.success('Summary regenerated');
+    } catch {
+      toast.error("Couldn't regenerate the summary — try again.");
+    }
+  };
+
   return (
     <Card padding="sm">
+      <div className="mb-3 flex justify-end">
+        <Button size="sm" variant="secondary" loading={generate.isPending} onClick={onRegenerate}>
+          <RotateCw className="size-3.5" aria-hidden />
+          Regenerate
+        </Button>
+      </div>
       <p className="text-sm leading-relaxed text-fg">{summary.content.summary}</p>
       {summary.content.keyPoints.length > 0 ? (
         <ul className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4">

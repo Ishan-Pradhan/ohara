@@ -20,3 +20,11 @@ export const sendMessageSchema = {
   params: z.object({ courseId: z.uuid(), conversationId: z.uuid() }),
   body: z.object({ content: z.string().min(1, 'Message cannot be empty') }),
 };
+
+export const deleteConversationSchema = {
+  params: z.object({ courseId: z.uuid(), conversationId: z.uuid() }),
+};
+
+export const deleteMessageSchema = {
+  params: z.object({ courseId: z.uuid(), conversationId: z.uuid(), messageId: z.uuid() }),
+};

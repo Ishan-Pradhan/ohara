@@ -23,7 +23,7 @@ export const useSummary = (courseId: string, lessonId?: string) =>
 export const useGenerateSummary = (courseId: string, lessonId?: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => generateSummary(courseId, lessonId),
+    mutationFn: (regenerate?: boolean) => generateSummary(courseId, lessonId, regenerate),
     onSuccess: (data) => qc.setQueryData(summaryKey(courseId, lessonId), data),
   });
 };
@@ -41,7 +41,7 @@ export const useFlashcards = (courseId: string, lessonId?: string) =>
 export const useGenerateFlashcards = (courseId: string, lessonId?: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => generateFlashcards(courseId, lessonId),
+    mutationFn: (regenerate?: boolean) => generateFlashcards(courseId, lessonId, regenerate),
     onSuccess: (data) => qc.setQueryData(flashcardsKey(courseId, lessonId), data),
   });
 };

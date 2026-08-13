@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Bot, MessageCircle, Plus, Send, Sparkles, User } from 'lucide-react';
+import { Bot, MessageCircle, Plus, Send, Sparkles, Trash2, User } from 'lucide-react';
 
 import {
   useConversations,
   useCreateConversation,
   useMessages,
   useSendMessage,
+  useDeleteConversation,
+  useDeleteMessage,
 } from '../../features/tutor/useTutor.js';
 import { ApiError } from '../../lib/apiError.js';
+import { toast } from '../../lib/toast.js';
 import { cn } from '../../lib/cn.js';
 import { Alert } from '../../components/ui/Alert.js';
 import { Card } from '../../components/ui/Card.js';
@@ -18,6 +21,7 @@ import { Textarea } from '../../components/ui/Textarea.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Spinner } from '../../components/ui/Spinner.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { ConfirmDialog } from '../../components/ui/Dialog.js';
 import { ChartRenderer } from '../../components/tutor/ChartRenderer.js';
 
 interface TutorPanelProps {
@@ -27,8 +31,10 @@ interface TutorPanelProps {
 export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   const { data: conversations, isLoading: conversationsLoading } = useConversations(courseId);
   const createConversation = useCreateConversation(courseId);
+  const deleteConversation = useDeleteConversation(courseId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,7 +52,12 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
 
   const { data: messages, isLoading: messagesLoading } = useMessages(courseId, selectedId ?? '');
   const sendMessage = useSendMessage(courseId, selectedId ?? '');
+  const deleteMessage = useDeleteMessage(courseId, selectedId ?? '');
   const selectedConversation = conversations?.find((conversation) => conversation.id === selectedId);
+  // Only the true last message (including hidden tool_call/tool_result rows)
+  // is deletable — if that's a hidden row, no *visible* message is
+  // currently the tail, so nothing shows a delete affordance.
+  const lastRawMessageId = messages && messages.length > 0 ? messages[messages.length - 1]!.id : null;
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -69,6 +80,27 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
       setSelectedId(conversation.id);
     } catch {
       // createConversation.isError surfaces the failure below the list.
+    }
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!deletingConversationId) return;
+    try {
+      await deleteConversation.mutateAsync(deletingConversationId);
+      if (selectedId === deletingConversationId) setSelectedId(null);
+      toast.success('Conversation deleted');
+    } catch {
+      toast.error("Couldn't delete this conversation — try again.");
+    } finally {
+      setDeletingConversationId(null);
+    }
+  };
+
+  const onDeleteLastMessage = async (messageId: string) => {
+    try {
+      await deleteMessage.mutateAsync(messageId);
+    } catch {
+      toast.error("Couldn't delete that message — try again.");
     }
   };
 
@@ -130,27 +162,42 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
             {[...conversations]
               .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
               .map((conversation) => (
-                <button
+                <div
                   key={conversation.id}
-                  type="button"
-                  onClick={() => setSelectedId(conversation.id)}
                   className={cn(
-                    'flex flex-col items-start gap-0.5 rounded-control px-2.5 py-2 text-left transition-colors',
+                    'group flex items-start gap-1 rounded-control transition-colors',
                     conversation.id === selectedId
                       ? 'bg-primary-soft text-primary'
-                      : 'text-muted hover:bg-surface-hover hover:text-fg',
+                      : 'hover:bg-surface-hover',
                   )}
                 >
-                  <span className="w-full truncate text-sm font-medium">{conversation.title}</span>
-                  <span
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(conversation.id)}
                     className={cn(
-                      'text-xs',
-                      conversation.id === selectedId ? 'text-primary/70' : 'text-subtle',
+                      'flex min-w-0 flex-1 flex-col items-start gap-0.5 py-2 pl-2.5 text-left',
+                      conversation.id === selectedId ? 'text-primary' : 'text-muted group-hover:text-fg',
                     )}
                   >
-                    {formatDistanceToNow(new Date(conversation.updatedAt), { addSuffix: true })}
-                  </span>
-                </button>
+                    <span className="w-full truncate text-sm font-medium">{conversation.title}</span>
+                    <span
+                      className={cn(
+                        'text-xs',
+                        conversation.id === selectedId ? 'text-primary/70' : 'text-subtle',
+                      )}
+                    >
+                      {formatDistanceToNow(new Date(conversation.updatedAt), { addSuffix: true })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete "${conversation.title}"`}
+                    onClick={() => setDeletingConversationId(conversation.id)}
+                    className="shrink-0 rounded-control p-1.5 text-subtle opacity-0 transition-opacity hover:bg-danger-soft hover:text-danger group-hover:opacity-100"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                </div>
               ))}
           </div>
         )}
@@ -239,6 +286,21 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                               </div>
                             </details>
                           ) : null}
+                          {message.id === lastRawMessageId ? (
+                            <button
+                              type="button"
+                              aria-label="Delete this message"
+                              disabled={deleteMessage.isPending}
+                              onClick={() => void onDeleteLastMessage(message.id)}
+                              className={cn(
+                                'flex items-center gap-1 self-start text-xs text-subtle transition-colors hover:text-danger disabled:opacity-50',
+                                message.role === 'user' && 'self-end',
+                              )}
+                            >
+                              <Trash2 className="size-3" aria-hidden />
+                              Delete
+                            </button>
+                          ) : null}
                         </div>
                       </>
                     )}
@@ -299,6 +361,17 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deletingConversationId)}
+        onOpenChange={(open) => !open && setDeletingConversationId(null)}
+        title="Delete this conversation?"
+        description="This permanently deletes the whole conversation and can't be undone."
+        confirmLabel="Delete"
+        destructive
+        loading={deleteConversation.isPending}
+        onConfirm={confirmDeleteConversation}
+      />
     </div>
   );
 };

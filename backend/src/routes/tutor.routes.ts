@@ -7,6 +7,8 @@ import {
   createConversationSchema,
   listMessagesSchema,
   sendMessageSchema,
+  deleteConversationSchema,
+  deleteMessageSchema,
 } from '../validations/tutor.validation.js';
 import {
   getCourseOutline,
@@ -14,6 +16,8 @@ import {
   createConversation,
   listMessages,
   sendMessage,
+  deleteConversation,
+  deleteMessage,
 } from '../controllers/tutor.controller.js';
 
 // Mounted at /api/v1/courses, not /api/v1/admin — same reasoning as
@@ -34,6 +38,13 @@ router
   .get(requireEnrolledStudent, validate(courseIdParamSchema), listConversations)
   .post(requireEnrolledStudent, validate(createConversationSchema), createConversation);
 
+router.delete(
+  '/:courseId/tutor/conversations/:conversationId',
+  requireEnrolledStudent,
+  validate(deleteConversationSchema),
+  deleteConversation,
+);
+
 router.get(
   '/:courseId/tutor/conversations/:conversationId/messages',
   requireEnrolledStudent,
@@ -47,6 +58,13 @@ router.post(
   tutorLimiter,
   validate(sendMessageSchema),
   sendMessage,
+);
+
+router.delete(
+  '/:courseId/tutor/conversations/:conversationId/messages/:messageId',
+  requireEnrolledStudent,
+  validate(deleteMessageSchema),
+  deleteMessage,
 );
 
 export default router;

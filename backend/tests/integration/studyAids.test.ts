@@ -198,6 +198,38 @@ describe('POST /courses/:courseId/study-aids/summary', () => {
     expect(res.status).toBe(502);
     expect(generateJson).toHaveBeenCalledTimes(2);
   });
+
+  it('regenerate: true bypasses the cache and replaces the stored summary with fresh content', async () => {
+    const { course, lesson } = await seedCourseWithLessonAndMaterial();
+    const studentCookie = await signInEnrolledStudent('s6@example.com', course.id);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ summary: 'First version.', keyPoints: ['A'] }),
+    );
+    const first = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/summary`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id });
+    expect(first.status).toBe(201);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ summary: 'Regenerated version.', keyPoints: ['B'] }),
+    );
+    const regenerated = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/summary`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id, regenerate: true });
+
+    expect(regenerated.status).toBe(201);
+    expect(regenerated.body.data.content.summary).toBe('Regenerated version.');
+    expect(generateJson).toHaveBeenCalledTimes(2); // called again, not served from cache
+
+    const getRes = await request(app)
+      .get(`/api/v1/courses/${course.id}/study-aids/summary`)
+      .query({ lessonId: lesson.id })
+      .set('Cookie', studentCookie);
+    expect(getRes.body.data.content.summary).toBe('Regenerated version.');
+  });
 });
 
 describe('POST /courses/:courseId/study-aids/flashcards', () => {
@@ -217,6 +249,32 @@ describe('POST /courses/:courseId/study-aids/flashcards', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.content.cards).toHaveLength(1);
     expect(res.body.data.type).toBe('flashcards');
+  });
+
+  it('regenerate: true bypasses the cache and replaces the stored flashcard set', async () => {
+    const { course, lesson } = await seedCourseWithLessonAndMaterial();
+    const studentCookie = await signInEnrolledStudent('f2@example.com', course.id);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ cards: [{ front: 'Q1', back: 'A1' }] }),
+    );
+    const first = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/flashcards`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id });
+    expect(first.status).toBe(201);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ cards: [{ front: 'Q2', back: 'A2' }, { front: 'Q3', back: 'A3' }] }),
+    );
+    const regenerated = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/flashcards`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id, regenerate: true });
+
+    expect(regenerated.status).toBe(201);
+    expect(regenerated.body.data.content.cards).toHaveLength(2);
+    expect(generateJson).toHaveBeenCalledTimes(2); // called again, not served from cache
   });
 });
 

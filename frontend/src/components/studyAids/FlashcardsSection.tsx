@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Layers, RotateCw } from 'lucide-react';
 
 import { useFlashcards, useGenerateFlashcards } from '../../features/studyAids/useStudyAids.js';
 import { ApiError } from '../../lib/apiError.js';
+import { toast } from '../../lib/toast.js';
 import { cn } from '../../lib/cn.js';
 import { Card } from '../ui/Card.js';
 import { Button } from '../ui/Button.js';
@@ -41,7 +42,7 @@ export const FlashcardsSection = ({ courseId, lessonId }: FlashcardsSectionProps
               : 'Generate a flashcard set to quiz yourself on this course.'
           }
           action={
-            <Button size="sm" loading={generate.isPending} onClick={() => generate.mutate()}>
+            <Button size="sm" loading={generate.isPending} onClick={() => generate.mutate(undefined)}>
               <Layers className="size-4" aria-hidden />
               Generate flashcards
             </Button>
@@ -68,8 +69,26 @@ export const FlashcardsSection = ({ courseId, lessonId }: FlashcardsSectionProps
     setFlipped(false);
   };
 
+  const onRegenerate = async () => {
+    try {
+      await generate.mutateAsync(true);
+      setIndex(0);
+      setFlipped(false);
+      toast.success('Flashcards regenerated');
+    } catch {
+      toast.error("Couldn't regenerate flashcards — try again.");
+    }
+  };
+
   return (
     <Card padding="sm">
+      <div className="mb-3 flex items-center justify-end">
+        <Button size="sm" variant="secondary" loading={generate.isPending} onClick={onRegenerate}>
+          <RotateCw className="size-3.5" aria-hidden />
+          Regenerate
+        </Button>
+      </div>
+
       <div className="mb-3 flex items-center gap-3">
         <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-hover">
           <div

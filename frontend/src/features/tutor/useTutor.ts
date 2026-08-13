@@ -6,6 +6,8 @@ import {
   createConversation,
   fetchMessages,
   sendMessage,
+  deleteConversation,
+  deleteMessage,
 } from './tutor.api.js';
 
 export const useOutline = (courseId: string) =>
@@ -55,5 +57,23 @@ export const useSendMessage = (courseId: string, conversationId: string) => {
       // useCreateConversation above.
       qc.invalidateQueries({ queryKey: conversationsKey(courseId) });
     },
+  });
+};
+
+export const useDeleteConversation = (courseId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) => deleteConversation(courseId, conversationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: conversationsKey(courseId) }),
+  });
+};
+
+/** Only the most recent message in a conversation can be deleted — the
+ * backend enforces this and 400s otherwise (see tutor.api.ts). */
+export const useDeleteMessage = (courseId: string, conversationId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) => deleteMessage(courseId, conversationId, messageId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: messagesKey(courseId, conversationId) }),
   });
 };
