@@ -191,6 +191,67 @@ describe('PATCH /admin/users/:id/restore', () => {
   });
 });
 
+describe('PATCH /admin/toggle-block/:id', () => {
+  // Role-agnostic on purpose (unlike archive/restore/hard-delete, which are
+  // student-only) — this is the access-revocation path for staff accounts,
+  // which have no other lifecycle management.
+  it('rejects an unauthenticated caller with 401', async () => {
+    const teacher = await createTeacherUser();
+    const res = await request(app).patch(`/api/v1/admin/toggle-block/${teacher.id}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const cookies = await signInAs('teacher@example.com', 'teacher');
+    const otherTeacher = await createTeacherUser();
+    const res = await request(app)
+      .patch(`/api/v1/admin/toggle-block/${otherTeacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects a non-existent user with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .patch('/api/v1/admin/toggle-block/00000000-0000-0000-0000-000000000000')
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('blocks a teacher, then unblocks them back — toggling both ways', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+
+    const blockRes = await request(app)
+      .patch(`/api/v1/admin/toggle-block/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(blockRes.status).toBe(200);
+    expect((await User.unscoped().findByPk(teacher.id))?.isBlocked).toBe(true);
+
+    const unblockRes = await request(app)
+      .patch(`/api/v1/admin/toggle-block/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(unblockRes.status).toBe(200);
+    expect((await User.unscoped().findByPk(teacher.id))?.isBlocked).toBe(false);
+  });
+
+  it('a blocked user is refused login', async () => {
+    const adminCookies = await signInAs('admin@example.com', 'admin');
+    const teacherCookies = await signInAs('blocked-teacher@example.com', 'teacher');
+    const me = await request(app).get('/api/v1/auth/current-user').set('Cookie', teacherCookies);
+    const teacherId = me.body.data.id as string;
+
+    await request(app)
+      .patch(`/api/v1/admin/toggle-block/${teacherId}`)
+      .set('Cookie', adminCookies);
+
+    const loginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'blocked-teacher@example.com', password: PASSWORD });
+    expect(loginRes.status).toBe(403);
+  });
+});
+
 describe('DELETE /admin/users/:id', () => {
   it('rejects a request without confirmHardDelete with 400', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');

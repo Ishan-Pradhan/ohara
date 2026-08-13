@@ -3,6 +3,8 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../types/auth.types.js';
 import { notificationRepository } from '../repositories/notifications.repository.js';
 import { serializeNotification } from '../serializers/notifications.serializer.js';
+import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.utils.js';
+import type { PaginationQuery } from '../types/pagination.types.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -13,9 +15,22 @@ export const listNotifications = asyncHandler(
     if (!userId) {
       throw new ApiError(401, 'Unauthorized');
     }
-    const { limit } = (req.validated?.query ?? {}) as { limit?: number };
-    const notifications = await notificationRepository.findByUser(userId, limit);
-    return ok(res, notifications.map(serializeNotification), 'Notifications retrieved');
+    const query = (req.validated?.query ?? {}) as PaginationQuery;
+    const { page, limit, offset } = getPaginationParams(query);
+
+    const { rows: notifications, count: totalItems } = await notificationRepository.findAndCountAll(
+      userId,
+      { limit, offset },
+    );
+
+    return ok(
+      res,
+      {
+        items: notifications.map(serializeNotification),
+        meta: buildPaginationMeta({ totalItems, page, limit, itemCount: notifications.length }),
+      },
+      'Notifications retrieved',
+    );
   },
 );
 

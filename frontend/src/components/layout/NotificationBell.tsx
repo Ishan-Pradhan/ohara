@@ -1,6 +1,6 @@
 import * as RadixDropdown from '@radix-ui/react-dropdown-menu';
 import { Bell, CheckCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   useNotifications,
@@ -102,6 +102,15 @@ export const NotificationBell = () => {
               ))
             )}
           </div>
+
+          <RadixDropdown.Item asChild>
+            <Link
+              to="/notifications"
+              className="mt-1 flex items-center justify-center rounded-control px-2.5 py-2 text-sm font-medium text-primary outline-none transition-colors data-[highlighted]:bg-surface-hover"
+            >
+              View all
+            </Link>
+          </RadixDropdown.Item>
         </RadixDropdown.Content>
       </RadixDropdown.Portal>
     </RadixDropdown.Root>

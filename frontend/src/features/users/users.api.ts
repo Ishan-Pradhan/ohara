@@ -4,15 +4,14 @@ import { api } from '../../lib/axios.js';
 import {
   adminUserSchema,
   batchInviteResultSchema,
-  paginationMetaSchema,
   teacherSchema,
   type AdminUser,
   type BatchInviteResult,
   type CreateStaffInput,
   type InviteUsersBatchInput,
-  type PaginationMeta,
   type Teacher,
 } from './users.schema.js';
+import { paginationMetaSchema, type PaginationMeta } from '../../schemas/pagination.schema.js';
 
 /** Teachers, for assignment pickers (section class teacher, course teachers).
  * Small institutions won't have enough teachers to need pagination here. */

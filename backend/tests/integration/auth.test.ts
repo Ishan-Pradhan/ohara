@@ -16,6 +16,7 @@ const LOGIN = '/api/v1/auth/login';
 const CURRENT = '/api/v1/auth/current-user';
 const REFRESH = '/api/v1/auth/refresh-access-token';
 const LOGOUT = '/api/v1/auth/logout';
+const CHANGE_PASSWORD = '/api/v1/auth/change-password';
 
 const credentials = {
   name: 'Jane Doe',
@@ -349,5 +350,56 @@ describe('POST /auth/logout', () => {
       where: { email: credentials.email },
     });
     expect(user?.refreshToken).toBeNull();
+  });
+});
+
+describe('POST /auth/change-password', () => {
+  it('changes the password, clears the stored refresh token, and the new password works for a fresh login', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app)
+      .post(CHANGE_PASSWORD)
+      .set('Cookie', cookies)
+      .send({ currentPassword: credentials.password, newPassword: 'newHunter3secret' });
+    expect(res.status).toBe(200);
+
+    // Same defensive clear as logout/deactivate/graduate — other sessions
+    // get logged out the next time they try to refresh.
+    const user = await User.unscoped().findOne({
+      where: { email: credentials.email },
+    });
+    expect(user?.refreshToken).toBeNull();
+
+    const oldLogin = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: credentials.password });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await request(app)
+      .post(LOGIN)
+      .send({ email: credentials.email, password: 'newHunter3secret' });
+    expect(newLogin.status).toBe(200);
+  });
+
+  it('rejects an incorrect current password and leaves the password unchanged', async () => {
+    await registerVerified();
+    const cookies = await signIn();
+
+    const res = await request(app)
+      .post(CHANGE_PASSWORD)
+      .set('Cookie', cookies)
+      .send({ currentPassword: 'wrongPassword123', newPassword: 'newHunter3secret' });
+    expect(res.status).toBe(400);
+
+    const stillWorks = await request(app).post(LOGIN).send(credentials);
+    expect(stillWorks.status).toBe(200);
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app)
+      .post(CHANGE_PASSWORD)
+      .send({ currentPassword: 'x', newPassword: 'newHunter3secret' });
+    expect(res.status).toBe(401);
   });
 });

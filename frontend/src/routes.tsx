@@ -12,6 +12,7 @@ import { CalendarPage } from './pages/CalendarPage.js';
 import { GradebookPage } from './pages/GradebookPage.js';
 import { AttendancePage } from './pages/AttendancePage.js';
 import { AtRiskPage } from './pages/AtRiskPage.js';
+import { NotificationsPage } from './pages/NotificationsPage.js';
 import { TranscriptPage } from './pages/TranscriptPage.js';
 import { ForbiddenPage } from './pages/ForbiddenPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
@@ -111,6 +112,15 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <AttendancePage />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: '/notifications',
+    element: (
+      <ProtectedRoute>
+        <NotificationsPage />
       </ProtectedRoute>
     ),
     errorElement: <ErrorPage />,

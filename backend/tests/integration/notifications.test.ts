@@ -23,6 +23,9 @@ const {
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
+const { notificationRepository } = await import(
+  '../../src/repositories/notifications.repository.js'
+);
 const { generateJson } = await import('../../src/services/llm.service.js');
 
 const PASSWORD = 'hunter2secret';
@@ -96,12 +99,13 @@ describe('Notifications', () => {
       .send({ status: 'published' });
 
     let listRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
-    expect(listRes.body.data).toHaveLength(2);
-    expect(listRes.body.data.map((n: { type: string }) => n.type).sort()).toEqual([
+    expect(listRes.body.data.items).toHaveLength(2);
+    expect(listRes.body.data.meta.totalItems).toBe(2);
+    expect(listRes.body.data.items.map((n: { type: string }) => n.type).sort()).toEqual([
       'assignment_created',
       'quiz_published',
     ]);
-    expect(listRes.body.data.every((n: { isRead: boolean }) => n.isRead === false)).toBe(true);
+    expect(listRes.body.data.items.every((n: { isRead: boolean }) => n.isRead === false)).toBe(true);
 
     let unreadRes = await request(app)
       .get('/api/v1/notifications/unread-count')
@@ -145,8 +149,8 @@ describe('Notifications', () => {
       });
 
     listRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
-    expect(listRes.body.data).toHaveLength(3);
-    const gradedNotification = listRes.body.data.find(
+    expect(listRes.body.data.items).toHaveLength(3);
+    const gradedNotification = listRes.body.data.items.find(
       (n: { type: string }) => n.type === 'assignment_graded',
     );
     expect(gradedNotification.link).toBe(`/student/courses/${course.id}/assignments/${assignmentId}`);
@@ -181,7 +185,7 @@ describe('Notifications', () => {
       });
 
     const listRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
-    const notificationId = listRes.body.data[0].id;
+    const notificationId = listRes.body.data.items[0].id;
 
     const otherStudent = await createStudentUser({ email: `other-${Date.now()}@example.com` });
     const otherCookies = await signInAs(otherStudent.email, 'student');
@@ -190,5 +194,55 @@ describe('Notifications', () => {
       .patch(`/api/v1/notifications/${notificationId}/read`)
       .set('Cookie', otherCookies);
     expect(res.status).toBe(403);
+  });
+
+  it('paginates notifications, newest first, with an accurate meta and page navigation', async () => {
+    const student = await createStudentUser({ email: `paged-${Date.now()}@example.com` });
+    const studentCookies = await signInAs(student.email, 'student');
+
+    // 25 notifications, created in order — bulkCreate so their createdAt
+    // ordering (newest first) is deterministic without relying on Date.now()
+    // ties across rapid inserts.
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      userId: student.id,
+      type: 'assignment_created' as const,
+      title: `Notification ${i + 1}`,
+      createdAt: new Date(Date.now() + i * 1000),
+    }));
+    await notificationRepository.bulkCreate(rows);
+
+    const page1 = await request(app)
+      .get('/api/v1/notifications')
+      .query({ page: 1, limit: 10 })
+      .set('Cookie', studentCookies);
+    expect(page1.status).toBe(200);
+    expect(page1.body.data.items).toHaveLength(10);
+    expect(page1.body.data.items[0].title).toBe('Notification 25'); // newest first
+    expect(page1.body.data.meta).toEqual({
+      totalItems: 25,
+      itemCount: 10,
+      itemsPerPage: 10,
+      totalPages: 3,
+      currentPage: 1,
+    });
+
+    const page3 = await request(app)
+      .get('/api/v1/notifications')
+      .query({ page: 3, limit: 10 })
+      .set('Cookie', studentCookies);
+    expect(page3.body.data.items).toHaveLength(5); // 25 - 10 - 10
+    expect(page3.body.data.meta.currentPage).toBe(3);
+    expect(page3.body.data.items[4].title).toBe('Notification 1'); // oldest, last page
+
+    // Omitting page/limit still works (the bell dropdown's call shape) —
+    // defaults to page 1, limit 10 per getPaginationParams.
+    const defaultRes = await request(app).get('/api/v1/notifications').set('Cookie', studentCookies);
+    expect(defaultRes.body.data.items).toHaveLength(10);
+    expect(defaultRes.body.data.meta.currentPage).toBe(1);
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app).get('/api/v1/notifications');
+    expect(res.status).toBe(401);
   });
 });

@@ -1,6 +1,7 @@
 import { api } from '../../lib/axios.js';
 import {
   currentUserSchema,
+  type ChangePasswordInput,
   type CurrentUser,
   type ForgotPasswordInput,
   type LoginInput,
@@ -42,4 +43,11 @@ export const resetPassword = async (
   input: ResetPasswordInput,
 ): Promise<void> => {
   await api.post('/auth/reset-password', { token, newPassword: input.newPassword });
+};
+
+export const changePassword = async (input: ChangePasswordInput): Promise<void> => {
+  await api.post('/auth/change-password', {
+    currentPassword: input.currentPassword,
+    newPassword: input.newPassword,
+  });
 };

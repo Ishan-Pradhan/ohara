@@ -11,11 +11,16 @@ export const notificationRepository = {
     return await Notification.bulkCreate(data);
   },
 
-  findByUser: async (userId: string, limit = 20): Promise<Notification[]> => {
-    return await Notification.findAll({
+  findAndCountAll: async (
+    userId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ rows: Notification[]; count: number }> => {
+    const { limit, offset } = options || {};
+    return await Notification.findAndCountAll({
       where: { userId },
       order: [['createdAt', 'DESC']],
-      limit,
+      ...(limit !== undefined && { limit }),
+      ...(offset !== undefined && { offset }),
     });
   },
 

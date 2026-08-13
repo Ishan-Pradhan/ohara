@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Archive, GraduationCap, Mail, MoreVertical, RotateCcw, Search, Trash2, UserPlus } from 'lucide-react';
 
 import { useArchiveUser, useHardDeleteUser, useRestoreUser, useUsers } from '../../features/users/useUsers.js';
@@ -16,6 +16,7 @@ import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { BlockersList } from '../../components/ui/BlockersList.js';
 import { ConfirmDialog } from '../../components/ui/Dialog.js';
+import { Pagination } from '../../components/ui/Pagination.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,14 +41,38 @@ const statusVariant: Record<AdminUser['status'], 'success' | 'neutral' | 'accent
 };
 
 export const StudentsPage = () => {
-  const [search, setSearch] = useState('');
+  // search + page live in the URL (not useState) so a reload or shared link
+  // lands back on the same filtered/paged view instead of resetting.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get('search') ?? '';
+  const page = Number(searchParams.get('page')) || 1;
+
+  const setSearch = (value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('search', value);
+      else next.delete('search');
+      next.delete('page'); // a new search always starts back at page 1
+      return next;
+    });
+  };
+
+  const setPage = (next: number) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next > 1) params.set('page', String(next));
+      else params.delete('page');
+      return params;
+    });
+  };
+
   const [archiving, setArchiving] = useState<AdminUser | null>(null);
   const [restoring, setRestoring] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState<AdminUser | null>(null);
   const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  const { data, isLoading } = useUsers({ role: 'student', search: search || undefined, limit: 50 });
+  const { data, isLoading } = useUsers({ role: 'student', search: search || undefined, page, limit: 20 });
   const archiveUser = useArchiveUser();
   const restoreUser = useRestoreUser();
   const hardDeleteUser = useHardDeleteUser();
@@ -204,6 +229,12 @@ export const StudentsPage = () => {
           </TableBody>
         </Table>
       )}
+
+      {data ? (
+        <div className="mt-4">
+          <Pagination meta={data.meta} onPageChange={setPage} />
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(archiving)}

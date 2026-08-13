@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CalendarRange,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   Layers,
   LineChart,
@@ -25,6 +26,7 @@ import { useInstitutionProfile } from '../../features/institution/useInstitution
 import type { CurrentUser } from '../../schemas/auth.schema.js';
 import { Avatar } from '../ui/Avatar.js';
 import { NotificationBell } from './NotificationBell.js';
+import { ChangePasswordDialog } from '../ChangePasswordDialog.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,6 +107,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const { data: institution } = useInstitutionProfile();
   const { mutate: signOut } = useLogout();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -209,12 +212,19 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
                 <DropdownMenuContent>
                   <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {user.authProvider === 'local' ? (
+                    <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
+                      <KeyRound className="size-4" aria-hidden />
+                      Change password
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onSelect={() => signOut()} destructive>
                     <LogOut className="size-4" aria-hidden />
                     Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
             </div>
           ) : null}
         </header>

@@ -3,8 +3,14 @@ import { envelope } from './user.response.js';
 
 const unauthenticated = { description: 'Not authenticated' };
 
+// page/limit stay raw strings (not z.coerce.number()) to match
+// getAllUsersSchema's convention — getPaginationParams (pagination.utils.ts)
+// does its own Number() coercion from PaginationQuery's string shape.
 export const listNotificationsSchema = {
-  query: z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }),
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+  }),
 };
 
 export const markNotificationReadSchema = {
@@ -24,6 +30,14 @@ const notificationSchema = registry.register(
   }),
 );
 
+const paginationMetaSchema = z.object({
+  totalItems: z.number(),
+  itemCount: z.number(),
+  itemsPerPage: z.number(),
+  totalPages: z.number(),
+  currentPage: z.number(),
+});
+
 registry.registerPath({
   method: 'get',
   path: '/notifications',
@@ -31,8 +45,13 @@ registry.registerPath({
   request: { query: listNotificationsSchema.query },
   responses: {
     200: {
-      description: "The caller's most recent notifications, newest first",
-      content: { 'application/json': { schema: envelope(z.array(notificationSchema)) } },
+      description:
+        "The caller's notifications, newest first, paginated (page defaults to 1, limit to 10 if omitted — the bell dropdown always passes limit=20 and no page).",
+      content: {
+        'application/json': {
+          schema: envelope(z.object({ items: z.array(notificationSchema), meta: paginationMetaSchema })),
+        },
+      },
     },
     401: unauthenticated,
   },

@@ -56,3 +56,13 @@ export const useHardDeleteUser = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   });
 };
+
+/** Role-agnostic (unlike archive/restore/hard-delete, which are
+ * student-only) — the access-revocation path for staff accounts. */
+export const useToggleBlockUser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.patch(`/admin/toggle-block/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+};

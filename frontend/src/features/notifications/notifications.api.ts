@@ -1,10 +1,18 @@
 import { api } from '../../lib/axios.js';
-import { notificationSchema, type Notification } from './notifications.schema.js';
+import {
+  notificationSchema,
+  notificationsResultSchema,
+  type Notification,
+  type NotificationsResult,
+} from './notifications.schema.js';
 import { z } from 'zod';
 
-export const fetchNotifications = async (): Promise<Notification[]> => {
-  const res = await api.get('/notifications');
-  return z.array(notificationSchema).parse(res.data.data);
+export const fetchNotifications = async (params?: {
+  page?: number;
+  limit?: number;
+}): Promise<NotificationsResult> => {
+  const res = await api.get('/notifications', { params });
+  return notificationsResultSchema.parse(res.data.data);
 };
 
 export const fetchUnreadCount = async (): Promise<number> => {

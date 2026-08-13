@@ -37,17 +37,8 @@ export const batchInviteResultSchema = z.object({
   skipped: z.array(z.object({ email: z.string(), reason: z.string() })),
 });
 
-export const paginationMetaSchema = z.object({
-  totalItems: z.number(),
-  itemCount: z.number(),
-  itemsPerPage: z.number(),
-  totalPages: z.number(),
-  currentPage: z.number(),
-});
-
 export type Teacher = z.infer<typeof teacherSchema>;
 export type AdminUser = z.infer<typeof adminUserSchema>;
-export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type InviteUsersBatchInput = z.infer<typeof inviteUsersBatchSchema>;
 export type BatchInviteResult = z.infer<typeof batchInviteResultSchema>;

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import {
+  changePassword as changePasswordRequest,
   fetchCurrentUser,
   forgotPassword as forgotPasswordRequest,
   login as loginRequest,
@@ -9,7 +10,7 @@ import {
   register as registerRequest,
   resetPassword as resetPasswordRequest,
 } from './auth.api.js';
-import type { ResetPasswordInput } from '../../schemas/auth.schema.js';
+import type { ChangePasswordInput, ResetPasswordInput } from '../../schemas/auth.schema.js';
 
 /**
  * Session state has exactly one source: this query. No context provider, no
@@ -60,4 +61,9 @@ export const useForgotPassword = () => useMutation({ mutationFn: forgotPasswordR
 export const useResetPassword = (token: string) =>
   useMutation({
     mutationFn: (input: ResetPasswordInput) => resetPasswordRequest(token, input),
+  });
+
+export const useChangePassword = () =>
+  useMutation({
+    mutationFn: (input: ChangePasswordInput) => changePasswordRequest(input),
   });

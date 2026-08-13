@@ -311,6 +311,11 @@ export const changePassword = asyncHandler(
     }
 
     user.password = await hashPassword(newPassword);
+    // Force re-login on every other session — the same defensive clear used
+    // on deactivate/graduate. The current tab keeps working (its access
+    // token is still valid); any other open session gets logged out the
+    // next time it tries to refresh.
+    user.refreshToken = null;
     await user.save();
 
     return ok(res, null, 'Password changed successfully');

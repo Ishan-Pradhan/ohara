@@ -27,6 +27,17 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(6, 'New password must be at least 6 characters'),
 });
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string().min(6, 'New password must be at least 6 characters'),
+    confirmPassword: z.string().min(1, 'Confirm your new password'),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    message: "New passwords don't match",
+    path: ['confirmPassword'],
+  });
+
 /*
  * Mirrors the UserPublic schema the API documents. `status` is omitted on
  * purpose: the backend refuses to authenticate a non-active account, so any
@@ -48,4 +59,5 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type CurrentUser = z.infer<typeof currentUserSchema>;
