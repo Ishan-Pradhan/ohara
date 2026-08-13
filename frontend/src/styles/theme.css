@@ -15,6 +15,10 @@
   --color-surface-hover: oklch(97.5% 0.006 260);
   --color-border: oklch(90% 0.008 260);
   --color-border-strong: oklch(82% 0.01 260);
+  /* Deliberately more visible than surface-hover (only ~0.7% away from
+     --color-bg, nearly invisible for a loading skeleton) — but lighter than
+     --color-border so it doesn't read as a real UI element. */
+  --color-skeleton: oklch(92% 0.008 260);
 
   /* Text ("Ink") */
   --color-fg: oklch(24% 0.03 265);
@@ -62,6 +66,9 @@
   --color-surface-hover: oklch(27% 0.018 265);
   --color-border: oklch(31% 0.02 265);
   --color-border-strong: oklch(40% 0.022 265);
+  /* Lighter than surface/surface-hover on purpose — a dark-mode skeleton
+     needs to stand out against a dark background, not blend into it. */
+  --color-skeleton: oklch(33% 0.02 265);
 
   --color-fg: oklch(96% 0.006 265);
   --color-muted: oklch(72% 0.018 265);

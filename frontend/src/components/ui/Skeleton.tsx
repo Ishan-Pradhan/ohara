@@ -10,7 +10,7 @@ export const Skeleton = ({ className }: SkeletonProps) => (
   <div
     aria-hidden
     className={cn(
-      'animate-pulse rounded-control bg-surface-hover',
+      'animate-pulse rounded-control bg-skeleton',
       className,
     )}
   />
