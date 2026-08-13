@@ -9,6 +9,19 @@ const placementResponseSchema = registry.register(
   'StudentPlacement',
   z.object({
     studentId: z.uuid(),
+    student: z.object({
+      id: z.uuid(),
+      name: z.string(),
+      email: z.string(),
+      avatarUrl: z.string().nullable(),
+      status: z.enum(['active', 'inactive', 'graduated', 'archived']),
+    }),
+    dateOfBirth: z.iso.date().nullable(),
+    address: z.string().nullable(),
+    studentPhone: z.string().nullable(),
+    parentName: z.string().nullable(),
+    parentPhone: z.string().nullable(),
+    previousSchool: z.string().nullable(),
     program: z
       .object({
         id: z.uuid(),
@@ -20,6 +33,7 @@ const placementResponseSchema = registry.register(
     class: z.object({ id: z.uuid(), name: z.string() }).nullable(),
     section: z.object({ id: z.uuid(), name: z.string() }).nullable(),
     academicYear: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+    batch: z.object({ id: z.uuid(), name: z.string() }).nullable(),
     courses: z.array(
       z.object({
         id: z.uuid(),

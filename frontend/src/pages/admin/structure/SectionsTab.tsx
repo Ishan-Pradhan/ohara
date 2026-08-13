@@ -4,11 +4,14 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ArrowUpCircle,
+  BookOpen,
   CalendarRange,
+  GraduationCap,
   LayoutGrid,
   MoreVertical,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-react';
 import { z } from 'zod';
@@ -17,6 +20,7 @@ import type { InstitutionType, Section } from '../../../features/institution/ins
 import {
   useAcademicYears,
   useClasses,
+  useCourses,
   useCreateSection,
   useDeleteSection,
   useSections,
@@ -69,6 +73,7 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   const { data: years, isLoading: yearsLoading } = useAcademicYears();
   const { data: sections, isLoading: sectionsLoading } = useSections();
   const { data: classes } = useClasses();
+  const { data: courses } = useCourses();
   const { data: teachers } = useTeachers();
   const createSection = useCreateSection();
   const updateSection = useUpdateSection();
@@ -79,6 +84,12 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   const [deleting, setDeleting] = useState<Section | null>(null);
   const [deleteError, setDeleteError] = useState<ApiError | null>(null);
   const [promoting, setPromoting] = useState<Section | null>(null);
+  const [viewingCoursesFor, setViewingCoursesFor] = useState<Section | null>(null);
+
+  // Courses belong to the class, not the section — a section's students are
+  // enrolled in whichever of the class's courses apply to them, so "this
+  // section's course rosters" really means "this class's courses."
+  const classCourses = (courses ?? []).filter((c) => c.classId === classId);
 
   // This class only ever runs in years matching its own term (annual for
   // schools; odd/even for college/university, derived from the semester
@@ -109,7 +120,17 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
   } = useForm<SectionFormInput>({ resolver: zodResolver(sectionFormSchema) });
 
   const teacherName = (id: string | null) => teachers?.find((t) => t.id === id)?.name ?? null;
-  const teacherOptions = (teachers ?? []).map((t) => ({ value: t.id, label: t.name }));
+  // Radix's Select.Item rejects an empty-string value (it's reserved
+  // internally for "nothing selected" / the placeholder), so an explicit
+  // "no teacher" choice needs its own sentinel rather than value: '' — there
+  // was previously no way to *clear* an already-assigned class teacher once
+  // set, which matters for college/university programs that don't use the
+  // class-teacher concept at all (fixed 2026-08-12).
+  const NO_TEACHER_VALUE = '__none__';
+  const teacherOptions = [
+    { value: NO_TEACHER_VALUE, label: 'No class teacher' },
+    ...(teachers ?? []).map((t) => ({ value: t.id, label: t.name })),
+  ];
   const yearOptions = relevantYears.map((y) => ({
     value: y.id,
     // A mismatched-term year only ever shows up via "show all years" (the
@@ -296,6 +317,10 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
                     <MoreVertical className="size-4" aria-hidden />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setViewingCoursesFor(section)}>
+                      <BookOpen className="size-4" aria-hidden />
+                      View course rosters
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => openEdit(section)}>
                       <Pencil className="size-4" aria-hidden />
                       Edit
@@ -338,8 +363,10 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
                 <Select
                   id="classTeacherId"
                   options={teacherOptions}
-                  value={selectField.value}
-                  onValueChange={selectField.onChange}
+                  value={selectField.value || NO_TEACHER_VALUE}
+                  onValueChange={(value) =>
+                    selectField.onChange(value === NO_TEACHER_VALUE ? '' : value)
+                  }
                   invalid={Boolean(errors.classTeacherId)}
                   placeholder="No class teacher assigned"
                 />
@@ -395,6 +422,31 @@ export const SectionsTab = ({ classId, institutionType, orderIndex }: SectionsTa
         retainedSectionOptions={retainedSectionOptions}
         onOpenChange={(open) => !open && setPromoting(null)}
       />
+
+      <Dialog
+        open={Boolean(viewingCoursesFor)}
+        onOpenChange={(open) => !open && setViewingCoursesFor(null)}
+        title={`Courses — ${viewingCoursesFor?.name ?? ''}`}
+        description="Courses belong to the whole class, not just this section — pick one to see everyone enrolled in it."
+      >
+        {classCourses.length === 0 ? (
+          <EmptyState icon={GraduationCap} title="No courses in this class yet" />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {classCourses.map((course) => (
+              <Link
+                key={course.id}
+                to={`/admin/courses/${course.id}`}
+                className="flex items-center justify-between gap-3 rounded-control border border-border px-3 py-2 text-sm transition-colors hover:border-border-strong hover:bg-surface-hover"
+                onClick={() => setViewingCoursesFor(null)}
+              >
+                <span className="font-medium text-fg">{course.title}</span>
+                <Badge>{course.enrolledCount} student{course.enrolledCount === 1 ? '' : 's'}</Badge>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 };
@@ -433,12 +485,14 @@ const BulkPromoteDialog = ({
   const [defaultTargetSectionId, setDefaultTargetSectionId] = useState('');
   const [overrides, setOverrides] = useState<Record<string, OverrideState>>({});
   const [results, setResults] = useState<BulkPromoteResult[] | null>(null);
+  const [search, setSearch] = useState('');
 
   // Reset local state whenever a different section is opened (or the dialog closes).
   useEffect(() => {
     setDefaultTargetSectionId('');
     setOverrides({});
     setResults(null);
+    setSearch('');
     bulkPromote.reset();
     // Only re-run when switching sections — bulkPromote itself is intentionally
     // excluded, since including it would re-fire this effect on every mutation
@@ -497,6 +551,11 @@ const BulkPromoteDialog = ({
   const studentName = (studentId: string) =>
     roster?.find((entry) => entry.student.id === studentId)?.student.name ?? studentId;
 
+  const q = search.toLowerCase().trim();
+  const filteredRoster = q
+    ? (roster ?? []).filter((entry) => entry.student.name.toLowerCase().includes(q))
+    : (roster ?? []);
+
   return (
     <Dialog
       open={Boolean(section)}
@@ -542,41 +601,57 @@ const BulkPromoteDialog = ({
               />
             </Field>
 
-            <div className="flex flex-col gap-2">
-              {roster.map((entry) => {
-                const override = overrides[entry.student.id];
-                return (
-                  <div
-                    key={entry.membershipId}
-                    className="flex flex-col gap-2 rounded-control border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-fg">{entry.student.name}</p>
-                      <p className="truncate text-xs text-muted">{entry.student.email}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {override?.outcome === 'retained' ? (
-                        <div className="w-44">
+            {roster.length > 5 ? (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-subtle" />
+                <Input
+                  placeholder="Search students…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            ) : null}
+
+            <div className="flex max-h-[360px] flex-col gap-2 overflow-y-auto pr-1">
+              {filteredRoster.length === 0 ? (
+                <p className="py-2 text-center text-sm text-muted">No students match "{search}"</p>
+              ) : (
+                filteredRoster.map((entry) => {
+                  const override = overrides[entry.student.id];
+                  return (
+                    <div
+                      key={entry.membershipId}
+                      className="flex flex-col gap-2 rounded-control border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-fg">{entry.student.name}</p>
+                        <p className="truncate text-xs text-muted">{entry.student.email}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {override?.outcome === 'retained' ? (
+                          <div className="w-44">
+                            <Select
+                              options={retainedSectionOptions}
+                              value={override.targetSectionId ?? ''}
+                              onValueChange={(value) => setOverrideTargetSection(entry.student.id, value)}
+                              placeholder="Target section"
+                              invalid={!override.targetSectionId}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="w-36">
                           <Select
-                            options={retainedSectionOptions}
-                            value={override.targetSectionId ?? ''}
-                            onValueChange={(value) => setOverrideTargetSection(entry.student.id, value)}
-                            placeholder="Target section"
-                            invalid={!override.targetSectionId}
+                            options={outcomeOverrideOptions}
+                            value={override?.outcome ?? 'promoted'}
+                            onValueChange={(value) => setOverrideOutcome(entry.student.id, value)}
                           />
                         </div>
-                      ) : null}
-                      <div className="w-36">
-                        <Select
-                          options={outcomeOverrideOptions}
-                          value={override?.outcome ?? 'promoted'}
-                          onValueChange={(value) => setOverrideOutcome(entry.student.id, value)}
-                        />
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </>
         )}

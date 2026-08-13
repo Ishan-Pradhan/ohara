@@ -1,7 +1,13 @@
-import { Calendar, Users, FileText, AlertTriangle } from 'lucide-react';
-import { useWeeklySummary } from '../../../features/teacherIntelligence/useWeeklyIntelligence.js';
+import { formatDistanceToNow } from 'date-fns';
+import { Calendar, Users, FileText, AlertTriangle, Lightbulb, Loader2, RefreshCw } from 'lucide-react';
+import {
+  useWeeklySummary,
+  useGenerateWeeklySummaryInsights,
+} from '../../../features/teacherIntelligence/useWeeklyIntelligence.js';
+import type { WeeklySummary } from '../../../features/teacherIntelligence/weeklyIntelligence.schema.js';
 import { Card } from '../../../components/ui/Card.js';
 import { Badge } from '../../../components/ui/Badge.js';
+import { Button } from '../../../components/ui/Button.js';
 import { Skeleton } from '../../../components/ui/Skeleton.js';
 import { EmptyState } from '../../../components/ui/EmptyState.js';
 
@@ -125,37 +131,86 @@ export const WeeklyIntelligencePanel = ({ courseId }: WeeklyIntelligencePanelPro
         </Card>
       )}
 
-      {/* AI Insights */}
-      {insights && (
-        <Card>
-          <h3 className="text-sm font-semibold mb-2">AI Insights</h3>
-          <p className="text-sm text-muted mb-2">{insights.summary}</p>
-          {insights.highlights.length > 0 && (
-            <div className="mb-2">
-              <p className="text-xs font-medium text-muted uppercase mb-1">Highlights</p>
-              <ul className="list-disc list-inside text-sm">
-                {insights.highlights.map((h, i) => <li key={i}>{h}</li>)}
-              </ul>
-            </div>
-          )}
-          {insights.concerns.length > 0 && (
-            <div className="mb-2">
-              <p className="text-xs font-medium text-muted uppercase mb-1">Concerns</p>
-              <ul className="list-disc list-inside text-sm">
-                {insights.concerns.map((c, i) => <li key={i}>{c}</li>)}
-              </ul>
-            </div>
-          )}
-          {insights.recommendations.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted uppercase mb-1">Recommendations</p>
-              <ul className="list-disc list-inside text-sm">
-                {insights.recommendations.map((r, i) => <li key={i}>{r}</li>)}
-              </ul>
-            </div>
-          )}
-        </Card>
-      )}
+      {/* AI Insights — explicitly triggered, never automatic, so the header
+          always states exactly when it was last generated. */}
+      <WeeklyPanelInsightsCard
+        courseId={courseId}
+        insights={insights}
+        insightsGeneratedAt={summary.insightsGeneratedAt}
+      />
     </div>
+  );
+};
+
+const WeeklyPanelInsightsCard = ({
+  courseId,
+  insights,
+  insightsGeneratedAt,
+}: {
+  courseId: string;
+  insights: WeeklySummary['insights'];
+  insightsGeneratedAt: string | null;
+}) => {
+  const { mutate: generate, isPending } = useGenerateWeeklySummaryInsights(courseId);
+
+  const refreshButton = (
+    <Button size="sm" variant="secondary" onClick={() => generate()} disabled={isPending}>
+      {isPending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
+      {insights ? 'Refresh' : 'Generate'}
+    </Button>
+  );
+
+  if (!insights) {
+    return (
+      <Card>
+        <EmptyState
+          icon={Lightbulb}
+          title="No AI insights yet"
+          description="Generate a summary of this week's highlights, concerns, and recommended actions for this course. Only runs when you ask — never automatically."
+          action={refreshButton}
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">AI Insights</h3>
+        <div className="flex items-center gap-2">
+          {insightsGeneratedAt ? (
+            <span className="text-xs text-subtle">
+              Generated {formatDistanceToNow(new Date(insightsGeneratedAt), { addSuffix: true })}
+            </span>
+          ) : null}
+          {refreshButton}
+        </div>
+      </div>
+      <p className="text-sm text-muted mb-2">{insights.summary}</p>
+      {insights.highlights.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs font-medium text-muted uppercase mb-1">Highlights</p>
+          <ul className="list-disc list-inside text-sm">
+            {insights.highlights.map((h, i) => <li key={i}>{h}</li>)}
+          </ul>
+        </div>
+      )}
+      {insights.concerns.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs font-medium text-muted uppercase mb-1">Concerns</p>
+          <ul className="list-disc list-inside text-sm">
+            {insights.concerns.map((c, i) => <li key={i}>{c}</li>)}
+          </ul>
+        </div>
+      )}
+      {insights.recommendations.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted uppercase mb-1">Recommendations</p>
+          <ul className="list-disc list-inside text-sm">
+            {insights.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 };

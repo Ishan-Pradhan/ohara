@@ -14,6 +14,7 @@ import { Checkbox } from '../../components/ui/Checkbox.js';
 import { Textarea } from '../../components/ui/Textarea.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Alert } from '../../components/ui/Alert.js';
+import { ConfirmDialog } from '../../components/ui/Dialog.js';
 import { cn } from '../../lib/cn.js';
 
 const scoreBadgeVariant = (score: number, maxScore: number): 'success' | 'accent' | 'danger' => {
@@ -31,20 +32,31 @@ export const QuizTakePage = () => {
   const submitAttempt = useSubmitAttempt(courseId, quizId);
 
   const [answers, setAnswers] = useState<Record<string, number | string>>({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const questions = quiz?.questions ?? [];
   const resultsByQuestion = new Map((attempt?.results ?? []).map((r) => [r.questionId, r]));
+  const answeredCount = questions.filter((q) => {
+    const a = answers[q.id];
+    return a !== undefined && !(typeof a === 'string' && a.trim() === '');
+  }).length;
 
-  const onSubmit = async () => {
-    const responses = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
-    if (responses.length === 0) {
+  const requestSubmit = () => {
+    if (answeredCount === 0) {
       toast.error('Answer at least one question first');
       return;
     }
+    setConfirmOpen(true);
+  };
+
+  const onSubmit = async () => {
+    const responses = Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }));
     try {
       await submitAttempt.mutateAsync({ responses });
+      setConfirmOpen(false);
       toast.success('Quiz submitted');
     } catch (caught) {
+      setConfirmOpen(false);
       toast.error(caught instanceof ApiError ? caught.message : 'Could not submit quiz');
     }
   };
@@ -78,6 +90,20 @@ export const QuizTakePage = () => {
       {submitAttempt.error instanceof ApiError ? (
         <div className="mb-4">
           <Alert>{submitAttempt.error.message}</Alert>
+        </div>
+      ) : null}
+
+      {!attempt && questions.length > 0 ? (
+        <div className="mb-4 flex items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-hover">
+            <div
+              className="h-full rounded-pill bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-xs text-subtle">
+            {answeredCount} / {questions.length} answered
+          </span>
         </div>
       ) : null}
 
@@ -122,7 +148,18 @@ export const QuizTakePage = () => {
                   })}
                 </div>
               ) : attempt ? (
-                <p className="rounded-control border border-border bg-surface-hover/40 px-3 py-2 text-sm text-fg">
+                <p
+                  className={cn(
+                    'rounded-control border px-3 py-2 text-sm',
+                    result?.grade?.status === 'approved'
+                      ? scoreBadgeVariant(result.grade.awardedPoints ?? 0, result.grade.maxPoints ?? 0) === 'success'
+                        ? 'border-success/40 bg-success-soft text-fg'
+                        : scoreBadgeVariant(result.grade.awardedPoints ?? 0, result.grade.maxPoints ?? 0) === 'danger'
+                          ? 'border-danger/40 bg-danger-soft text-fg'
+                          : 'border-accent/40 bg-accent-soft text-fg'
+                      : 'border-warning/40 bg-warning-soft text-fg',
+                  )}
+                >
                   {String(result?.answer ?? '—')}
                 </p>
               ) : (
@@ -157,10 +194,24 @@ export const QuizTakePage = () => {
       </div>
 
       {!attempt && questions.length > 0 ? (
-        <Button className="mt-6" loading={submitAttempt.isPending} onClick={onSubmit}>
+        <Button className="mt-6" loading={submitAttempt.isPending} onClick={requestSubmit}>
           Submit quiz
         </Button>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Submit this quiz?"
+        description={
+          answeredCount < questions.length
+            ? `You've answered ${answeredCount} of ${questions.length} questions. Unanswered ones will be scored as incorrect, and you can't change your answers after submitting.`
+            : "You can't change your answers after submitting."
+        }
+        confirmLabel="Submit quiz"
+        loading={submitAttempt.isPending}
+        onConfirm={onSubmit}
+      />
     </AppShell>
   );
 };

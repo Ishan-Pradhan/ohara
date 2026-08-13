@@ -4,7 +4,7 @@ import { envelope } from './user.response.js';
 const unauthenticated = { description: 'Not authenticated' };
 const adminOnly = { description: 'Caller is not an admin' };
 
-const insightsSchema = z.object({
+export const institutionWeeklyInsightsSchema = z.object({
   highlights: z.array(z.string()),
   concerns: z.array(z.string()),
   recommendations: z.array(z.string()),
@@ -46,7 +46,8 @@ const institutionWeeklySchema = registry.register(
       averageScore: z.number().nullable(),
     }),
     programSummaries: z.array(programSummarySchema),
-    insights: insightsSchema.nullable(),
+    insights: institutionWeeklyInsightsSchema.nullable(),
+    insightsGeneratedAt: z.iso.datetime().nullable(),
   }),
 );
 
@@ -58,10 +59,37 @@ registry.registerPath({
   tags: ['Institution Intelligence'],
   responses: {
     200: {
-      description: 'Institution-wide weekly intelligence summary',
+      description:
+        'Institution-wide weekly intelligence summary. insights is whatever was last cached ' +
+        '(or null if never generated) — always fast, never calls the LLM.',
       content: { 'application/json': { schema: envelope(institutionWeeklySchema) } },
     },
     401: unauthenticated,
     403: adminOnly,
+  },
+});
+
+export const generateInstitutionWeeklyInsightsSchema = {};
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/weekly-intelligence/insights',
+  tags: ['Institution Intelligence'],
+  responses: {
+    200: {
+      description:
+        'Regenerates and caches fresh AI insights from the current week\'s institution-wide ' +
+        'data — explicitly triggered, never automatic.',
+      content: {
+        'application/json': {
+          schema: envelope(
+            z.object({ insights: institutionWeeklyInsightsSchema, generatedAt: z.iso.datetime() }),
+          ),
+        },
+      },
+    },
+    401: unauthenticated,
+    403: adminOnly,
+    502: { description: 'The LLM could not produce valid insights after a retry' },
   },
 });

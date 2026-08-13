@@ -49,6 +49,19 @@ export const outcomeSchema = z
 
 export const studentPlacementSchema = z.object({
   studentId: z.string(),
+  student: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string(),
+    avatarUrl: z.string().nullable(),
+    status: z.enum(['active', 'inactive', 'graduated', 'archived']),
+  }),
+  dateOfBirth: z.string().nullable(),
+  address: z.string().nullable(),
+  studentPhone: z.string().nullable(),
+  parentName: z.string().nullable(),
+  parentPhone: z.string().nullable(),
+  previousSchool: z.string().nullable(),
   program: z
     .object({
       id: z.string(),

@@ -27,4 +27,13 @@ export const courseTeacherRepository = {
     });
     return found !== null;
   },
+
+  /** Just an access-grant mapping, not an academic record — safe to hard
+   * delete (unlike removing a student, see docs/SCHEMA.md). Course-scoped
+   * data the teacher created (grades, quizzes, interventions, ...) is
+   * unaffected; this only revokes access. */
+  unassign: async (courseId: string, teacherId: string): Promise<boolean> => {
+    const deleted = await CourseTeacher.destroy({ where: { courseId, teacherId } });
+    return deleted > 0;
+  },
 };

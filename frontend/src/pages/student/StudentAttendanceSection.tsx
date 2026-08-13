@@ -6,17 +6,11 @@ import { Badge } from '../../components/ui/Badge.js';
 import { ProgressRing } from '../../components/ui/ProgressRing.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
+import { pctColor } from '../../lib/pctColor.js';
 
 interface StudentAttendanceSectionProps {
   courseId: string;
 }
-
-const pctColor = (pct: number | null) => {
-  if (pct === null) return 'text-muted';
-  if (pct >= 80) return 'text-success';
-  if (pct >= 60) return 'text-accent-fg';
-  return 'text-danger';
-};
 
 export const StudentAttendanceSection = ({ courseId }: StudentAttendanceSectionProps) => {
   const { data: attendance, isLoading } = useMyAttendance(courseId);

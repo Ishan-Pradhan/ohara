@@ -92,6 +92,35 @@ export const classMembershipRepository = {
     return Object.fromEntries(rows.map((r) => [r.sectionId, Number(r.count)]));
   },
 
+  /** Which class(es)/section(s) a batch is placed in *right now* —
+   * `outcome: 'enrolled'` only. Powers "mark and auto-select the current
+   * semester" in the Attendance/Gradebook/At-Risk/Transcripts batch pickers,
+   * which otherwise browse a batch's full history (`classRepository
+   * .findAll({batchId})` / `sectionRepository.findAll({batchId})` — neither
+   * filters by outcome, on purpose, so past semesters stay reachable).
+   * Usually resolves to exactly one class/section, but a batch's cohort can
+   * legitimately be split across two adjacent classes if promotion hasn't
+   * been applied uniformly to every student yet — this returns all of them,
+   * not just one, so the caller doesn't silently drop a real placement. */
+  findCurrentForBatch: async (batchId: string): Promise<{ classId: string; sectionId: string }[]> => {
+    const memberships = await ClassMembership.findAll({
+      where: { batchId, outcome: CLASS_MEMBERSHIP_OUTCOMES.ENROLLED },
+      attributes: ['sectionId'],
+      include: [{ association: 'section', attributes: ['classId'], required: true }],
+    });
+    const seen = new Set<string>();
+    const result: { classId: string; sectionId: string }[] = [];
+    for (const m of memberships) {
+      const classId = m.section?.classId;
+      if (!classId) continue;
+      const key = `${classId}:${m.sectionId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({ classId, sectionId: m.sectionId });
+    }
+    return result;
+  },
+
   updateSection: async (id: string, sectionId: string): Promise<ClassMembership | null> => {
     const membership = await ClassMembership.findByPk(id);
     if (!membership) return null;

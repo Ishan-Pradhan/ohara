@@ -23,6 +23,9 @@ const {
 const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
+const { studentProfileRepository } = await import(
+  '../../src/repositories/studentProfiles.repository.js'
+);
 
 const PASSWORD = 'hunter2secret';
 
@@ -76,13 +79,54 @@ describe('GET /students/:studentId/placement', () => {
     expect(res.status).toBe(401);
   });
 
-  it("allows an admin to view any student's placement", async () => {
+  it("allows an admin to view any student's placement, identity, and KYC profile", async () => {
     const adminCookies = await signInAs('admin@example.com', 'admin');
     const program = await createProgram({ institutionType: 'college' });
     const cls = await createClass({ programId: program.id });
     const year = await createAcademicYear({ isCurrent: true });
     const section = await createSection({ classId: cls.id, academicYearId: year.id });
     const course = await createCourse({ classId: cls.id, title: 'Physics' });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser({ name: 'Ada Lovelace' });
+    await studentProfileRepository.upsert(student.id, {
+      parentName: 'Lord Byron',
+      parentPhone: '9800000000',
+      address: '1 Analytical Engine Way',
+      dateOfBirth: '2005-12-10',
+      previousSchool: 'Kings College',
+      studentPhone: '9811111111',
+    });
+
+    await placeAndEnroll(adminCookies, student.id, section.id, course.id, batch.id);
+
+    const res = await request(app)
+      .get(`/api/v1/students/${student.id}/placement`)
+      .set('Cookie', adminCookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.studentId).toBe(student.id);
+    expect(res.body.data.student).toMatchObject({ id: student.id, name: 'Ada Lovelace' });
+    expect(res.body.data.section.id).toBe(section.id);
+    expect(res.body.data.courses).toHaveLength(1);
+    expect(res.body.data.courses[0].title).toBe('Physics');
+    expect(res.body.data.courses[0].isPublished).toBe(false);
+    expect(res.body.data).toMatchObject({
+      dateOfBirth: '2005-12-10',
+      address: '1 Analytical Engine Way',
+      studentPhone: '9811111111',
+      parentName: 'Lord Byron',
+      parentPhone: '9800000000',
+      previousSchool: 'Kings College',
+    });
+  });
+
+  it("returns null profile fields when the student has no StudentProfile row", async () => {
+    const adminCookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ institutionType: 'college' });
+    const cls = await createClass({ programId: program.id });
+    const year = await createAcademicYear({ isCurrent: true });
+    const section = await createSection({ classId: cls.id, academicYearId: year.id });
+    const course = await createCourse({ classId: cls.id });
     const batch = await createBatch({ programId: program.id });
     const student = await createStudentUser();
 
@@ -93,11 +137,14 @@ describe('GET /students/:studentId/placement', () => {
       .set('Cookie', adminCookies);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.studentId).toBe(student.id);
-    expect(res.body.data.section.id).toBe(section.id);
-    expect(res.body.data.courses).toHaveLength(1);
-    expect(res.body.data.courses[0].title).toBe('Physics');
-    expect(res.body.data.courses[0].isPublished).toBe(false);
+    expect(res.body.data).toMatchObject({
+      dateOfBirth: null,
+      address: null,
+      studentPhone: null,
+      parentName: null,
+      parentPhone: null,
+      previousSchool: null,
+    });
   });
 
   it('allows a student to view their own placement', async () => {

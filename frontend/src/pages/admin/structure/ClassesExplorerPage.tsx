@@ -105,10 +105,16 @@ export const ClassesExplorerPage = () => {
     resolver: zodResolver(batchFormSchema),
   });
 
-  const currentYearId = years?.find((y) => y.isCurrent)?.id;
+  // Counts every section this class has ever had, across every academic
+  // year — not scoped to "the current year," which doesn't have a single
+  // correct value here: `is_current` is unique per *term* (odd/even/annual),
+  // not globally, and one program's classes span more than one term at once
+  // (Semester 1 odd, Semester 2 even, Semester 3 odd, all listed together).
+  // The previous version picked whichever `is_current` row happened to come
+  // first regardless of term, so every class of the *other* term showed 0
+  // sections even when it genuinely had some (fixed 2026-08-12).
   const sectionCount = (classId: string) =>
-    sections?.filter((s) => s.classId === classId && s.academicYearId === currentYearId).length ??
-    0;
+    sections?.filter((s) => s.classId === classId).length ?? 0;
   const courseCount = (classId: string) =>
     courses?.filter((c) => c.classId === classId).length ?? 0;
 

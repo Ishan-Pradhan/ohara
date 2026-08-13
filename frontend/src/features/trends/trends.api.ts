@@ -9,7 +9,12 @@ export const fetchGradeTrends = async (courseId: string): Promise<GradeTrendPoin
   return z.array(gradeTrendPointSchema).parse(res.data.data);
 };
 
-export const fetchAttendanceTrends = async (courseId: string): Promise<AttendanceTrendPoint[]> => {
-  const res = await api.get(`/courses/${courseId}/attendance-trends`);
+export const fetchAttendanceTrends = async (
+  courseId: string,
+  sectionId?: string,
+): Promise<AttendanceTrendPoint[]> => {
+  const res = await api.get(`/courses/${courseId}/attendance-trends`, {
+    params: sectionId ? { sectionId } : undefined,
+  });
   return z.array(attendanceTrendPointSchema).parse(res.data.data);
 };

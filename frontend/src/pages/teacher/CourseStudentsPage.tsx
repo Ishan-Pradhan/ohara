@@ -1,22 +1,18 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, Flag, GraduationCap } from 'lucide-react';
+import { ChevronLeft, Flag } from 'lucide-react';
 
 import { useCourseRoster } from '../../features/teacher/useTeacher.js';
 import type { RosterStudent } from '../../features/teacher/teacher.schema.js';
 import { AppShell } from '../../components/layout/AppShell.js';
 import { PageHeader } from '../../components/layout/PageHeader.js';
-import { Card } from '../../components/ui/Card.js';
-import { Badge } from '../../components/ui/Badge.js';
 import { Button } from '../../components/ui/Button.js';
-import { Avatar } from '../../components/ui/Avatar.js';
-import { Skeleton } from '../../components/ui/Skeleton.js';
-import { EmptyState } from '../../components/ui/EmptyState.js';
+import { CourseRosterSection } from '../admin/course-content/CourseRosterSection.js';
 import { FlagStudentDialog } from './FlagStudentDialog.js';
 
 export const CourseStudentsPage = () => {
   const { courseId = '' } = useParams();
-  const { data: students, isLoading } = useCourseRoster(courseId);
+  const { data: students } = useCourseRoster(courseId);
   const [flagging, setFlagging] = useState<RosterStudent | null>(null);
 
   return (
@@ -34,35 +30,16 @@ export const CourseStudentsPage = () => {
         }
       />
 
-      {isLoading ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-14 w-full" />
-        </div>
-      ) : !students || students.length === 0 ? (
-        <EmptyState icon={GraduationCap} title="No students enrolled yet" />
-      ) : (
-        <div className="flex flex-col gap-2">
-          {students.map((student) => (
-            <Card key={student.id} padding="sm" className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar name={student.name} src={student.avatarUrl} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-fg">{student.name}</p>
-                  <p className="truncate text-xs text-muted">{student.email}</p>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Badge variant={student.status === 'active' ? 'success' : 'neutral'}>{student.status}</Badge>
-                <Button size="sm" variant="ghost" onClick={() => setFlagging(student)}>
-                  <Flag className="size-4" aria-hidden />
-                  Flag
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <CourseRosterSection
+        courseId={courseId}
+        profileBasePath="/teacher/students"
+        renderActions={(student) => (
+          <Button size="sm" variant="ghost" onClick={() => setFlagging(student)}>
+            <Flag className="size-4" aria-hidden />
+            Flag
+          </Button>
+        )}
+      />
 
       {flagging ? (
         <FlagStudentDialog

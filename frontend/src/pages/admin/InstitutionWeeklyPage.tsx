@@ -1,7 +1,12 @@
-import { Users, FileText, Calendar } from 'lucide-react';
-import { useInstitutionWeekly } from '../../features/institution/useInstitutionWeekly.js';
+import { formatDistanceToNow } from 'date-fns';
+import { Users, FileText, Calendar, Lightbulb, Loader2, RefreshCw } from 'lucide-react';
+import {
+  useInstitutionWeekly,
+  useGenerateInstitutionWeeklyInsights,
+} from '../../features/institution/useInstitutionWeekly.js';
 import { Card } from '../../components/ui/Card.js';
 import { Badge } from '../../components/ui/Badge.js';
+import { Button } from '../../components/ui/Button.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 
@@ -25,7 +30,7 @@ export const InstitutionWeeklyPage = () => {
     );
   }
 
-  const { attendance, submissions, quizzes, programSummaries, insights } = weekly;
+  const { attendance, submissions, quizzes, programSummaries, insights, insightsGeneratedAt } = weekly;
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,33 +99,76 @@ export const InstitutionWeeklyPage = () => {
         </Card>
       )}
 
-      {/* Insights */}
-      {insights && (
-        <Card>
-          <h2 className="text-sm font-semibold mb-2">AI Insights</h2>
-          <p className="text-sm text-muted mb-3">{insights.summary}</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {insights.highlights.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-success uppercase mb-1">Highlights</p>
-                <ul className="list-disc list-inside text-sm space-y-0.5">{insights.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul>
-              </div>
-            )}
-            {insights.concerns.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-danger uppercase mb-1">Concerns</p>
-                <ul className="list-disc list-inside text-sm space-y-0.5">{insights.concerns.map((c, i) => <li key={i}>{c}</li>)}</ul>
-              </div>
-            )}
-            {insights.recommendations.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-primary uppercase mb-1">Actions</p>
-                <ul className="list-disc list-inside text-sm space-y-0.5">{insights.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
+      {/* Insights — explicitly triggered, never automatic, so the header
+          always states exactly when it was last generated. */}
+      <WeeklyInsightsCard insights={insights} insightsGeneratedAt={insightsGeneratedAt} />
     </div>
+  );
+};
+
+const WeeklyInsightsCard = ({
+  insights,
+  insightsGeneratedAt,
+}: {
+  insights: NonNullable<ReturnType<typeof useInstitutionWeekly>['data']>['insights'];
+  insightsGeneratedAt: string | null;
+}) => {
+  const { mutate: generate, isPending } = useGenerateInstitutionWeeklyInsights();
+
+  const refreshButton = (
+    <Button size="sm" variant="secondary" onClick={() => generate()} disabled={isPending}>
+      {isPending ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
+      {insights ? 'Refresh' : 'Generate'}
+    </Button>
+  );
+
+  if (!insights) {
+    return (
+      <Card>
+        <EmptyState
+          icon={Lightbulb}
+          title="No AI insights yet"
+          description="Generate a summary of this week's institution-wide highlights, concerns, and recommended actions. Only runs when you ask — never automatically."
+          action={refreshButton}
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">AI Insights</h2>
+        <div className="flex items-center gap-2">
+          {insightsGeneratedAt ? (
+            <span className="text-xs text-subtle">
+              Generated {formatDistanceToNow(new Date(insightsGeneratedAt), { addSuffix: true })}
+            </span>
+          ) : null}
+          {refreshButton}
+        </div>
+      </div>
+      <p className="text-sm text-muted mb-3">{insights.summary}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {insights.highlights.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-success uppercase mb-1">Highlights</p>
+            <ul className="list-disc list-inside text-sm space-y-0.5">{insights.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul>
+          </div>
+        )}
+        {insights.concerns.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-danger uppercase mb-1">Concerns</p>
+            <ul className="list-disc list-inside text-sm space-y-0.5">{insights.concerns.map((c, i) => <li key={i}>{c}</li>)}</ul>
+          </div>
+        )}
+        {insights.recommendations.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-primary uppercase mb-1">Actions</p>
+            <ul className="list-disc list-inside text-sm space-y-0.5">{insights.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 };

@@ -5,10 +5,16 @@ import {
   teacherCourseSchema,
   rosterStudentSchema,
   studentFlagSchema,
+  myStudentListItemSchema,
+  myStudentProfileSchema,
+  teacherStudentNoteSchema,
   type TeacherCourse,
   type RosterStudent,
   type CreateFlagInput,
   type StudentFlag,
+  type MyStudentListItem,
+  type MyStudentProfile,
+  type TeacherStudentNote,
 } from './teacher.schema.js';
 
 export const fetchMyCourses = async (): Promise<TeacherCourse[]> => {
@@ -34,4 +40,31 @@ export const fetchStudentFlags = async (studentId: string): Promise<StudentFlag[
 export const resolveFlag = async (id: string): Promise<StudentFlag> => {
   const res = await api.patch(`/admin/student-flags/${id}/resolve`);
   return studentFlagSchema.parse(res.data.data);
+};
+
+export const fetchMyStudents = async (): Promise<MyStudentListItem[]> => {
+  const res = await api.get('/teacher/students');
+  return z.array(myStudentListItemSchema).parse(res.data.data);
+};
+
+export const fetchMyStudent = async (studentId: string): Promise<MyStudentProfile> => {
+  const res = await api.get(`/teacher/students/${studentId}`);
+  return myStudentProfileSchema.parse(res.data.data);
+};
+
+export const fetchMyStudentNotes = async (studentId: string): Promise<TeacherStudentNote[]> => {
+  const res = await api.get(`/teacher/students/${studentId}/notes`);
+  return z.array(teacherStudentNoteSchema).parse(res.data.data);
+};
+
+export const createMyStudentNote = async (
+  studentId: string,
+  content: string,
+): Promise<TeacherStudentNote> => {
+  const res = await api.post(`/teacher/students/${studentId}/notes`, { content });
+  return teacherStudentNoteSchema.parse(res.data.data);
+};
+
+export const deleteMyStudentNote = async (studentId: string, noteId: string): Promise<void> => {
+  await api.delete(`/teacher/students/${studentId}/notes/${noteId}`);
 };

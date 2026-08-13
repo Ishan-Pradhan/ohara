@@ -42,10 +42,20 @@ export const generateJson = async (
 
 /** Plain-text chat completion (no JSON mode) — used by the tutor, which
  * returns prose, not a structured object. Same transport-only contract as
- * generateJson: no retry/validation here, callers own that if they need it. */
+ * generateJson: no retry/validation here, callers own that if they need it.
+ *
+ * maxCompletionTokens defaults to a short-prose budget (every current caller
+ * — tutor stage-1, at-risk explanations, teacher/admin copilots, explain-a-
+ * concept — asks for a few paragraphs at most). Leaving this uncapped left
+ * output size entirely up to Groq's own default, which combined with a large
+ * input is exactly how a request blows past the on_demand tier's 12,000 TPM
+ * cap (a 413, distinct from the daily token cap) — the same class of bug
+ * MODULE_CONTENT_RETRIEVAL_K (constants/index.ts) was already introduced to
+ * avoid on the generateJson side. */
 export const generateText = async (
   systemPrompt: string,
   userPrompt: string,
+  maxCompletionTokens = 1024,
 ): Promise<string> => {
   const completion = await groq.chat.completions.create({
     model: env.GROQ_MODEL,
@@ -54,6 +64,7 @@ export const generateText = async (
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.3,
+    max_completion_tokens: maxCompletionTokens,
   });
 
   const content = completion.choices[0]?.message?.content;

@@ -28,6 +28,19 @@ export const copilotRepository = {
     });
   },
 
+  /** Last `limit` messages already in the conversation, oldest first — used
+   * to give the model short-term memory of the conversation so far (pronoun
+   * references like "them", follow-ups like "what about X instead") without
+   * paying to replay the whole thread on every turn. */
+  findRecentMessages: async (conversationId: string, limit: number): Promise<TeacherCopilotMessage[]> => {
+    const recent = await TeacherCopilotMessage.findAll({
+      where: { conversationId },
+      order: [['seq', 'DESC']],
+      limit,
+    });
+    return recent.reverse();
+  },
+
   createMessage: async (
     conversationId: string,
     seq: number,

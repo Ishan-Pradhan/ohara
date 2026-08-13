@@ -16,6 +16,9 @@ interface FlagStudentDialogProps {
   sectionId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called after a flag is successfully raised — e.g. so a page showing
+   * this student's existing flags can refetch them. Not called on cancel. */
+  onFlagged?: () => void;
 }
 
 export const FlagStudentDialog = ({
@@ -25,6 +28,7 @@ export const FlagStudentDialog = ({
   sectionId,
   open,
   onOpenChange,
+  onFlagged,
 }: FlagStudentDialogProps) => {
   const [reason, setReason] = useState('');
   const createFlag = useCreateFlag();
@@ -38,6 +42,7 @@ export const FlagStudentDialog = ({
   const onSubmit = async () => {
     await createFlag.mutateAsync({ studentId, reason, courseId, sectionId });
     toast.success(`Flagged ${studentName} for admin attention`);
+    onFlagged?.();
     close();
   };
 

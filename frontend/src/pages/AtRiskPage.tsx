@@ -7,12 +7,14 @@ import {
   usePrograms,
   useClasses,
   useBatches,
+  useBatchCurrentPlacement,
   useSections,
   useCourses,
+  useAcademicYears,
 } from '../features/institution/useInstitution.js';
 import { AppShell } from '../components/layout/AppShell.js';
 import { PageHeader } from '../components/layout/PageHeader.js';
-import { CourseSwitcher } from '../components/CourseSwitcher.js';
+import { TeacherCourseNav } from '../components/TeacherCourseNav.js';
 import { Select } from '../components/ui/Select.js';
 import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
@@ -29,8 +31,8 @@ export const AtRiskPage = () => {
 /** Admin view: Program → Batch → Semester → Section → Course → At-Risk */
 const AdminAtRiskView = () => {
   const { data: programs, isLoading: programsLoading } = usePrograms();
-  const { data: allSections } = useSections();
   const { data: allCourses } = useCourses();
+  const { data: academicYears } = useAcademicYears();
 
   const [programId, setProgramId] = useState('');
   const [batchId, setBatchId] = useState('');
@@ -39,11 +41,23 @@ const AdminAtRiskView = () => {
   const [courseId, setCourseId] = useState('');
 
   const { data: batches } = useBatches(programId || undefined);
+  // The full semester history for this batch, not just its current one —
+  // browsing past semesters (old at-risk flags) is a real need.
+  // useBatchCurrentPlacement (below) is the separate signal for which of
+  // these is current, used only for labeling (sorted first), never filtering.
   const { data: semesterOptions } = useClasses(batchId ? { programId: programId || undefined, batchId } : undefined);
+  // Scoped server-side to this batch's actual placements across its full
+  // history too — a batch with nothing ever placed in this class must show
+  // zero sections here, never a different batch's real roster (see
+  // docs/SCHEMA.md's `sections` entry for why).
+  const { data: sectionsForClass } = useSections(
+    classId ? { classId, batchId: batchId || undefined } : undefined,
+  );
+  const { data: currentPlacement } = useBatchCurrentPlacement(batchId);
 
-  const sectionOptions = (allSections ?? [])
-    .filter((s) => s.classId === classId)
-    .map((s) => ({ value: s.id, label: `Section ${s.name}` }));
+  const yearById = new Map((academicYears ?? []).map((y) => [y.id, y]));
+  const currentClassIds = new Set((currentPlacement ?? []).map((p) => p.classId));
+  const currentSectionIds = new Set((currentPlacement ?? []).map((p) => p.sectionId));
 
   const filteredCourses = (allCourses ?? [])
     .filter((c) => c.classId === classId)
@@ -51,18 +65,54 @@ const AdminAtRiskView = () => {
 
   const batchOptions = (batches ?? []).map((b) => ({ value: b.id, label: b.name }));
   const programOptions = (programs ?? []).map((p) => ({ value: p.id, label: p.name }));
+  // Current semester sorts first and is labeled, so it's easy to spot —
+  // nothing is auto-selected, the admin still has to pick it explicitly.
   const classOptions = (semesterOptions ?? [])
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((c) => ({ value: c.id, label: c.name }));
+    .slice()
+    .sort((a, b) => {
+      const aCurrent = currentClassIds.has(a.id) ? 1 : 0;
+      const bCurrent = currentClassIds.has(b.id) ? 1 : 0;
+      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+      return a.orderIndex - b.orderIndex;
+    })
+    .map((c) => ({ value: c.id, label: currentClassIds.has(c.id) ? `${c.name} (current)` : c.name }));
 
+  // A retained batch that repeated a semester shows up as two sections for
+  // the same class (one per academic-year attempt) — only then is the year
+  // worth showing, since batch and semester are already fixed by this point.
+  const sectionNameCounts = new Map<string, number>();
+  for (const s of sectionsForClass ?? []) {
+    sectionNameCounts.set(s.name, (sectionNameCounts.get(s.name) ?? 0) + 1);
+  }
+  const sectionOptions = (sectionsForClass ?? [])
+    .slice()
+    .sort((a, b) => {
+      const aCurrent = currentSectionIds.has(a.id) ? 1 : 0;
+      const bCurrent = currentSectionIds.has(b.id) ? 1 : 0;
+      if (aCurrent !== bCurrent) return bCurrent - aCurrent;
+      if (a.enrolledCount !== b.enrolledCount) return b.enrolledCount - a.enrolledCount;
+      const aYear = yearById.get(a.academicYearId)?.startDate ?? '';
+      const bYear = yearById.get(b.academicYearId)?.startDate ?? '';
+      return bYear.localeCompare(aYear);
+    })
+    .map((s) => {
+      const labelParts = [`Section ${s.name}`];
+      if ((sectionNameCounts.get(s.name) ?? 0) > 1) {
+        const yearName = yearById.get(s.academicYearId)?.name;
+        if (yearName) labelParts.push(yearName);
+      }
+      if (currentSectionIds.has(s.id)) labelParts.push('current');
+      const headcount = s.enrolledCount > 0 ? `${s.enrolledCount} students` : 'empty';
+      return { value: s.id, label: `${labelParts.join(' — ')} (${headcount})` };
+    });
+
+  // Nothing here auto-selects — the admin picks every level explicitly, and
+  // data only loads once they have. Only clearing dependent selections when
+  // a parent changes (so a stale child selection can't linger) stays.
   useEffect(() => { setBatchId(''); setClassId(''); setSectionId(''); setCourseId(''); }, [programId]);
   useEffect(() => { setClassId(''); setSectionId(''); setCourseId(''); }, [batchId]);
   useEffect(() => { setSectionId(''); setCourseId(''); }, [classId]);
   useEffect(() => { setCourseId(''); }, [sectionId]);
-
-  useEffect(() => {
-    if (!courseId && filteredCourses.length > 0) setCourseId(filteredCourses[0]!.id);
-  }, [courseId, filteredCourses]);
 
   if (programsLoading) {
     return (
@@ -129,7 +179,13 @@ const AdminAtRiskView = () => {
               value={sectionId}
               onValueChange={setSectionId}
               options={sectionOptions}
-              placeholder={classId ? 'Select section…' : 'Choose a semester first'}
+              placeholder={
+                !classId
+                  ? 'Choose a semester first'
+                  : sectionOptions.length === 0
+                    ? 'No students placed in this batch yet'
+                    : 'Select section…'
+              }
             />
           </div>
 
@@ -164,10 +220,6 @@ const TeacherAtRiskView = () => {
   const { data: courses, isLoading } = useMyCourses();
   const [courseId, setCourseId] = useState('');
 
-  useEffect(() => {
-    if (!courseId && courses && courses.length > 0) setCourseId(courses[0]!.id);
-  }, [courses, courseId]);
-
   return (
     <AppShell>
       <PageHeader title="At-Risk Students" description="Students flagged from grades, attendance, and missed work, by course." />
@@ -178,11 +230,7 @@ const TeacherAtRiskView = () => {
         <EmptyState icon={AlertTriangle} title="No courses yet" description="At-risk flags will appear here once you have a course." />
       ) : (
         <div className="flex flex-col gap-4">
-          <CourseSwitcher
-            courses={courses.map((c) => ({ id: c.id, title: c.title, code: c.code }))}
-            selectedCourseId={courseId}
-            onSelect={setCourseId}
-          />
+          <TeacherCourseNav courses={courses} onSelect={setCourseId} />
           {courseId ? <AtRiskSection courseId={courseId} /> : null}
         </div>
       )}

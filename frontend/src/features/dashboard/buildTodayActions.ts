@@ -3,7 +3,7 @@
  *
  * Derives a ranked, actionable list of items the student should focus on
  * today. Inputs come entirely from data already fetched by existing queries
- * (dashboard, study plan, concept inventory) — no new API calls.
+ * (dashboard, study plan) — no new API calls.
  *
  * Priority order (highest first):
  *   1. OVERDUE     — assignments past due date with no submission
@@ -11,8 +11,7 @@
  *   3. QUIZ        — published quizzes with no attempt
  *   4. STALE_PLAN  — active study plan marked stale, prompt to regenerate
  *   5. TODAY_TASKS — today's undone tasks from the active study plan
- *   6. WEAK_CONCEPT — top needs_attention concept topics (max 2)
- *   7. PROGRESS    — positive recent grade worth surfacing (≥ 80%)
+ *   6. PROGRESS    — positive recent grade worth surfacing (≥ 80%)
  *
  * Rules:
  * - Maximum 7 items total so the list stays scannable.
@@ -22,7 +21,6 @@
 
 import type { StudentDashboard, UpcomingItem, RecentGradeItem } from './dashboard.schema.js';
 import type { StudyPlan } from './studyPlan.schema.js';
-import type { ConceptInventory } from './conceptInventory.schema.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Action shape
@@ -34,7 +32,6 @@ export type ActionKind =
   | 'quiz'
   | 'stale_plan'
   | 'today_task'
-  | 'weak_concept'
   | 'progress';
 
 export interface TodayAction {
@@ -87,13 +84,11 @@ const todayDayName = (): string => {
 export interface BuildTodayActionsInput {
   dashboard: StudentDashboard | undefined;
   studyPlan: StudyPlan | null | undefined;
-  conceptInventory: ConceptInventory | undefined;
 }
 
 export const buildTodayActions = ({
   dashboard,
   studyPlan,
-  conceptInventory,
 }: BuildTodayActionsInput): TodayAction[] => {
   if (!dashboard?.placed) return [];
 
@@ -164,7 +159,7 @@ export const buildTodayActions = ({
       kind: 'stale_plan',
       label: 'Study plan needs updating',
       detail: studyPlan.staleReason ?? 'Your plan may no longer reflect your current situation.',
-      href: '/student/progress#study-plan',
+      href: '/student/study-plan',
       dueAt: null,
     });
   }
@@ -182,38 +177,14 @@ export const buildTodayActions = ({
           kind: 'today_task',
           label: task.title,
           detail: `${task.courseTitle ? `${task.courseTitle} · ` : ''}${task.estimatedMinutes} min · ${task.priority} priority`,
-          href: '/student/progress',
+          href: '/student/study-plan',
           dueAt: null,
         });
       }
     }
   }
 
-  // ── 6. Weak concepts ──────────────────────────────────────────────────────
-  if (conceptInventory) {
-    const weakTopics: { topic: string; courseTitle: string }[] = [];
-
-    for (const course of conceptInventory.courses) {
-      for (const concept of course.concepts) {
-        if (concept.masteryState === 'needs_attention') {
-          weakTopics.push({ topic: concept.topic, courseTitle: course.courseTitle });
-        }
-      }
-    }
-
-    for (const { topic, courseTitle } of weakTopics.slice(0, 2)) {
-      actions.push({
-        id: `weak-concept-${topic.toLowerCase().replace(/\s+/g, '-')}`,
-        kind: 'weak_concept',
-        label: topic,
-        detail: `${courseTitle} · Needs attention`,
-        href: '/student/progress?tab=concepts',
-        dueAt: null,
-      });
-    }
-  }
-
-  // ── 7. Positive recent grade (progress signal) ─────────────────────────────
+  // ── 6. Positive recent grade (progress signal) ─────────────────────────────
   if (actions.length < MAX_ACTIONS && dashboard.recentGrades.length > 0) {
     const best = dashboard.recentGrades
       .filter((g): g is RecentGradeItem =>

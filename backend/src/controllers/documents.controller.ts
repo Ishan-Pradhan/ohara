@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
-import type { Response } from 'express';
+import type { Response, NextFunction } from 'express';
 
 import { sequelize } from '../config/db.js';
 import type { AuthRequest } from '../types/auth.types.js';
 import { documentRepository } from '../repositories/documents.repository.js';
 import { documentChunkRepository } from '../repositories/documentChunks.repository.js';
+import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeDocument } from '../serializers/documents.serializer.js';
 import { extractText } from '../services/pdf.service.js';
 import { embed } from '../services/embeddings.service.js';
@@ -121,3 +122,173 @@ export const deleteDocument = asyncHandler(
     return ok(res, null, 'Document deleted');
   },
 );
+
+// ── Viewing ──────────────────────────────────────────────────────────────────
+
+/** Streams the raw PDF inline (not as a download) — the source for the
+ * raw-document viewer, used by both the management UI (teacher/admin
+ * preview) and the student-facing reader (via listViewableDocuments below
+ * for discovery). requireCourseAccess (not requireCourseTeacher) gates the
+ * route, so admins, assigned teachers, and enrolled students can all reach
+ * it. Deliberately not gated by document status here — the file lands on
+ * disk at upload time, before ingestion runs, so a teacher previewing a
+ * still-processing or failed document isn't blocked; only
+ * listViewableDocuments filters by status for the student-facing list. */
+export const getDocumentFile = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const { courseId, id } = req.validated?.params as { courseId: string; id: string };
+
+    const document = await documentRepository.findById(id);
+    if (!document || document.courseId !== courseId) {
+      throw new ApiError(404, 'Document not found');
+    }
+
+    // filename is the original uploaded filename (user-supplied at upload
+    // time) — strip characters that could break the header value, and
+    // additionally encode it via the RFC 5987 extended parameter so
+    // non-ASCII names still round-trip correctly in browsers that support it.
+    const safeFilename = document.filename.replace(/["\r\n]/g, '');
+    res.set(
+      'Content-Disposition',
+      `inline; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(document.filename)}`,
+    );
+    res.type('application/pdf');
+    res.sendFile(document.storageKey, (err) => {
+      // sendFile's error callback fires outside the try/catch asyncHandler
+      // wraps this function in — route it through the normal error-handling
+      // middleware ourselves so the response envelope stays consistent.
+      // headersSent guards against double-responding if the error happened
+      // after streaming had already begun.
+      if (err && !res.headersSent) {
+        logger.warn({ err, documentId: id }, 'Document file missing from disk');
+        next(new ApiError(404, 'File not found on disk'));
+      }
+    });
+  },
+);
+
+/** The student-facing counterpart to listDocuments: only status: 'ready'
+ * documents (nothing still processing or failed), and only once the course
+ * is published — same gate getCourseOutline (tutor.controller.ts) uses for
+ * modules/lessons, so a course's raw documents and its structured content
+ * become visible to students at the same moment. */
+export const listViewableDocuments = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { courseId } = req.validated?.params as { courseId: string };
+
+    const course = await courseRepository.findById(courseId);
+    if (!course || !course.isPublished) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    const documents = await documentRepository.findAllByCourse(courseId);
+    const viewable = documents.filter((d) => d.status === DOCUMENT_STATUS.READY);
+    return ok(res, viewable.map(serializeDocument), 'Documents retrieved');
+  },
+);
+
+// ── Knowledge base selection ────────────────────────────────────────────────
+
+/** Sets (or, with documentId: null, clears) which single uploaded document
+ * the tutor and quiz generation are allowed to ground answers/questions in
+ * — see Course.knowledgeBaseDocumentId. A course can have several uploaded
+ * documents; only one is ever searched. */
+export const setKnowledgeBaseDocument = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { courseId } = req.validated?.params as { courseId: string };
+    const { documentId } = req.validated?.body as { documentId: string | null };
+
+    if (documentId !== null) {
+      const document = await documentRepository.findById(documentId);
+      if (!document || document.courseId !== courseId) {
+        throw new ApiError(404, 'Document not found');
+      }
+      if (document.status !== DOCUMENT_STATUS.READY) {
+        throw new ApiError(400, 'Only a fully processed document can be selected as the knowledge base');
+      }
+    }
+
+    const course = await courseRepository.setKnowledgeBaseDocument(courseId, documentId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    return ok(
+      res,
+      { id: course.id, knowledgeBaseDocumentId: course.knowledgeBaseDocumentId },
+      'Knowledge base document updated',
+    );
+  },
+);
+
+/** Sets (or, with documentId: null, clears) which single uploaded document
+ * defines this course's official module/lesson structure — see
+ * Course.syllabusDocumentId and generateSkeleton (courseContent.controller.ts),
+ * which uses this document's own text to produce a skeleton matching an
+ * official syllabus instead of inventing a grouping. Independent of
+ * setKnowledgeBaseDocument above — same validation shape (must belong to
+ * this course, must be status: 'ready'), different course field. */
+export const setSyllabusDocument = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { courseId } = req.validated?.params as { courseId: string };
+    const { documentId } = req.validated?.body as { documentId: string | null };
+
+    if (documentId !== null) {
+      const document = await documentRepository.findById(documentId);
+      if (!document || document.courseId !== courseId) {
+        throw new ApiError(404, 'Document not found');
+      }
+      if (document.status !== DOCUMENT_STATUS.READY) {
+        throw new ApiError(400, 'Only a fully processed document can be selected as the syllabus');
+      }
+    }
+
+    const course = await courseRepository.setSyllabusDocument(courseId, documentId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    return ok(
+      res,
+      { id: course.id, syllabusDocumentId: course.syllabusDocumentId },
+      'Syllabus document updated',
+    );
+  },
+);
+
+// ── Shared RAG grounding helper ─────────────────────────────────────────────
+
+/** Embeds `query` and searches the given knowledge base document (a
+ * course's Course.knowledgeBaseDocumentId — the caller resolves the course
+ * itself, since some callers, e.g. lessonPlanner.controller.ts, already
+ * have it loaded for other fields and shouldn't fetch it twice) via the same
+ * retrieval the tutor's search_course_material tool uses. Returns null —
+ * never an empty string — when knowledgeBaseDocumentId is null, the embed
+ * call fails, or nothing relevant is found, so callers can fall back to
+ * their own default instead of silently grounding on nothing. Shared by
+ * quizzes.controller.ts and lessonPlanner.controller.ts (both had a
+ * "topic-only" generation path that previously sent the bare topic string
+ * to the LLM with no connection to the course's actual material); same
+ * precedent as courses.controller.ts's resolveCurrentAcademicYearForCourse
+ * being reused across controllers. */
+export const retrieveKnowledgeBaseMaterial = async (
+  knowledgeBaseDocumentId: string | null,
+  query: string,
+  k: number,
+): Promise<string | null> => {
+  if (!knowledgeBaseDocumentId) {
+    return null;
+  }
+
+  const [queryVector] = await embed([query]);
+  if (!queryVector) {
+    return null;
+  }
+
+  const chunks = await documentChunkRepository.findSimilar(knowledgeBaseDocumentId, queryVector, k);
+  if (chunks.length === 0) {
+    return null;
+  }
+
+  return chunks.map((c) => c.content).join('\n\n---\n\n');
+};

@@ -25,11 +25,13 @@ export interface InstitutionPerformanceContext {
     atRiskCount: number;
   }>;
   topCourses: Array<{
+    courseId: string;
     name: string;
     averageGrade: number | null;
     enrollmentCount: number;
   }>;
   bottomCourses: Array<{
+    courseId: string;
     name: string;
     averageGrade: number | null;
     enrollmentCount: number;

@@ -8,7 +8,7 @@ export const getWeeklySummarySchema = {
   params: z.object({ courseId: z.uuid() }),
 };
 
-const weeklyInsightsSchema = z.object({
+export const weeklyInsightsSchema = z.object({
   highlights: z.array(z.string()),
   concerns: z.array(z.string()),
   recommendations: z.array(z.string()),
@@ -51,6 +51,7 @@ const weeklySummarySchema = registry.register(
     ),
     classAverage: z.number().nullable(),
     insights: weeklyInsightsSchema.nullable(),
+    insightsGeneratedAt: z.iso.datetime().nullable(),
   }),
 );
 
@@ -61,10 +62,40 @@ registry.registerPath({
   request: { params: getWeeklySummarySchema.params },
   responses: {
     200: {
-      description: 'Weekly class intelligence summary with attendance, submissions, quizzes, at-risk students, and AI insights',
+      description:
+        'Weekly class intelligence summary with attendance, submissions, quizzes, and at-risk ' +
+        'students. insights is whatever was last cached for this course (or null if never ' +
+        'generated) — always fast, never calls the LLM.',
       content: { 'application/json': { schema: envelope(weeklySummarySchema) } },
     },
     401: unauthenticated,
     403: teacherOnly,
+  },
+});
+
+export const generateWeeklySummaryInsightsSchema = {
+  params: z.object({ courseId: z.uuid() }),
+};
+
+registry.registerPath({
+  method: 'post',
+  path: '/courses/{courseId}/weekly-intelligence/insights',
+  tags: ['Teacher Intelligence'],
+  request: { params: generateWeeklySummaryInsightsSchema.params },
+  responses: {
+    200: {
+      description:
+        'Regenerates and caches fresh AI insights from this course\'s current week data — ' +
+        'explicitly triggered, never automatic.',
+      content: {
+        'application/json': {
+          schema: envelope(z.object({ insights: weeklyInsightsSchema, generatedAt: z.iso.datetime() })),
+        },
+      },
+    },
+    401: unauthenticated,
+    403: teacherOnly,
+    404: { description: 'Course not found' },
+    502: { description: 'The LLM could not produce valid insights after a retry' },
   },
 });

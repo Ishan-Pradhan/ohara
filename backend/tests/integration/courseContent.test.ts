@@ -1,7 +1,11 @@
 import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
+import PDFDocument from 'pdfkit';
 
 vi.mock('../../src/services/email.service.js', async () => {
   const { emailServiceStub } = await import('../helpers/auth.js');
@@ -10,6 +14,10 @@ vi.mock('../../src/services/email.service.js', async () => {
 
 vi.mock('../../src/services/llm.service.js', () => ({
   generateJson: vi.fn(),
+}));
+
+vi.mock('../../src/services/embeddings.service.js', () => ({
+  embed: vi.fn(),
 }));
 
 const { app } = await import('../../src/app.js');
@@ -23,7 +31,13 @@ const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
 const { documentRepository } = await import('../../src/repositories/documents.repository.js');
+const { courseRepository } = await import('../../src/repositories/courses.repository.js');
+const { documentChunkRepository } = await import(
+  '../../src/repositories/documentChunks.repository.js'
+);
 const { generateJson } = await import('../../src/services/llm.service.js');
+const { embed } = await import('../../src/services/embeddings.service.js');
+const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_PDF = path.join(__dirname, '..', 'fixtures', 'sample.pdf');
@@ -87,9 +101,51 @@ const createReadyDocument = async (courseId: string, uploadedBy: string) =>
     status: 'ready',
   });
 
+/** Generates a minimal one-page PDF containing exactly the given text, saved
+ * to a fresh temp file — used to create a "syllabus" document with content
+ * distinct from SAMPLE_PDF, so a test can assert the skeleton call's prompt
+ * came from the syllabus and not from the document being structured. */
+const createPdfFile = (text: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const filePath = path.join(os.tmpdir(), `${randomUUID()}.pdf`);
+    const doc = new PDFDocument();
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => {
+      fs.writeFile(filePath, Buffer.concat(chunks)).then(() => resolve(filePath)).catch(reject);
+    });
+    doc.on('error', reject);
+    doc.text(text);
+    doc.end();
+  });
+
+/** Creates a "ready" document backed by a distinct, generated PDF — for the
+ * syllabus-document tests, which need content that's clearly not
+ * SAMPLE_PDF's. */
+const createReadySyllabusDocument = async (
+  courseId: string,
+  uploadedBy: string,
+  text: string,
+) => {
+  const filePath = await createPdfFile(text);
+  return documentRepository.create({
+    courseId,
+    uploadedBy,
+    filename: 'official-syllabus.pdf',
+    storageKey: filePath,
+    status: 'ready',
+  });
+};
+
+/** A valid, non-zero embedding of the model's dimension — cosine distance is
+ * undefined for the zero vector. Mirrors tests/integration/tutor.test.ts. */
+const vector = (value: number): number[] => new Array(EMBEDDING_DIMENSIONS).fill(value) as number[];
+
 beforeEach(async () => {
   await truncateAll();
   vi.mocked(generateJson).mockReset();
+  vi.mocked(embed).mockReset();
+  vi.mocked(embed).mockImplementation(async (texts: string[]) => texts.map(() => vector(0.1)));
 });
 
 afterAll(async () => {
@@ -194,6 +250,106 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     expect(modules).toHaveLength(1);
     const lessons = await Lesson.findAll({ where: { moduleId: modules[0]?.id } });
     expect(lessons).toHaveLength(2);
+  });
+
+  it('grounds module content generation in RAG-retrieved chunks, not the whole document', async () => {
+    // Regression test for the Groq 413 "request too large" fix: module
+    // content generation must search the document's own chunks (embedding
+    // the module's lesson titles/topics as the query) instead of sending
+    // the full extracted text, which is what originally exceeded Groq's
+    // on_demand tier's per-request token cap on anything beyond a few pages.
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    await documentChunkRepository.bulkCreate([
+      {
+        documentId: document.id,
+        chunkIndex: 0,
+        content: 'Chlorophyll absorbs light and passes energy to the electron transport chain.',
+        embedding: vector(0.1),
+      },
+    ]);
+    const cookies = await signInAs('admin@example.com', 'admin');
+    mockSuccessfulGeneration();
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    // First call is the skeleton (whole-document); second is this module's
+    // content call — its prompt must contain the retrieved chunk, not the
+    // (irrelevant, fixture-only) full sample.pdf text.
+    const [, moduleContentUserPrompt] = vi.mocked(generateJson).mock.calls[1]!;
+    expect(moduleContentUserPrompt).toContain(
+      'Chlorophyll absorbs light and passes energy to the electron transport chain.',
+    );
+  });
+
+  it('falls back to a short source-text slice when the document has no chunks', async () => {
+    // createReadyDocument never chunks the document (that's
+    // documents.test.ts's job) — this is the fallback path every other test
+    // in this file already exercises implicitly; asserted explicitly here
+    // so the fallback itself has direct coverage.
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+    mockSuccessfulGeneration();
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    expect(embed).toHaveBeenCalled();
+    const [, moduleContentUserPrompt] = vi.mocked(generateJson).mock.calls[1]!;
+    // sample.pdf's real extracted text — just needs to be non-empty and
+    // short (capped by MODULE_CONTENT_SOURCE_FALLBACK_CHARS), not empty.
+    expect((moduleContentUserPrompt as string).length).toBeGreaterThan(0);
+  });
+
+  it("uses the course's syllabus document to drive the skeleton, not the target document, when one is set", async () => {
+    // Regression test for the "structure must match the official syllabus"
+    // fix: when Course.syllabusDocumentId is set, the skeleton call's
+    // prompt must be built from THAT document's text, not the document
+    // being structured (:documentId in the URL) — even though both are
+    // "ready" documents that could otherwise be confused.
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const targetDocument = await createReadyDocument(course.id, admin.id);
+    const syllabusMarker = 'UNIT 1: Photosynthesis — Light reactions and Calvin cycle. UNIT 2: Cellular respiration.';
+    const syllabusDocument = await createReadySyllabusDocument(course.id, admin.id, syllabusMarker);
+    await courseRepository.setSyllabusDocument(course.id, syllabusDocument.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+    mockSuccessfulGeneration();
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${targetDocument.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    const [skeletonSystemPrompt, skeletonUserPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+    expect(skeletonUserPrompt).toContain(syllabusMarker);
+    // The extraction-mode system prompt, not the invent-a-grouping one —
+    // distinguishing language from courseSkeletonFromSyllabusSystemPrompt.
+    expect(skeletonSystemPrompt).toContain('TRANSCRIPTION task, not a design task');
+  });
+
+  it('falls back to inventing structure from the target document when no syllabus document is set', async () => {
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+    mockSuccessfulGeneration();
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    const [skeletonSystemPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+    expect(skeletonSystemPrompt).not.toContain('TRANSCRIPTION task');
   });
 
   it('appends rather than replacing on a second generation', async () => {

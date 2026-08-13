@@ -4,6 +4,7 @@ import { api } from '../../lib/axios.js';
 import {
   academicYearSchema,
   batchSchema,
+  batchCurrentPlacementSchema,
   classSchema,
   courseSchema,
   courseTeacherSchema,
@@ -13,6 +14,7 @@ import {
   type AcademicYear,
   type AssignCourseTeacherInput,
   type Batch,
+  type BatchCurrentPlacement,
   type Class,
   type Course,
   type CourseTeacher,
@@ -88,6 +90,11 @@ export const deleteBatch = async (id: string): Promise<void> => {
   await api.delete(`/admin/batches/${id}`);
 };
 
+export const fetchBatchCurrentPlacement = async (batchId: string): Promise<BatchCurrentPlacement[]> => {
+  const res = await api.get(`/admin/batches/${batchId}/current-placement`);
+  return z.array(batchCurrentPlacementSchema).parse(res.data.data);
+};
+
 export const fetchAcademicYears = async (): Promise<AcademicYear[]> => {
   const res = await api.get('/admin/academic-years');
   return z.array(academicYearSchema).parse(res.data.data);
@@ -112,8 +119,8 @@ export const deleteAcademicYear = async (id: string): Promise<void> => {
   await api.delete(`/admin/academic-years/${id}`);
 };
 
-export const fetchSections = async (): Promise<Section[]> => {
-  const res = await api.get('/admin/sections');
+export const fetchSections = async (params?: { classId?: string; batchId?: string }): Promise<Section[]> => {
+  const res = await api.get('/admin/sections', { params });
   return z.array(sectionSchema).parse(res.data.data);
 };
 
@@ -174,6 +181,10 @@ export const assignCourseTeacher = async (
 ): Promise<CourseTeacher> => {
   const res = await api.post(`/admin/courses/${courseId}/teachers`, input);
   return courseTeacherSchema.parse(res.data.data);
+};
+
+export const unassignCourseTeacher = async (courseId: string, teacherId: string): Promise<void> => {
+  await api.delete(`/admin/courses/${courseId}/teachers/${teacherId}`);
 };
 
 /** Public — the whole app (including the dashboard shell) needs the

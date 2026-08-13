@@ -6,6 +6,7 @@ const forbidden = { description: 'Caller does not have access to this course' };
 
 export const getAttendanceTrendsSchema = {
   params: z.object({ courseId: z.uuid() }),
+  query: z.object({ sectionId: z.uuid().optional() }),
 };
 
 const attendanceTrendPointSchema = z.object({
@@ -25,10 +26,13 @@ registry.registerPath({
   method: 'get',
   path: '/courses/{courseId}/attendance-trends',
   tags: ['Attendance Trends'],
-  request: { params: getAttendanceTrendsSchema.params },
+  request: { params: getAttendanceTrendsSchema.params, query: getAttendanceTrendsSchema.query },
   responses: {
     200: {
-      description: 'Per-session attendance counts ordered by date for trend charting',
+      description:
+        'Per-session attendance counts ordered by date for trend charting. Pass ?sectionId= to ' +
+        'scope to one section; omitted, this aggregates across every section in whichever academic ' +
+        'year is currently relevant for the class.',
       content: { 'application/json': { schema: envelope(attendanceTrendsSchema) } },
     },
     401: unauthenticated,

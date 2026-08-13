@@ -24,3 +24,7 @@ export const listStudentFlagsSchema = {
 export const resolveFlagSchema = {
   params: z.object({ id: z.uuid() }),
 };
+
+export const getMyStudentSchema = {
+  params: z.object({ studentId: z.uuid() }),
+};

@@ -6,14 +6,19 @@ import { classRepository } from '../repositories/classes.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { userRepository } from '../repositories/users.repository.js';
 import { interventionRepository } from '../repositories/intervention.repository.js';
+import { adminCopilotRepository } from '../repositories/adminCopilot.repository.js';
 import { computeCourseMetrics } from './classIntelligence.controller.js';
 import { generateText } from '../services/llm.service.js';
 import { adminCopilotSystemPrompt, adminCopilotUserPrompt } from '../prompts/adminCopilot.prompt.js';
+import { formatCopilotHistory } from '../utils/copilotHistory.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { USER_ROLES } from '../constants/index.js';
 
+/** The deterministic data context every question is grounded in — built
+ * fresh per message, since institution data can change between messages
+ * in the same conversation. */
 async function buildAdminDataContext(): Promise<string> {
   const [programs, classes, allCourses, allStudents, allTeachers] = await Promise.all([
     programRepository.findAll(),
@@ -78,20 +83,119 @@ async function buildAdminDataContext(): Promise<string> {
   return lines.join('\n');
 }
 
-export const adminCopilotQuery = asyncHandler(
+export const createCopilotConversation = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { question } = req.validated?.body as { question: string };
+    const adminId = req.user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
 
-    if (!question || question.trim().length === 0) {
-      throw new ApiError(400, 'Question is required');
+    const conversation = await adminCopilotRepository.createConversation(adminId);
+    return ok(res, conversation.toJSON(), 'Conversation created', 201);
+  },
+);
+
+export const getCopilotConversations = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const adminId = req.user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const conversations = await adminCopilotRepository.findAdminConversations(adminId);
+    return ok(res, conversations.map((c) => c.toJSON()), 'Conversations retrieved');
+  },
+);
+
+export const getCopilotConversation = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { conversationId } = req.validated?.params as { conversationId: string };
+    const adminId = req.user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const conversation = await adminCopilotRepository.findConversationWithMessages(conversationId);
+    if (!conversation) {
+      throw new ApiError(404, 'Conversation not found');
+    }
+    if (conversation.adminId !== adminId) {
+      throw new ApiError(403, 'Access denied');
     }
 
-    const dataContext = await buildAdminDataContext();
-    const answer = await generateText(
-      adminCopilotSystemPrompt(),
-      adminCopilotUserPrompt(question, dataContext),
+    return ok(res, conversation.toJSON(), 'Conversation retrieved');
+  },
+);
+
+export const sendCopilotMessage = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { conversationId } = req.validated?.params as { conversationId: string };
+    const { message } = req.validated?.body as { message: string };
+    const adminId = req.user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const conversation = await adminCopilotRepository.findConversation(conversationId);
+    if (!conversation) {
+      throw new ApiError(404, 'Conversation not found');
+    }
+    if (conversation.adminId !== adminId) {
+      throw new ApiError(403, 'Access denied');
+    }
+
+    // Last 2 exchanges (4 messages), fetched before this turn's messages
+    // exist so it's genuinely "what came before", not including itself.
+    const priorMessages = await adminCopilotRepository.findRecentMessages(conversationId, 4);
+    const history = formatCopilotHistory(
+      priorMessages.map((m) => ({ role: m.role, content: m.content })),
     );
 
-    return ok(res, { answer, dataContext });
+    const nextSeq = (await adminCopilotRepository.getMaxSeq(conversationId)) + 1;
+
+    const userMessage = await adminCopilotRepository.createMessage(
+      conversationId,
+      nextSeq,
+      'user',
+      message,
+    );
+
+    const dataContext = await buildAdminDataContext();
+
+    if (conversation.title === 'New conversation') {
+      const title = message.length > 60 ? message.slice(0, 57) + '...' : message;
+      await conversation.update({ title });
+    }
+
+    let assistantContent: string;
+    try {
+      assistantContent = await generateText(
+        adminCopilotSystemPrompt(),
+        adminCopilotUserPrompt(message, dataContext, history),
+      );
+    } catch {
+      assistantContent = 'I was unable to generate a response. Please try again.';
+    }
+
+    const assistantMessage = await adminCopilotRepository.createMessage(
+      conversationId,
+      nextSeq + 1,
+      'assistant',
+      assistantContent.trim(),
+      { dataContext },
+    );
+
+    return ok(res, { userMessage: userMessage.toJSON(), assistantMessage: assistantMessage.toJSON() }, 'Message sent');
+  },
+);
+
+export const deleteCopilotConversation = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { conversationId } = req.validated?.params as { conversationId: string };
+    const adminId = req.user?.id;
+    if (!adminId) throw new ApiError(401, 'Unauthorized');
+
+    const conversation = await adminCopilotRepository.findConversation(conversationId);
+    if (!conversation) {
+      throw new ApiError(404, 'Conversation not found');
+    }
+    if (conversation.adminId !== adminId) {
+      throw new ApiError(403, 'Access denied');
+    }
+
+    await adminCopilotRepository.deleteConversation(conversationId);
+    return ok(res, null, 'Conversation deleted');
   },
 );

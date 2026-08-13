@@ -10,6 +10,10 @@ vi.mock('../../src/services/llm.service.js', () => ({
   generateJson: vi.fn(),
 }));
 
+vi.mock('../../src/services/embeddings.service.js', () => ({
+  embed: vi.fn(),
+}));
+
 const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { cookiesFrom } = await import('../helpers/auth.js');
@@ -25,6 +29,13 @@ const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
 const { generateJson } = await import('../../src/services/llm.service.js');
+const { embed } = await import('../../src/services/embeddings.service.js');
+const { documentRepository } = await import('../../src/repositories/documents.repository.js');
+const { documentChunkRepository } = await import(
+  '../../src/repositories/documentChunks.repository.js'
+);
+const { courseRepository } = await import('../../src/repositories/courses.repository.js');
+const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
 
 const PASSWORD = 'hunter2secret';
 
@@ -69,9 +80,17 @@ const generateQuizAs = async (cookies: string[], courseId: string) => {
     .send({ title: 'Arithmetic Quiz', topic: 'Basic addition', numQuestions: 3 });
 };
 
+/** A valid, non-zero embedding of the model's dimension — cosine distance is
+ * undefined for the zero vector. Mirrors tests/integration/tutor.test.ts. */
+const vector = (value: number): number[] => new Array(EMBEDDING_DIMENSIONS).fill(value) as number[];
+
 beforeEach(async () => {
   await truncateAll();
   vi.mocked(generateJson).mockReset();
+  vi.mocked(embed).mockReset();
+  vi.mocked(embed).mockImplementation(async (texts: string[]) =>
+    texts.map(() => vector(0.1)),
+  );
 });
 
 afterAll(async () => {
@@ -94,6 +113,72 @@ describe('POST /courses/:courseId/quizzes/generate', () => {
     expect(res.body.data.status).toBe('draft');
     expect(res.body.data.questions).toHaveLength(3);
     expect(res.body.data.questions[0]).toMatchObject({ type: 'mcq', correctIndex: 1 });
+  });
+
+  it('a topic-only request with no course material sends the bare topic to the LLM (unchanged fallback)', async () => {
+    // Regression guard for the RAG-grounding change below: a course with no
+    // knowledge base document selected must behave exactly as before —
+    // sourceText is just the topic string, and embed() is never called
+    // (nothing to search).
+    const { course, teacherCookies } = await setupCourseWithTeacherAndStudent();
+    vi.mocked(generateJson).mockResolvedValueOnce(validQuizJson);
+
+    const res = await generateQuizAs(teacherCookies, course.id);
+
+    expect(res.status).toBe(201);
+    expect(embed).not.toHaveBeenCalled();
+    const [, userPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+    expect(userPrompt).toContain('Basic addition');
+  });
+
+  it('a topic-only request grounds in the course knowledge base document via RAG', async () => {
+    const { course, teacher, teacherCookies } = await setupCourseWithTeacherAndStudent();
+    const document = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: teacher.id,
+      filename: 'arithmetic.pdf',
+      storageKey: '/tmp/arithmetic.pdf',
+      status: 'ready',
+    });
+    await documentChunkRepository.bulkCreate([
+      {
+        documentId: document.id,
+        chunkIndex: 0,
+        content: 'Addition combines two numbers into a sum.',
+        embedding: vector(0.1),
+      },
+    ]);
+    await courseRepository.setKnowledgeBaseDocument(course.id, document.id);
+    vi.mocked(generateJson).mockResolvedValueOnce(validQuizJson);
+
+    const res = await generateQuizAs(teacherCookies, course.id);
+
+    expect(res.status).toBe(201);
+    expect(embed).toHaveBeenCalledWith(['Basic addition']);
+    const [, userPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+    expect(userPrompt).toContain('Addition combines two numbers into a sum.');
+  });
+
+  it('a topic-only request falls back to the bare topic when the knowledge base document has no relevant chunks', async () => {
+    // knowledgeBaseDocumentId is set, but findSimilar returns nothing
+    // (empty document) — must still fall back to the bare topic rather than
+    // sending an empty sourceText.
+    const { course, teacher, teacherCookies } = await setupCourseWithTeacherAndStudent();
+    const document = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: teacher.id,
+      filename: 'empty.pdf',
+      storageKey: '/tmp/empty.pdf',
+      status: 'ready',
+    });
+    await courseRepository.setKnowledgeBaseDocument(course.id, document.id);
+    vi.mocked(generateJson).mockResolvedValueOnce(validQuizJson);
+
+    const res = await generateQuizAs(teacherCookies, course.id);
+
+    expect(res.status).toBe(201);
+    const [, userPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+    expect(userPrompt).toContain('Basic addition');
   });
 });
 

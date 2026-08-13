@@ -10,9 +10,12 @@ import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeModule, serializeLesson } from '../serializers/courseContent.serializer.js';
 import { extractText } from '../services/pdf.service.js';
 import { generateJson } from '../services/llm.service.js';
+import { retrieveKnowledgeBaseMaterial } from './documents.controller.js';
 import {
   courseSkeletonSystemPrompt,
   courseSkeletonUserPrompt,
+  courseSkeletonFromSyllabusSystemPrompt,
+  courseSkeletonFromSyllabusUserPrompt,
   courseSkeletonCorrectivePrompt,
   moduleContentSystemPrompt,
   moduleContentUserPrompt,
@@ -22,7 +25,12 @@ import {
   generatedCourseSkeletonSchema,
   generatedModuleContentSchema,
 } from '../validations/courseContent.validation.js';
-import { DOCUMENT_STATUS, MODULE_CONTENT_MAX_COMPLETION_TOKENS } from '../constants/index.js';
+import {
+  DOCUMENT_STATUS,
+  MODULE_CONTENT_MAX_COMPLETION_TOKENS,
+  MODULE_CONTENT_RETRIEVAL_K,
+  MODULE_CONTENT_SOURCE_FALLBACK_CHARS,
+} from '../constants/index.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -32,18 +40,24 @@ import type { Module } from '../models/modules.model.js';
 
 /** Phase 1: one call over the whole source, producing just module/lesson
  * titles + key topics — see courseStructure.prompt.ts for why content is
- * deliberately not requested here. Retries once on invalid JSON. */
-const generateSkeleton = async (sourceText: string) => {
-  const userPrompt = courseSkeletonUserPrompt(sourceText);
-  const raw = await generateJson(courseSkeletonSystemPrompt, userPrompt);
+ * deliberately not requested here. Retries once on invalid JSON.
+ *
+ * When syllabusText is given (the course has a Course.syllabusDocumentId —
+ * see generateCourseStructure below), this EXTRACTS the structure from that
+ * official syllabus instead of inventing one from sourceText — sourceText
+ * is unused in that case, kept as a parameter only so the corrective retry
+ * and error handling stay identical between the two modes. */
+const generateSkeleton = async (sourceText: string, syllabusText: string | null) => {
+  const systemPrompt = syllabusText ? courseSkeletonFromSyllabusSystemPrompt : courseSkeletonSystemPrompt;
+  const userPrompt = syllabusText
+    ? courseSkeletonFromSyllabusUserPrompt(syllabusText)
+    : courseSkeletonUserPrompt(sourceText);
+  const raw = await generateJson(systemPrompt, userPrompt);
 
   const firstAttempt = tryParseSkeleton(raw);
   if (firstAttempt.success) return firstAttempt.data;
 
-  const retryRaw = await generateJson(
-    courseSkeletonSystemPrompt,
-    courseSkeletonCorrectivePrompt(raw),
-  );
+  const retryRaw = await generateJson(systemPrompt, courseSkeletonCorrectivePrompt(raw));
   const secondAttempt = tryParseSkeleton(retryRaw);
   if (secondAttempt.success) return secondAttempt.data;
 
@@ -62,19 +76,58 @@ const tryParseSkeleton = (raw: string) => {
 const placeholderContent = (lesson: { title: string; keyTopics: string[] }): string =>
   `_Content generation failed for this lesson. Topics: ${lesson.keyTopics.join(', ') || lesson.title}. Edit this lesson manually or try Generate structure again._`;
 
+/** A module's lesson titles + key topics, joined into one query string for
+ * RAG retrieval (resolveModuleSourceText below) — stands in for "what is
+ * this module about" since there's no single user question to embed here,
+ * unlike the tutor/quiz/lesson-planner's retrieval callers. */
+const buildModuleRetrievalQuery = (
+  moduleTitle: string,
+  lessons: { title: string; keyTopics: string[] }[],
+): string => [moduleTitle, ...lessons.flatMap((l) => [l.title, ...l.keyTopics])].join(' ');
+
+/** RAG-retrieves the chunks relevant to one module instead of resending the
+ * whole document — the fix for Groq's on_demand tier rejecting the
+ * module-content call outright once a document is more than a few pages
+ * (see MODULE_CONTENT_RETRIEVAL_K). Falls back to a short, hard-capped
+ * slice of the full source text only if retrieval finds nothing, which
+ * shouldn't happen for a status: 'ready' document — ingestion chunks it
+ * before marking it ready — but a document with genuinely no chunks
+ * (id mismatch, deleted chunks) must not fall back to sending the entire
+ * fallbackSourceText, which is exactly the request-too-large failure this
+ * replaces. */
+const resolveModuleSourceText = async (
+  documentId: string,
+  fallbackSourceText: string,
+  moduleTitle: string,
+  lessons: { title: string; keyTopics: string[] }[],
+): Promise<string> => {
+  const query = buildModuleRetrievalQuery(moduleTitle, lessons);
+  const material = await retrieveKnowledgeBaseMaterial(documentId, query, MODULE_CONTENT_RETRIEVAL_K);
+  if (material) return material;
+
+  logger.warn(
+    { documentId, moduleTitle },
+    'No relevant chunks found for module content generation; falling back to a short source slice',
+  );
+  return fallbackSourceText.slice(0, MODULE_CONTENT_SOURCE_FALLBACK_CHARS);
+};
+
 /** Phase 2: one call per MODULE — every lesson in that module written in
  * one response, not the whole course in one call (rations depth too thin
- * across many items) and not one call per lesson (resends the full source
- * text so often it burns through a Groq token quota fast). See
- * courseStructure.prompt.ts. Falls back to a placeholder per lesson rather
- * than aborting the rest of the generation if this module's call never
- * produces valid JSON, or omits a lesson the skeleton asked for. */
+ * across many items) and not one call per lesson (would mean re-embedding
+ * and re-searching per lesson for no benefit — a module's lessons share
+ * enough context to search together). See courseStructure.prompt.ts.
+ * Falls back to a placeholder per lesson rather than aborting the rest of
+ * the generation if this module's call never produces valid JSON, or omits
+ * a lesson the skeleton asked for. */
 const generateModuleContent = async (
-  sourceText: string,
+  documentId: string,
+  fallbackSourceText: string,
   moduleTitle: string,
   lessons: { title: string; keyTopics: string[] }[],
 ): Promise<Map<string, string>> => {
-  const userPrompt = moduleContentUserPrompt(sourceText, moduleTitle, lessons);
+  const moduleSourceText = await resolveModuleSourceText(documentId, fallbackSourceText, moduleTitle, lessons);
+  const userPrompt = moduleContentUserPrompt(moduleSourceText, moduleTitle, lessons);
   const raw = await generateJson(
     moduleContentSystemPrompt,
     userPrompt,
@@ -108,6 +161,32 @@ const tryParseModuleContent = (raw: string) => {
   }
 };
 
+/** If the course has a Course.syllabusDocumentId set, re-extracts that
+ * document's own text (truncated the same way as the target document) for
+ * generateSkeleton's syllabus-extraction mode. Returns null — never throws
+ * — on any failure (no syllabus set, document missing, unreadable file):
+ * generateCourseStructure falls back to inventing structure from the
+ * target document, same as before this feature existed, rather than
+ * failing the whole generation over a syllabus-specific problem. */
+const resolveSyllabusText = async (courseId: string): Promise<string | null> => {
+  const course = await courseRepository.findById(courseId);
+  if (!course?.syllabusDocumentId) return null;
+
+  try {
+    const syllabusDocument = await documentRepository.findById(course.syllabusDocumentId);
+    if (!syllabusDocument) return null;
+    const syllabusBuffer = await fs.readFile(syllabusDocument.storageKey);
+    const syllabusFullText = await extractText(syllabusBuffer);
+    return syllabusFullText.slice(0, env.MAX_LLM_SOURCE_CHARS);
+  } catch (err) {
+    logger.warn(
+      { err, courseId, syllabusDocumentId: course.syllabusDocumentId },
+      'Could not read the syllabus document; falling back to inventing structure from the target document',
+    );
+    return null;
+  }
+};
+
 export const generateCourseStructure = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { courseId, documentId } = req.validated?.params as {
@@ -130,7 +209,8 @@ export const generateCourseStructure = asyncHandler(
     // doc, not solved here).
     const sourceText = fullText.slice(0, env.MAX_LLM_SOURCE_CHARS);
 
-    const skeleton = await generateSkeleton(sourceText);
+    const syllabusText = await resolveSyllabusText(courseId);
+    const skeleton = await generateSkeleton(sourceText, syllabusText);
 
     // Phase 2 — one call per module, sequential rather than parallel: this is
     // already several Groq calls for one generation, and firing them
@@ -139,6 +219,7 @@ export const generateCourseStructure = asyncHandler(
     const modulesWithContent: { title: string; lessons: { title: string; keyTopics: string[]; content: string }[] }[] = [];
     for (const generatedModule of skeleton.modules) {
       const contentByLessonTitle = await generateModuleContent(
+        documentId,
         sourceText,
         generatedModule.title,
         generatedModule.lessons,

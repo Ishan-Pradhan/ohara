@@ -11,6 +11,10 @@ vi.mock('../../src/services/llm.service.js', () => ({
   generateText: vi.fn(),
 }));
 
+vi.mock('../../src/services/embeddings.service.js', () => ({
+  embed: vi.fn(),
+}));
+
 const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
 const { cookiesFrom } = await import('../helpers/auth.js');
@@ -26,6 +30,13 @@ const { courseTeacherRepository } = await import(
   '../../src/repositories/courseTeachers.repository.js'
 );
 const { generateText, generateJson } = await import('../../src/services/llm.service.js');
+const { embed } = await import('../../src/services/embeddings.service.js');
+const { documentRepository } = await import('../../src/repositories/documents.repository.js');
+const { documentChunkRepository } = await import(
+  '../../src/repositories/documentChunks.repository.js'
+);
+const { courseRepository } = await import('../../src/repositories/courses.repository.js');
+const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
 
 const PASSWORD = 'hunter2secret';
 type Role = 'admin' | 'teacher' | 'student' | 'alumni';
@@ -41,10 +52,16 @@ const signInAs = async (email: string, role: Role): Promise<string[]> => {
   return cookiesFrom(login);
 };
 
+/** A valid, non-zero embedding of the model's dimension — cosine distance is
+ * undefined for the zero vector. Mirrors tests/integration/tutor.test.ts. */
+const vector = (value: number): number[] => new Array(EMBEDDING_DIMENSIONS).fill(value) as number[];
+
 beforeEach(async () => {
   await truncateAll();
   vi.mocked(generateText).mockReset();
   vi.mocked(generateJson).mockReset();
+  vi.mocked(embed).mockReset();
+  vi.mocked(embed).mockImplementation(async (texts: string[]) => texts.map(() => vector(0.1)));
 });
 
 afterAll(async () => {
@@ -315,6 +332,54 @@ describe('Teacher Intelligence', () => {
       expect(res.body.data.activities).toHaveLength(2);
       expect(res.body.data.assessmentIdeas).toHaveLength(1);
       expect(generateJson).toHaveBeenCalledTimes(1);
+      // No knowledge base document selected on this course — must not touch
+      // embeddings at all, same fallback behavior as before this change.
+      expect(embed).not.toHaveBeenCalled();
+    });
+
+    it('grounds the plan in the course knowledge base document via RAG when one is selected', async () => {
+      await createAcademicYear({ isCurrent: true });
+      const course = await createCourse();
+      const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
+      await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+      const document = await documentRepository.create({
+        courseId: course.id,
+        uploadedBy: teacher.id,
+        filename: 'algebra.pdf',
+        storageKey: '/tmp/algebra.pdf',
+        status: 'ready',
+      });
+      await documentChunkRepository.bulkCreate([
+        {
+          documentId: document.id,
+          chunkIndex: 0,
+          content: 'A variable represents an unknown quantity in an equation.',
+          embedding: vector(0.1),
+        },
+      ]);
+      await courseRepository.setKnowledgeBaseDocument(course.id, document.id);
+
+      const teacherCookies = await signInAs(teacher.email, 'teacher');
+
+      vi.mocked(generateJson).mockResolvedValueOnce(
+        JSON.stringify({
+          title: 'Introduction to Algebra',
+          objectives: ['Understand variables'],
+          outline: [{ section: 'Main lesson', durationMinutes: 45, description: 'Teach variables' }],
+          activities: [{ name: 'Guided practice', type: 'practice', description: 'Solve equations', durationMinutes: 45 }],
+          assessmentIdeas: ['Exit ticket'],
+        }),
+      );
+
+      const res = await request(app)
+        .post(`/api/v1/courses/${course.id}/lesson-plan`)
+        .set('Cookie', teacherCookies)
+        .send({ topic: 'Introduction to Algebra', durationMinutes: 45 });
+
+      expect(res.status).toBe(200);
+      expect(embed).toHaveBeenCalledWith(['Introduction to Algebra']);
+      const [, userPrompt] = vi.mocked(generateJson).mock.calls[0]!;
+      expect(userPrompt).toContain('A variable represents an unknown quantity in an equation.');
     });
   });
 
@@ -371,6 +436,38 @@ describe('Teacher Intelligence', () => {
 
       expect(listConvs.status).toBe(200);
       expect(listConvs.body.data).toHaveLength(1);
+    });
+
+    it('includes recent conversation history in the prompt for a follow-up message', async () => {
+      await createAcademicYear({ isCurrent: true });
+      const course = await createCourse();
+      const teacher = await createTeacherUser({ email: `teacher-${Date.now()}@example.com` });
+      await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+      const teacherCookies = await signInAs(teacher.email, 'teacher');
+
+      const createConv = await request(app)
+        .post(`/api/v1/courses/${course.id}/copilot/conversations`)
+        .set('Cookie', teacherCookies);
+      const convId = createConv.body.data.id;
+
+      vi.mocked(generateText).mockResolvedValueOnce('Alice and Bob are the top performers.');
+      await request(app)
+        .post(`/api/v1/courses/${course.id}/copilot/conversations/${convId}/messages`)
+        .set('Cookie', teacherCookies)
+        .send({ message: 'Who are the top performers?' });
+
+      vi.mocked(generateText).mockResolvedValueOnce('Yes, you outperform the department average.');
+      const followUp = await request(app)
+        .post(`/api/v1/courses/${course.id}/copilot/conversations/${convId}/messages`)
+        .set('Cookie', teacherCookies)
+        .send({ message: 'Do I beat them?' });
+
+      expect(followUp.status).toBe(200);
+      expect(generateText).toHaveBeenCalledTimes(2);
+      const secondCallPrompt = vi.mocked(generateText).mock.calls[1]?.[1] as string;
+      expect(secondCallPrompt).toContain('Who are the top performers?');
+      expect(secondCallPrompt).toContain('Alice and Bob are the top performers.');
+      expect(secondCallPrompt).toContain('Do I beat them?');
     });
 
     it('returns 403 when a student tries to access copilot', async () => {

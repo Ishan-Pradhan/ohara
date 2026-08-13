@@ -182,6 +182,27 @@ export const updateBatch = asyncHandler(
   },
 );
 
+/** Which class(es)/section(s) this batch is currently placed in — powers
+ * marking/auto-selecting "current" in a batch picker that otherwise browses
+ * the batch's full semester history (GET /admin/classes and
+ * /admin/sections's own `batchId` filters deliberately return every
+ * semester the batch has ever passed through, not just this). Usually one
+ * entry; can be more than one if the batch's cohort isn't uniformly
+ * promoted yet. */
+export const getBatchCurrentPlacement = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.validated?.params as { id: string };
+
+    const batch = await batchRepository.findById(id);
+    if (!batch) {
+      throw new ApiError(404, 'Batch not found');
+    }
+
+    const placements = await classMembershipRepository.findCurrentForBatch(id);
+    return ok(res, placements, 'Current placement retrieved');
+  },
+);
+
 export const deleteBatch = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const { id } = req.validated?.params as { id: string };
@@ -311,11 +332,12 @@ export const createSection = asyncHandler(
 
 export const listSections = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { classId, academicYearId } = req.validated?.query as {
+    const { classId, academicYearId, batchId } = req.validated?.query as {
       classId?: string;
       academicYearId?: string;
+      batchId?: string;
     };
-    const sections = await sectionRepository.findAll({ classId, academicYearId });
+    const sections = await sectionRepository.findAll({ classId, academicYearId, batchId });
     const counts = await classMembershipRepository.countBySections(sections.map((s) => s.id));
     return ok(
       res,
@@ -516,6 +538,24 @@ export const assignCourseTeacher = asyncHandler(
       'Teacher assigned',
       201,
     );
+  },
+);
+
+export const unassignCourseTeacher = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { courseId, teacherId } = req.validated?.params as { courseId: string; teacherId: string };
+
+    const course = await courseRepository.findById(courseId);
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    const removed = await courseTeacherRepository.unassign(courseId, teacherId);
+    if (!removed) {
+      throw new ApiError(404, 'This teacher is not assigned to this course');
+    }
+
+    return ok(res, null, 'Teacher unassigned');
   },
 );
 

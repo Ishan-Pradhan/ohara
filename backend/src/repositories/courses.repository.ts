@@ -40,4 +40,22 @@ export const courseRepository = {
     if (!course) return null;
     return await course.update({ isPublished });
   },
+
+  setKnowledgeBaseDocument: async (
+    id: string,
+    documentId: string | null,
+  ): Promise<Course | null> => {
+    const course = await Course.findByPk(id);
+    if (!course) return null;
+    return await course.update({ knowledgeBaseDocumentId: documentId });
+  },
+
+  setSyllabusDocument: async (
+    id: string,
+    documentId: string | null,
+  ): Promise<Course | null> => {
+    const course = await Course.findByPk(id);
+    if (!course) return null;
+    return await course.update({ syllabusDocumentId: documentId });
+  },
 };

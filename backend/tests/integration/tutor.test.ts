@@ -95,56 +95,131 @@ afterAll(async () => {
  * fill instead. */
 const vector = (value: number): number[] => new Array(EMBEDDING_DIMENSIONS).fill(value) as number[];
 
-describe('documentChunkRepository.findSimilar', () => {
-  it('only returns chunks from the target course, from ready documents', async () => {
-    const courseA = await createCourse();
-    const courseB = await createCourse();
-    const uploader = await createTeacherUser();
+/** Any two constant-fill vectors point in the exact same direction (one is
+ * just a positive scalar multiple of the other), so `vector(a)` vs `vector(b)`
+ * always has cosine distance 0 regardless of a/b — useless for testing a
+ * distance *threshold*. This one-hot vector points in a genuinely different
+ * direction from every `vector(...)` fixture (cosine distance ≈ 0.95 against
+ * any of them), standing in for "an unrelated query/chunk" in threshold tests. */
+const orthogonalVector = (): number[] => {
+  const v = new Array(EMBEDDING_DIMENSIONS).fill(0) as number[];
+  v[0] = 1;
+  return v;
+};
 
-    const readyDocumentInCourseA = await documentRepository.create({
-      courseId: courseA.id,
+/** Seeds a course with one ready document and one chunk, and selects that
+ * document as the course's knowledge base, so the tutor's up-front "does
+ * this course have any material" check (tutorAgent.ts) passes and the agent
+ * loop actually runs. Needed by every route-level test below that isn't
+ * itself testing the zero-material short-circuit. */
+const seedCourseWithMaterial = async (courseId: string): Promise<void> => {
+  const teacher = await createTeacherUser();
+  const document = await documentRepository.create({
+    courseId,
+    uploadedBy: teacher.id,
+    filename: 'lecture-1.pdf',
+    storageKey: '/tmp/lecture-1.pdf',
+    status: 'ready',
+  });
+  await documentChunkRepository.bulkCreate([
+    {
+      documentId: document.id,
+      chunkIndex: 0,
+      content: 'Photosynthesis converts light energy into chemical energy.',
+      embedding: vector(0.1),
+    },
+  ]);
+  await courseRepository.setKnowledgeBaseDocument(courseId, document.id);
+};
+
+describe('documentChunkRepository.findSimilar', () => {
+  it('only returns chunks from the target document, and only when it is ready', async () => {
+    // Scoped by documentId, not courseId — a course can have several
+    // uploaded documents (readyDocument and anotherReadyDocument both belong
+    // to the same course here), but findSimilar only ever searches the one
+    // document it's given (courses.knowledgeBaseDocumentId picks which).
+    const uploader = await createTeacherUser();
+    const course = await createCourse();
+
+    const readyDocument = await documentRepository.create({
+      courseId: course.id,
       uploadedBy: uploader.id,
-      filename: 'a-ready.pdf',
-      storageKey: '/tmp/a-ready.pdf',
+      filename: 'ready.pdf',
+      storageKey: '/tmp/ready.pdf',
       status: 'ready',
     });
-    const processingDocumentInCourseA = await documentRepository.create({
-      courseId: courseA.id,
+    const anotherReadyDocument = await documentRepository.create({
+      courseId: course.id,
       uploadedBy: uploader.id,
-      filename: 'a-processing.pdf',
-      storageKey: '/tmp/a-processing.pdf',
+      filename: 'another-ready.pdf',
+      storageKey: '/tmp/another-ready.pdf',
+      status: 'ready',
+    });
+    const processingDocument = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: uploader.id,
+      filename: 'processing.pdf',
+      storageKey: '/tmp/processing.pdf',
       status: 'processing',
     });
-    const readyDocumentInCourseB = await documentRepository.create({
-      courseId: courseB.id,
-      uploadedBy: uploader.id,
-      filename: 'b-ready.pdf',
-      storageKey: '/tmp/b-ready.pdf',
-      status: 'ready',
-    });
 
-    const [readyChunkInCourseA] = await documentChunkRepository.bulkCreate([
-      { documentId: readyDocumentInCourseA.id, chunkIndex: 0, content: 'a-ready', embedding: vector(0.1) },
+    const [readyChunk] = await documentChunkRepository.bulkCreate([
+      { documentId: readyDocument.id, chunkIndex: 0, content: 'ready', embedding: vector(0.1) },
     ]);
-    const [chunkOnProcessingDocumentInCourseA] = await documentChunkRepository.bulkCreate([
-      {
-        documentId: processingDocumentInCourseA.id,
-        chunkIndex: 0,
-        content: 'a-processing',
-        embedding: vector(0.2),
-      },
+    await documentChunkRepository.bulkCreate([
+      { documentId: readyDocument.id, chunkIndex: 1, content: 'ready-still-not-queried', embedding: vector(0.15) },
     ]);
-    const [chunkInCourseB] = await documentChunkRepository.bulkCreate([
-      { documentId: readyDocumentInCourseB.id, chunkIndex: 0, content: 'b-ready', embedding: vector(0.3) },
+    const [chunkOnAnotherDocument] = await documentChunkRepository.bulkCreate([
+      { documentId: anotherReadyDocument.id, chunkIndex: 0, content: 'another', embedding: vector(0.2) },
+    ]);
+    const [chunkOnProcessingDocument] = await documentChunkRepository.bulkCreate([
+      { documentId: processingDocument.id, chunkIndex: 0, content: 'processing', embedding: vector(0.3) },
     ]);
 
     const queryVector = vector(0.1);
-    const results = await documentChunkRepository.findSimilar(courseA.id, queryVector, 5);
+    const results = await documentChunkRepository.findSimilar(readyDocument.id, queryVector, 5);
     const chunkIds = results.map((c) => c.id);
 
-    expect(chunkIds).toContain(readyChunkInCourseA?.id);
-    expect(chunkIds).not.toContain(chunkInCourseB?.id);
-    expect(chunkIds).not.toContain(chunkOnProcessingDocumentInCourseA?.id);
+    expect(chunkIds).toContain(readyChunk?.id);
+    expect(chunkIds).not.toContain(chunkOnAnotherDocument?.id);
+    expect(chunkIds).not.toContain(chunkOnProcessingDocument?.id);
+
+    // The same document while it's still processing (not yet ready) must
+    // return nothing, even though chunks already exist for it.
+    const resultsWhileProcessing = await documentChunkRepository.findSimilar(
+      processingDocument.id,
+      queryVector,
+      5,
+    );
+    expect(resultsWhileProcessing).toHaveLength(0);
+  });
+
+  it('excludes chunks beyond maxDistance, and is a no-op filter when maxDistance is omitted', async () => {
+    const uploader = await createTeacherUser();
+    const course = await createCourse();
+    const document = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: uploader.id,
+      filename: 'doc.pdf',
+      storageKey: '/tmp/doc.pdf',
+      status: 'ready',
+    });
+    const [nearChunk] = await documentChunkRepository.bulkCreate([
+      { documentId: document.id, chunkIndex: 0, content: 'on-topic', embedding: vector(0.1) },
+    ]);
+    const [farChunk] = await documentChunkRepository.bulkCreate([
+      { documentId: document.id, chunkIndex: 1, content: 'unrelated', embedding: orthogonalVector() },
+    ]);
+
+    const queryVector = vector(0.1);
+
+    // No threshold given: both come back (existing behavior, unaffected).
+    const unfiltered = await documentChunkRepository.findSimilar(document.id, queryVector, 5);
+    expect(unfiltered.map((c) => c.id).sort()).toEqual([nearChunk?.id, farChunk?.id].sort());
+
+    // Threshold given: only the chunk within it comes back.
+    const filtered = await documentChunkRepository.findSimilar(document.id, queryVector, 5, 0.45);
+    expect(filtered.map((c) => c.id)).toEqual([nearChunk?.id]);
   });
 });
 
@@ -189,6 +264,7 @@ describe('Tutor endpoints', () => {
         embedding: vector(0.1),
       },
     ]);
+    await courseRepository.setKnowledgeBaseDocument(course.id, readyDocument.id);
 
     const enrolledStudentCookie = await signInEnrolledStudent('enrolled@example.com', course.id);
 
@@ -221,6 +297,103 @@ describe('Tutor endpoints', () => {
       documentId: readyDocument.id,
       filename: 'lecture-1.pdf',
     });
+  });
+
+  it('search_course_material finds nothing relevant for an off-topic question, so the answer carries no bogus citation', async () => {
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+    const readyDocument = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: teacher.id,
+      filename: 'lecture-1.pdf',
+      storageKey: '/tmp/lecture-1.pdf',
+      status: 'ready',
+    });
+    await documentChunkRepository.bulkCreate([
+      {
+        documentId: readyDocument.id,
+        chunkIndex: 0,
+        content: 'Photosynthesis converts light energy into chemical energy.',
+        embedding: vector(0.1),
+      },
+    ]);
+    await courseRepository.setKnowledgeBaseDocument(course.id, readyDocument.id);
+
+    // The stored chunk embeds near vector(0.1) (the default mock); this
+    // question's embedding points in an unrelated direction — standing in
+    // for a genuinely off-topic query the way "king birendra" is unrelated
+    // to a software engineering syllabus's chunks.
+    vi.mocked(embed).mockImplementation(async (texts: string[]) =>
+      texts.map(() => orthogonalVector()),
+    );
+
+    const enrolledStudentCookie = await signInEnrolledStudent('offtopic@example.com', course.id);
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Off-topic' });
+    const conversationId = createRes.body.data.id;
+
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({
+        type: 'tool_calls',
+        calls: [{ id: 'call_1', name: 'search_course_material', arguments: '{"query":"something unrelated"}' }],
+      })
+      .mockResolvedValueOnce({ type: 'text', content: "The material doesn't cover this." });
+
+    const sendRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'Something entirely unrelated to this course' });
+
+    expect(sendRes.status).toBe(201);
+    // No sources were accumulated — the tool found nothing within
+    // TUTOR_RELEVANCE_MAX_DISTANCE, so there is nothing to cite, even though
+    // the document itself is ready and otherwise searchable.
+    expect(sendRes.body.data.assistantMessage.sources).toBeNull();
+  });
+
+  it('dedupes citations by document when several of the nearest chunks are from the same document', async () => {
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+    const readyDocument = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: teacher.id,
+      filename: 'lecture-1.pdf',
+      storageKey: '/tmp/lecture-1.pdf',
+      status: 'ready',
+    });
+    await documentChunkRepository.bulkCreate([
+      { documentId: readyDocument.id, chunkIndex: 0, content: 'chunk A', embedding: vector(0.1) },
+      { documentId: readyDocument.id, chunkIndex: 1, content: 'chunk B', embedding: vector(0.1) },
+      { documentId: readyDocument.id, chunkIndex: 2, content: 'chunk C', embedding: vector(0.1) },
+    ]);
+    await courseRepository.setKnowledgeBaseDocument(course.id, readyDocument.id);
+
+    const enrolledStudentCookie = await signInEnrolledStudent('dedupe@example.com', course.id);
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Dedup check' });
+    const conversationId = createRes.body.data.id;
+
+    vi.mocked(runAgentTurn)
+      .mockResolvedValueOnce({
+        type: 'tool_calls',
+        calls: [{ id: 'call_1', name: 'search_course_material', arguments: '{"query":"topic"}' }],
+      })
+      .mockResolvedValueOnce({ type: 'text', content: 'Grounded answer' });
+
+    const sendRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'Tell me about this' });
+
+    expect(sendRes.status).toBe(201);
+    // Three chunks matched, all from the same document — exactly one
+    // citation badge, not three duplicate ones.
+    expect(sendRes.body.data.assistantMessage.sources).toHaveLength(1);
+    expect(sendRes.body.data.assistantMessage.sources[0].documentId).toBe(readyDocument.id);
   });
 
   it('auto-titles a new conversation from the student\'s first message, ChatGPT-style', async () => {
@@ -260,7 +433,15 @@ describe('Tutor endpoints', () => {
     expect(listRes2.body.data[0].title).toBe('What is the capital of France?');
   });
 
-  it('returns a "no material" response when the course has no ready documents', async () => {
+  it('returns a "no material" response when the course has no ready documents, without ever calling the LLM', async () => {
+    // Regression test: this used to run the full agent loop even against a
+    // course with zero material, trusting the model to admit "no material"
+    // on its own — which it doesn't reliably do (Groq's
+    // llama-3.3-70b-versatile has been observed answering from its own
+    // knowledge instead). The fix is a deterministic pre-check in
+    // tutorAgent.ts, so this must resolve without runAgentTurn, generateText,
+    // or embed ever being invoked, and without any tool_call/tool_result
+    // rows in the conversation.
     const emptyCourse = await createCourse();
     const enrolledStudentCookie = await signInEnrolledStudent(
       'empty-course-student@example.com',
@@ -273,23 +454,6 @@ describe('Tutor endpoints', () => {
       .send({ title: 'Test' });
     const conversationId = createRes.body.data.id;
 
-    // With the agent loop, the "no material" hard branch now lives in the
-    // search_course_material tool handler and the stage-1 fallback, not in
-    // sendMessage itself. Mirror the "grounded" test's pattern: mock a
-    // tool_calls turn requesting search_course_material so the *real*
-    // handler runs against emptyCourse (zero ready documents/chunks), then
-    // mock the final text turn — this exercises the actual zero-chunk
-    // branch end-to-end instead of only proving mocked text propagates.
-    vi.mocked(runAgentTurn)
-      .mockResolvedValueOnce({
-        type: 'tool_calls',
-        calls: [{ id: 'call_1', name: 'search_course_material', arguments: '{"query":"anything"}' }],
-      })
-      .mockResolvedValueOnce({
-        type: 'text',
-        content: "There's no course material available yet to answer this question.",
-      });
-
     const sendRes = await request(app)
       .post(`/api/v1/courses/${emptyCourse.id}/tutor/conversations/${conversationId}/messages`)
       .set('Cookie', enrolledStudentCookie)
@@ -297,32 +461,24 @@ describe('Tutor endpoints', () => {
 
     expect(sendRes.status).toBe(201);
     expect(sendRes.body.data.assistantMessage.sources).toBeNull();
-    // The primary agent loop never falls back to stage-1's own generateText
-    // call in a successful run — that path is reserved for errors/cap-outs.
-    expect(generateText).not.toHaveBeenCalled();
     expect(sendRes.body.data.assistantMessage.content).toBe(
       "There's no course material available yet to answer this question.",
     );
+    expect(runAgentTurn).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+    expect(embed).not.toHaveBeenCalled();
 
-    // Prove the real executeSearchCourseMaterial handler actually ran
-    // against the empty course and hit its zero-chunk branch — not just
-    // that the mocked final-turn text made it through the response.
     const messagesRes = await request(app)
       .get(`/api/v1/courses/${emptyCourse.id}/tutor/conversations/${conversationId}/messages`)
       .set('Cookie', enrolledStudentCookie);
-    const toolResultMessage = messagesRes.body.data.find(
-      (m: { type: string }) => m.type === 'tool_result',
-    );
-    expect(toolResultMessage).toBeTruthy();
-    expect(toolResultMessage.toolResult).toMatchObject({
-      toolCallId: 'call_1',
-      content: 'No relevant material found for this query.',
-    });
-    expect(toolResultMessage.sources).toBeNull();
+    expect(
+      messagesRes.body.data.some((m: { type: string }) => m.type === 'tool_call' || m.type === 'tool_result'),
+    ).toBe(false);
   });
 
   it('sendMessage runs the agent loop and returns the final assistant message', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const enrolledStudentCookie = await signInEnrolledStudent('agent-loop@example.com', course.id);
 
     const createRes = await request(app)
@@ -353,6 +509,7 @@ describe('Tutor endpoints', () => {
     // own returned messageId must make each response correct regardless of
     // interleaving.
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const enrolledStudentCookie = await signInEnrolledStudent('double-submit@example.com', course.id);
 
     const createRes = await request(app)
@@ -395,6 +552,7 @@ describe('Tutor endpoints', () => {
 
   it('resumes a conversation from awaiting_student and flips status back to active', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const enrolledStudentCookie = await signInEnrolledStudent('resume@example.com', course.id);
 
     const createRes = await request(app)
@@ -423,6 +581,53 @@ describe('Tutor endpoints', () => {
       .set('Cookie', enrolledStudentCookie);
     const updated = conversations.body.data.find((c: { id: string }) => c.id === conversationId);
     expect(updated.status).toBe(TUTOR_CONVERSATION_STATUSES.ACTIVE);
+  });
+
+  it('does not offer ask_student again right after one unresolved clarifying question', async () => {
+    // Real incident (2026-08-12): a student got seven straight rounds of
+    // clarifying questions ("What area?" / "What aspects?" / "What's most
+    // important?") instead of ever being taught anything — including after
+    // saying "I don't know, I'm a beginner, you tell me." This is the
+    // deterministic backstop: after one text-only (ask_student-shaped) turn
+    // with no tool activity, ask_student is structurally removed from the
+    // next turn's tool list, so the model cannot ask a second one no matter
+    // what it decides.
+    const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
+    const enrolledStudentCookie = await signInEnrolledStudent('clarify@example.com', course.id);
+
+    const createRes = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ title: 'Clarify test' });
+    const conversationId = createRes.body.data.id;
+
+    // First turn: the model asks a clarifying question via ask_student.
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({
+      type: 'tool_calls',
+      calls: [{ id: 'call_1', name: 'ask_student', arguments: '{"question":"What area interests you?"}' }],
+    });
+    const first = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'how to become pro' });
+    expect(first.status).toBe(201);
+    expect(first.body.data.assistantMessage.content).toBe('What area interests you?');
+
+    // Second turn (the student's vague reply): capture what tools this next
+    // call is actually offered.
+    let toolsOffered: { name: string }[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce(async (_history, tools) => {
+      toolsOffered = tools;
+      return { type: 'text', content: 'Starting from the fundamentals...' };
+    });
+    const second = await request(app)
+      .post(`/api/v1/courses/${course.id}/tutor/conversations/${conversationId}/messages`)
+      .set('Cookie', enrolledStudentCookie)
+      .send({ content: 'I don\'t know, you tell me' });
+
+    expect(second.status).toBe(201);
+    expect(toolsOffered.map((t) => t.name)).not.toContain('ask_student');
   });
 
   it("a student cannot view another student's conversation", async () => {

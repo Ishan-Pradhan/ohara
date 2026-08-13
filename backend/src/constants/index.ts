@@ -70,10 +70,43 @@ export const CHUNK_OVERLAP_CHARS = 100;
 // titles and key topics only), then one content call per MODULE (a
 // module's handful of lessons, not the whole course in one call and not
 // one call per lesson — the former rations depth too thin, the latter
-// resends the full source text so often it burns through a Groq token
-// quota fast). A module can have a few lessons at 400+ words each plus
-// code blocks, so this budget is larger than a single lesson would need.
+// meant resending the full source text on every call). A module can have a
+// few lessons at 400+ words each plus code blocks, so this budget is larger
+// than a single lesson would need.
 export const MODULE_CONTENT_MAX_COMPLETION_TOKENS = 8192;
+
+// Module-content generation retrieves RAG chunks (documentChunkRepository,
+// same as the tutor/quiz/lesson-planner) instead of resending the whole
+// document — the source of the Groq 413 "request too large" errors this
+// replaced. Sized to leave headroom under Groq's on_demand tier's 12,000
+// TPM hard cap alongside MODULE_CONTENT_MAX_COMPLETION_TOKENS: 10 chunks at
+// ~1000 chars (CHUNK_SIZE_CHARS) is roughly 2,500 tokens, well under the
+// ~3,800 tokens left after the completion budget, with headroom for the
+// system prompt and lesson list.
+export const MODULE_CONTENT_RETRIEVAL_K = 10;
+
+// Defensive fallback only — used when RAG retrieval finds nothing for a
+// module's query (shouldn't happen for a status: 'ready' document, since
+// ingestion chunks it before marking it ready). Deliberately small: this is
+// a slice of the raw source text, not chunk-selected, so it must stay well
+// under the same TPM budget on its own.
+export const MODULE_CONTENT_SOURCE_FALLBACK_CHARS = 3000;
+
+// Study aids (summary/flashcards/explain) send a lesson's or a whole
+// course's already-curated content verbatim rather than RAG-retrieving it —
+// unlike module-content generation above, there's no per-chunk selection to
+// bound it, so the raw text needs its own hard ceiling. Sized against the
+// same Groq on_demand tier's 12,000 TPM cap: system+user prompt overhead is
+// small (~250 tokens, see studyAids.prompt.ts), and the larger of the two
+// completion budgets below (flashcards, 2048) leaves roughly 9,700 tokens of
+// input room; 20,000 chars is ~5,000 tokens, well under that with headroom
+// to spare — the same "well under, with room for prompt overhead" reasoning
+// as MODULE_CONTENT_RETRIEVAL_K above. A course with more material than this
+// just gets summarized/carded from its first ~20,000 characters, same
+// trade-off MODULE_CONTENT_SOURCE_FALLBACK_CHARS already makes.
+export const STUDY_AID_SOURCE_MAX_CHARS = 20_000;
+export const STUDY_AID_SUMMARY_MAX_COMPLETION_TOKENS = 1024;
+export const STUDY_AID_FLASHCARDS_MAX_COMPLETION_TOKENS = 2048;
 
 export const TUTOR_CONVERSATION_STATUSES = {
   ACTIVE: 'active',
@@ -97,6 +130,34 @@ export const TUTOR_MESSAGE_TYPES = {
 // How many chunks to retrieve per tutor question — a retrieval-quality
 // tuning knob, not a deployment concern, same reasoning as CHUNK_SIZE_CHARS.
 export const TUTOR_RETRIEVAL_K = 5;
+
+// pgvector cosine distance (`<=>`) cutoff above which a retrieved chunk is
+// treated as "not actually relevant" rather than "the closest thing we
+// found." Without this, findSimilar's ORDER BY ... LIMIT k always returns k
+// chunks regardless of how unrelated the query is — ask a course's tutor an
+// off-topic question and it still gets back "material," which the LLM (a
+// known-unreliable refuser — see NO_MATERIAL_MESSAGE below) then sometimes
+// answers from its own general knowledge while still citing those chunks as
+// if they supported it. Calibrated empirically against a real ingested
+// document (bge-small-en-v1.5 embeddings), probing both clusters, not just
+// one query each way: clearly on-topic queries — including
+// awkwardly-phrased-but-legitimate ones like "what is in chapter 1" or "what
+// does W6 cover", where structural/navigational phrasing embeds worse than
+// topic-based phrasing, and an earlier 0.45 cutoff wrongly rejected these —
+// topped out at distance ~0.48; clearly off-topic queries (unrelated trivia,
+// small talk) bottomed out at ~0.52. 0.50 sits in that gap. Applied only to
+// the tutor's own retrieval (searchCourseMaterial tool + stage1Fallback),
+// not to quiz/lesson-planner/course-structure's retrieveKnowledgeBaseMaterial,
+// which retrieve for topics the teacher explicitly named and where a hard
+// cutoff risks rejecting a genuine but lexically-distant match instead of
+// just refusing an off-topic question.
+export const TUTOR_RELEVANCE_MAX_DISTANCE = 0.5;
+
+// Higher than TUTOR_RETRIEVAL_K: a single chat answer needs a few precise
+// excerpts, but a topic-based quiz (quizzes.controller.ts) can ask for up to
+// 20 questions and needs broader material coverage to avoid repeating the
+// same fact across questions.
+export const QUIZ_RETRIEVAL_K = 10;
 
 // A new conversation's placeholder title before its first message retitles
 // it — see tutor.controller.ts's sendMessage.

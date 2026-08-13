@@ -63,6 +63,8 @@ export const serializeCourse = (c: Course, enrolledCount = 0) => ({
   isPublished: c.isPublished,
   courseType: c.courseType,
   capacity: c.capacity,
+  knowledgeBaseDocumentId: c.knowledgeBaseDocumentId,
+  syllabusDocumentId: c.syllabusDocumentId,
   enrolledCount,
   createdAt: c.createdAt,
 });

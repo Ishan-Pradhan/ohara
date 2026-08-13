@@ -39,14 +39,14 @@ export const CopilotPanel = ({ courseId }: CopilotPanelProps) => {
   }
 
   return (
-    <div className="flex gap-4" style={{ minHeight: 480 }}>
+    <div className="flex gap-4" style={{ height: 480 }}>
       {/* Conversation list */}
       <div className="flex w-48 flex-col gap-2">
         <Button size="sm" onClick={onNew} disabled={createConversation.isPending}>
           <Plus className="size-3.5" aria-hidden />
           New chat
         </Button>
-        <div className="flex flex-col gap-1 overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto">
           {conversations?.map((c) => (
             <button
               key={c.id}
@@ -69,7 +69,11 @@ export const CopilotPanel = ({ courseId }: CopilotPanelProps) => {
       {/* Active conversation */}
       <div className="flex-1">
         {activeId ? (
-          <ConversationView courseId={courseId} conversationId={activeId} />
+          <ConversationView
+            courseId={courseId}
+            conversationId={activeId}
+            onDeleted={() => setActiveId(null)}
+          />
         ) : (
           <div className="flex h-full items-center justify-center">
             <EmptyState
@@ -84,7 +88,15 @@ export const CopilotPanel = ({ courseId }: CopilotPanelProps) => {
   );
 };
 
-const ConversationView = ({ courseId, conversationId }: { courseId: string; conversationId: string }) => {
+const ConversationView = ({
+  courseId,
+  conversationId,
+  onDeleted,
+}: {
+  courseId: string;
+  conversationId: string;
+  onDeleted: () => void;
+}) => {
   const { data: conversation, isLoading } = useCopilotConversation(courseId, conversationId);
   const sendMessage = useSendCopilotMessage(courseId);
   const deleteConversation = useDeleteCopilotConversation(courseId);
@@ -109,6 +121,8 @@ const ConversationView = ({ courseId, conversationId }: { courseId: string; conv
   const onDelete = async () => {
     try {
       await deleteConversation.mutateAsync(conversationId);
+      onDeleted();
+      toast.success('Conversation deleted');
     } catch {
       toast.error('Could not delete conversation');
     }

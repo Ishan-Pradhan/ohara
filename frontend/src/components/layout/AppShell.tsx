@@ -8,7 +8,6 @@ import {
   CalendarRange,
   GraduationCap,
   LayoutDashboard,
-  LayoutGrid,
   Layers,
   LineChart,
   LogOut,
@@ -83,14 +82,14 @@ const navGroups: NavGroup[] = [
     label: 'Teaching',
     items: [
       { to: '/teacher/courses', label: 'My Courses', icon: BookOpen, roles: ['teacher'] },
-      { to: '/teacher/section', label: 'My Students', icon: LayoutGrid, roles: ['teacher'] },
+      { to: '/teacher/students', label: 'My Students', icon: GraduationCap, roles: ['teacher'] },
     ],
   },
   {
     label: 'Learning',
     items: [
       { to: '/student/courses', label: 'My Courses', icon: BookOpen, roles: ['student'] },
-      { to: '/student/progress', label: 'My Progress', icon: LineChart, roles: ['student'] },
+      { to: '/student/study-plan', label: 'My Study Plan', icon: LineChart, roles: ['student'] },
       { to: '/student/profile', label: 'My Profile', icon: User, roles: ['student'] },
     ],
   },

@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Brain } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Brain, Users } from 'lucide-react';
 
 import {
   useClasses,
@@ -21,6 +21,7 @@ import { ModulesSection } from './ModulesSection.js';
 import { AssignmentsSection } from './AssignmentsSection.js';
 import { QuizzesSection } from './QuizzesSection.js';
 import { IntelligenceSection } from './IntelligenceSection.js';
+import { CourseRosterSection } from './CourseRosterSection.js';
 
 export const CourseContentPage = () => {
   const { courseId = '' } = useParams();
@@ -131,6 +132,10 @@ export const CourseContentPage = () => {
             <HelpCircle className="size-4" aria-hidden />
             Quizzes
           </TabsTrigger>
+          <TabsTrigger value="students">
+            <Users className="size-4" aria-hidden />
+            Students
+          </TabsTrigger>
           <TabsTrigger value="intelligence">
             <Brain className="size-4" aria-hidden />
             Intelligence
@@ -139,7 +144,11 @@ export const CourseContentPage = () => {
 
         <TabsContent value="content">
           <div className="flex flex-col gap-10">
-            <DocumentsSection courseId={courseId} />
+            <DocumentsSection
+              courseId={courseId}
+              knowledgeBaseDocumentId={course?.knowledgeBaseDocumentId ?? null}
+              syllabusDocumentId={course?.syllabusDocumentId ?? null}
+            />
             <ModulesSection courseId={courseId} />
           </div>
         </TabsContent>
@@ -150,6 +159,13 @@ export const CourseContentPage = () => {
 
         <TabsContent value="quizzes">
           <QuizzesSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="students">
+          <CourseRosterSection
+            courseId={courseId}
+            profileBasePath={isAdmin ? '/admin/students' : '/teacher/students'}
+          />
         </TabsContent>
 
         <TabsContent value="intelligence">

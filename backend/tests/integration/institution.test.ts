@@ -293,6 +293,113 @@ describe('GET /admin/classes', () => {
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].name).toBe('Grade 10');
   });
+
+  it('filters by batchId to every class the batch has ever been placed in — full history, not just the current one', async () => {
+    // A batch accumulates one class_membership row per year as its cohort is
+    // promoted (Semester 1 -> Semester 2 -> ...); the superseded rows keep
+    // outcome 'promoted', only the live placement stays 'enrolled'. Past
+    // semesters must stay browsable (reviewing old attendance/grades,
+    // correcting a past transcript entry) — GET /admin/batches/:id
+    // /current-placement is the separate, dedicated way to find which one is
+    // current (see the describe block below).
+    const { createSection, createBatch, createStudentUser } = await import('../helpers/institution.js');
+    const { classMembershipRepository } = await import('../../src/repositories/classMemberships.repository.js');
+
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ name: 'Batch scoping program' });
+    const semester1 = await createClassHelper({ programId: program.id, name: 'Semester 1', orderIndex: 1 });
+    const semester2 = await createClassHelper({ programId: program.id, name: 'Semester 2', orderIndex: 2 });
+    const section1 = await createSection({ classId: semester1.id });
+    const section2 = await createSection({ classId: semester2.id });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+
+    // Promoted out of Semester 1 — no longer the current placement, but
+    // still part of the batch's history.
+    await classMembershipRepository.create({
+      studentId: student.id,
+      batchId: batch.id,
+      sectionId: section1.id,
+      academicYearId: section1.academicYearId,
+      outcome: 'promoted',
+    });
+    // Currently placed in Semester 2.
+    await classMembershipRepository.create({
+      studentId: student.id,
+      batchId: batch.id,
+      sectionId: section2.id,
+      academicYearId: section2.academicYearId,
+    });
+
+    const res = await request(app)
+      .get(CLASSES)
+      .query({ batchId: batch.id })
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(new Set(res.body.data.map((c: { id: string }) => c.id))).toEqual(
+      new Set([semester1.id, semester2.id]),
+    );
+  });
+});
+
+describe('GET /admin/batches/:id/current-placement', () => {
+  it("returns the batch's current class/section, not its past ones", async () => {
+    const { createSection, createBatch, createStudentUser } = await import('../helpers/institution.js');
+    const { classMembershipRepository } = await import('../../src/repositories/classMemberships.repository.js');
+
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ name: 'Current placement program' });
+    const semester1 = await createClassHelper({ programId: program.id, name: 'Semester 1', orderIndex: 1 });
+    const semester2 = await createClassHelper({ programId: program.id, name: 'Semester 2', orderIndex: 2 });
+    const section1 = await createSection({ classId: semester1.id });
+    const section2 = await createSection({ classId: semester2.id });
+    const batch = await createBatch({ programId: program.id });
+    const student = await createStudentUser();
+
+    await classMembershipRepository.create({
+      studentId: student.id,
+      batchId: batch.id,
+      sectionId: section1.id,
+      academicYearId: section1.academicYearId,
+      outcome: 'promoted',
+    });
+    await classMembershipRepository.create({
+      studentId: student.id,
+      batchId: batch.id,
+      sectionId: section2.id,
+      academicYearId: section2.academicYearId,
+    });
+
+    const res = await request(app)
+      .get(`${BATCHES}/${batch.id}/current-placement`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([{ classId: semester2.id, sectionId: section2.id }]);
+  });
+
+  it('returns an empty array for a batch with no current (enrolled) placement at all', async () => {
+    const { createBatch } = await import('../helpers/institution.js');
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const program = await createProgram({ name: 'Empty batch program' });
+    const batch = await createBatch({ programId: program.id });
+
+    const res = await request(app)
+      .get(`${BATCHES}/${batch.id}/current-placement`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+  });
+
+  it('404s for a non-existent batch', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const res = await request(app)
+      .get(`${BATCHES}/00000000-0000-0000-0000-000000000000/current-placement`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('PATCH /admin/classes/:id', () => {
@@ -833,6 +940,53 @@ describe('GET /admin/sections', () => {
     expect(res.body.data[0].classId).toBe(classA.id);
   });
 
+  it('filters by batchId — never falling back to a different batch\'s section when this batch has none', async () => {
+    // Reproduces a real case: a class ends up with two same-named sections
+    // across years, one holding a different batch's students entirely.
+    // Scoping by batchId must never leak that other batch's populated
+    // section just because the requested batch has nothing in this class yet.
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const cls = await createClass();
+    const year = await createAcademicYear();
+
+    const populatedSectionRes = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: year.id, name: 'A' });
+    const populatedSectionId: string = populatedSectionRes.body.data.id;
+
+    const emptySectionRes = await request(app)
+      .post(SECTIONS)
+      .set('Cookie', cookies)
+      .send({ classId: cls.id, academicYearId: year.id, name: 'B' });
+    const emptySectionId: string = emptySectionRes.body.data.id;
+
+    const populatedBatch = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'Populated batch' });
+    const emptyBatch = await createBatch({ programId: cls.programId, startAcademicYearId: year.id, name: 'Empty batch' });
+    const student = await createStudentUser();
+    await request(app)
+      .post(CLASS_MEMBERSHIPS)
+      .set('Cookie', cookies)
+      .send({ studentId: student.id, sectionId: populatedSectionId, batchId: populatedBatch.id });
+
+    const forPopulatedBatch = await request(app)
+      .get(SECTIONS)
+      .query({ classId: cls.id, batchId: populatedBatch.id })
+      .set('Cookie', cookies);
+    expect(forPopulatedBatch.status).toBe(200);
+    expect(forPopulatedBatch.body.data).toEqual([expect.objectContaining({ id: populatedSectionId })]);
+
+    // The empty batch has no placements in this class at all — must return
+    // nothing, not the other batch's populated section or the unrelated one.
+    const forEmptyBatch = await request(app)
+      .get(SECTIONS)
+      .query({ classId: cls.id, batchId: emptyBatch.id })
+      .set('Cookie', cookies);
+    expect(forEmptyBatch.status).toBe(200);
+    expect(forEmptyBatch.body.data).toEqual([]);
+    expect(forEmptyBatch.body.data.map((s: { id: string }) => s.id)).not.toContain(emptySectionId);
+  });
+
   it('filters by academicYearId', async () => {
     const cookies = await signInAs('admin@example.com', 'admin');
     const cls = await createClass();
@@ -935,6 +1089,24 @@ describe('PATCH /admin/sections/:id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ name: 'B', classTeacherId: teacher.id });
+  });
+
+  it('unassigns an already-assigned class teacher when classTeacherId is sent as null', async () => {
+    // College/university programs don't use the class-teacher concept at
+    // all — an admin needs to be able to clear one that was set (or set by
+    // mistake), not just assign one.
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+    const section = await createSection({ classTeacherId: teacher.id });
+    expect(section.classTeacherId).toBe(teacher.id);
+
+    const res = await request(app)
+      .patch(`${SECTIONS}/${section.id}`)
+      .set('Cookie', cookies)
+      .send({ classTeacherId: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.classTeacherId).toBeNull();
   });
 });
 
@@ -1306,5 +1478,64 @@ describe('GET /admin/courses/:courseId/teachers', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].teacherName).toBe('Ada Lovelace');
+  });
+});
+
+describe('DELETE /admin/courses/:courseId/teachers/:teacherId', () => {
+  it('unassigns a teacher, removing them from the course teacher list', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+    await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+
+    const res = await request(app)
+      .delete(`${COURSE_TEACHERS(course.id)}/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+
+    const list = await request(app).get(COURSE_TEACHERS(course.id)).set('Cookie', cookies);
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it('allows reassigning the same teacher after unassigning them', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+    await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+    await request(app)
+      .delete(`${COURSE_TEACHERS(course.id)}/${teacher.id}`)
+      .set('Cookie', cookies);
+
+    const res = await request(app)
+      .post(COURSE_TEACHERS(course.id))
+      .set('Cookie', cookies)
+      .send({ teacherId: teacher.id });
+    expect(res.status).toBe(201);
+  });
+
+  it('rejects a non-existent courseId with 404', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const teacher = await createTeacherUser();
+    const res = await request(app)
+      .delete(`${COURSE_TEACHERS('00000000-0000-0000-0000-000000000000')}/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when the teacher is not assigned to the course', async () => {
+    const cookies = await signInAs('admin@example.com', 'admin');
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+
+    const res = await request(app)
+      .delete(`${COURSE_TEACHERS(course.id)}/${teacher.id}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(404);
   });
 });

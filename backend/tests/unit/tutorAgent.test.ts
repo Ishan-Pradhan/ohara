@@ -20,6 +20,7 @@ const { documentRepository } = await import('../../src/repositories/documents.re
 const { documentChunkRepository } = await import(
   '../../src/repositories/documentChunks.repository.js'
 );
+const { courseRepository } = await import('../../src/repositories/courses.repository.js');
 const { moduleRepository } = await import('../../src/repositories/modules.repository.js');
 const { lessonRepository } = await import('../../src/repositories/lessons.repository.js');
 const { tutorConversationRepository } = await import(
@@ -34,8 +35,10 @@ const { AGENT_MAX_ITERATIONS, EMBEDDING_DIMENSIONS, TUTOR_MESSAGE_ROLES, TUTOR_M
  * fill instead. Mirrors tests/integration/tutor.test.ts. */
 const vector = (value: number): number[] => new Array(EMBEDDING_DIMENSIONS).fill(value) as number[];
 
-/** Seeds a course with one ready document and one chunk, so tool handlers
- * and the stage-1 fallback both have real material to retrieve. */
+/** Seeds a course with one ready document and one chunk, and selects that
+ * document as the course's knowledge base — so tool handlers and the
+ * stage-1 fallback (both scoped to Course.knowledgeBaseDocumentId, not
+ * "any document the course has") have real material to retrieve. */
 const seedCourseWithMaterial = async (courseId: string): Promise<void> => {
   const teacher = await createTeacherUser();
   const document = await documentRepository.create({
@@ -53,6 +56,7 @@ const seedCourseWithMaterial = async (courseId: string): Promise<void> => {
       embedding: vector(0.1),
     },
   ]);
+  await courseRepository.setKnowledgeBaseDocument(courseId, document.id);
 };
 
 const seedConversationWithQuestion = async (
@@ -93,8 +97,62 @@ afterAll(async () => {
 });
 
 describe('runTutorAgentTurn', () => {
+  it('refuses deterministically, without ever calling the LLM, when the course has no chunked documents and no lessons', async () => {
+    // Regression test: previously a course with zero material of any kind
+    // still ran the full agent loop, and the model (in production, Groq's
+    // llama-3.3-70b-versatile) would sometimes answer from its own general
+    // knowledge instead of admitting there's no course material — a
+    // grounding violation the system prompt asks for but doesn't enforce.
+    // The fix is a deterministic pre-check, so this must never reach
+    // runAgentTurn at all — if it did, the mock below (which is never
+    // configured with a resolved value) would cause the call to hang/throw
+    // and the assertion on call count would catch it either way.
+    const course = await createCourse();
+    const conversationId = await seedConversationWithQuestion(course.id);
+
+    const result = await runTutorAgentTurn(conversationId, course.id);
+
+    expect(result.content).toBe(
+      "There's no course material available yet to answer this question.",
+    );
+    expect(result.sources).toBeNull();
+    expect(runAgentTurn).not.toHaveBeenCalled();
+    expect(generateText).not.toHaveBeenCalled();
+    expect(embed).not.toHaveBeenCalled();
+
+    expect(result.messageId).toBeTruthy();
+    const persisted = await tutorMessageRepository.findById(result.messageId!);
+    expect(persisted?.content).toBe(
+      "There's no course material available yet to answer this question.",
+    );
+  });
+
+  it('runs the agent loop normally when the course has lessons but no chunked documents', async () => {
+    // The two grounding paths (search_course_material -> DocumentChunks,
+    // get_lesson -> Lessons via Modules) are populated by separate
+    // pipelines — course structure generation never touches DocumentChunks.
+    // A course with only generated lessons must NOT be refused.
+    const course = await createCourse();
+    const module = await moduleRepository.create({ courseId: course.id, title: 'Module 1', orderIndex: 0 });
+    await lessonRepository.create({
+      moduleId: module.id,
+      title: 'Lesson One',
+      content: 'Content of lesson one.',
+      keyTopics: ['topic-a'],
+      orderIndex: 0,
+    });
+    const conversationId = await seedConversationWithQuestion(course.id);
+    vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Answer from lesson' });
+
+    const result = await runTutorAgentTurn(conversationId, course.id);
+
+    expect(result.content).toBe('Answer from lesson');
+    expect(runAgentTurn).toHaveBeenCalledTimes(1);
+  });
+
   it('returns a text answer directly when the model needs no tools', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const conversationId = await seedConversationWithQuestion(course.id);
     vi.mocked(runAgentTurn).mockResolvedValueOnce({ type: 'text', content: 'Answer' });
 
@@ -189,6 +247,7 @@ describe('runTutorAgentTurn', () => {
 
   it('ask_student pauses the loop and sets the conversation to awaiting_student', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const conversationId = await seedConversationWithQuestion(course.id);
 
     vi.mocked(runAgentTurn).mockResolvedValueOnce({
@@ -219,6 +278,7 @@ describe('runTutorAgentTurn', () => {
     // null-content assistant message is only valid alongside a non-empty
     // tool_calls array).
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const student = await createStudentUser();
     const conversation = await tutorConversationRepository.create({
       courseId: course.id,
@@ -302,6 +362,7 @@ describe('runTutorAgentTurn', () => {
     // toAgentHistory must synthesize a placeholder result for the missing
     // call id so every replay stays a valid alternating shape.
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const student = await createStudentUser();
     const conversation = await tutorConversationRepository.create({
       courseId: course.id,
@@ -451,6 +512,7 @@ describe('runTutorAgentTurn', () => {
 
   it('injects learningContext into the system prompt when provided', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const conversationId = await seedConversationWithQuestion(course.id);
 
     let capturedHistory: { role: string; content: unknown }[] = [];
@@ -476,6 +538,7 @@ describe('runTutorAgentTurn', () => {
 
   it('omits learningContext from the system prompt when not provided', async () => {
     const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
     const conversationId = await seedConversationWithQuestion(course.id);
 
     let capturedHistory: { role: string; content: unknown }[] = [];

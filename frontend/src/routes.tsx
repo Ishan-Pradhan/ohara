@@ -34,13 +34,15 @@ import { MyCoursesPage } from './pages/teacher/MyCoursesPage.js';
 import { TeacherCoursePage } from './pages/teacher/TeacherCoursePage.js';
 import { TeacherCourseRedirect } from './pages/teacher/TeacherCourseRedirect.js';
 import { CourseStudentsPage } from './pages/teacher/CourseStudentsPage.js';
-import { MySectionPage } from './pages/teacher/MySectionPage.js';
+import { MyStudentsPage } from './pages/teacher/MyStudentsPage.js';
+import { MyStudentDetailPage } from './pages/teacher/MyStudentDetailPage.js';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage.js';
 import { StudentCoursePage } from './pages/student/StudentCoursePage.js';
+import { StudentCourseRedirect } from './pages/student/StudentCourseRedirect.js';
 import { StudentAssignmentDetailPage } from './pages/student/StudentAssignmentDetailPage.js';
 import { QuizTakePage } from './pages/student/QuizTakePage.js';
 import { StudentLessonPage } from './pages/student/StudentLessonPage.js';
-import { StudentProgressPage } from './pages/student/StudentProgressPage.js';
+import { StudentStudyPlanPage } from './pages/student/StudentStudyPlanPage.js';
 import { StudentProfilePage } from './pages/student/StudentProfilePage.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
 import { GuestOnlyRoute } from './components/GuestOnlyRoute.js';
@@ -162,13 +164,15 @@ export const router = createBrowserRouter([
   teacherRoute('/teacher/courses/:courseId/students', <CourseStudentsPage />),
   teacherRoute('/teacher/courses/:courseId/intelligence/:subsection', <TeacherCoursePage />),
   teacherRoute('/teacher/courses/:courseId/:section', <TeacherCoursePage />),
-  teacherRoute('/teacher/section', <MySectionPage />),
+  teacherRoute('/teacher/students', <MyStudentsPage />),
+  teacherRoute('/teacher/students/:studentId', <MyStudentDetailPage />),
   studentRoute('/student/courses', <StudentCoursesPage />),
-  studentRoute('/student/progress', <StudentProgressPage />),
+  studentRoute('/student/study-plan', <StudentStudyPlanPage />),
   studentRoute('/student/profile', <StudentProfilePage />),
-  studentRoute('/student/courses/:courseId', <StudentCoursePage />),
+  studentRoute('/student/courses/:courseId', <StudentCourseRedirect />),
   studentRoute('/student/courses/:courseId/assignments/:assignmentId', <StudentAssignmentDetailPage />),
   studentRoute('/student/courses/:courseId/quizzes/:quizId', <QuizTakePage />),
   studentRoute('/student/courses/:courseId/lessons/:lessonId', <StudentLessonPage />),
+  studentRoute('/student/courses/:courseId/:section', <StudentCoursePage />),
   { path: '*', element: <NotFoundPage /> },
 ]);

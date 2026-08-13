@@ -99,7 +99,15 @@ export const StudentAssignmentDetailPage = () => {
           </Card>
 
           {submission?.grade ? (
-            <Card>
+            <Card
+              className={
+                scoreBadgeVariant(submission.grade.score, totalPoints) === 'success'
+                  ? 'border-success/30'
+                  : scoreBadgeVariant(submission.grade.score, totalPoints) === 'danger'
+                    ? 'border-danger/30'
+                    : 'border-accent/30'
+              }
+            >
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-fg">Grade</h2>
                 <Badge variant={scoreBadgeVariant(submission.grade.score, totalPoints)}>
@@ -122,9 +130,12 @@ export const StudentAssignmentDetailPage = () => {
             </Card>
           ) : null}
 
-          <Card>
-            <h2 className="mb-3 text-sm font-semibold text-fg">
+          <Card
+            className={!submission ? (isPastDue ? 'border-danger/30' : 'border-primary/25') : undefined}
+          >
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
               {isApproved ? 'Your submission' : submission ? 'Update your submission' : 'Submit'}
+              {!submission ? <Badge variant={isPastDue ? 'danger' : 'primary'}>Action needed</Badge> : null}
             </h2>
 
             {submit.error instanceof ApiError ? (

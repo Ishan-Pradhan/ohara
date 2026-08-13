@@ -20,7 +20,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
-  Lightbulb,
   Sparkles,
   TriangleAlert,
 } from 'lucide-react';
@@ -28,7 +27,6 @@ import type { LucideIcon } from 'lucide-react';
 
 import { useStudentDashboard } from '../../features/dashboard/useDashboard.js';
 import { useStudyPlan } from '../../features/dashboard/useStudyPlan.js';
-import { useConceptInventory } from '../../features/dashboard/useConceptInventory.js';
 import {
   buildTodayActions,
   type TodayAction,
@@ -88,13 +86,6 @@ const KIND_CONFIG: Record<ActionKind, KindConfig> = {
     icon: CheckCircle2,
     iconBg: 'bg-success-soft',
     iconColor: 'text-success',
-  },
-  weak_concept: {
-    icon: Lightbulb,
-    iconBg: 'bg-accent-soft',
-    iconColor: 'text-accent-fg',
-    badge: 'Review',
-    badgeCls: 'bg-accent-soft text-accent-fg border border-accent/30',
   },
   progress: {
     icon: Sparkles,
@@ -189,13 +180,12 @@ const PanelSkeleton = () => (
 
 export const TodayIntelligencePanel = () => {
   const { data: dashboard, isLoading: dashLoading, isError: dashError } = useStudentDashboard(true);
-  // studyPlan and conceptInventory errors are treated as non-fatal: the panel
-  // still renders using whatever data is available, same as the backend's
-  // graceful-degradation principle. Only a dashboard failure is fatal here.
+  // A studyPlan error is treated as non-fatal: the panel still renders using
+  // whatever data is available, same as the backend's graceful-degradation
+  // principle. Only a dashboard failure is fatal here.
   const { data: studyPlan, isLoading: planLoading } = useStudyPlan();
-  const { data: conceptInventory, isLoading: conceptsLoading } = useConceptInventory();
 
-  const isLoading = dashLoading || planLoading || conceptsLoading;
+  const isLoading = dashLoading || planLoading;
 
   if (isLoading) {
     return <PanelSkeleton />;
@@ -223,7 +213,7 @@ export const TodayIntelligencePanel = () => {
     return null;
   }
 
-  const actions = buildTodayActions({ dashboard, studyPlan, conceptInventory });
+  const actions = buildTodayActions({ dashboard, studyPlan });
 
   // Nothing to surface — all caught up
   if (actions.length === 0) {
@@ -239,7 +229,7 @@ export const TodayIntelligencePanel = () => {
           </div>
           <p className="text-sm font-medium text-fg">All caught up</p>
           <p className="max-w-xs text-xs text-muted">
-            No pending assignments, quizzes, or weak areas to surface right now.
+            No pending assignments or quizzes to surface right now.
           </p>
         </div>
       </Card>

@@ -5,6 +5,7 @@ import { classMembershipRepository } from '../repositories/classMemberships.repo
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { attendanceRecordRepository } from '../repositories/attendanceRecords.repository.js';
+import { studentProfileRepository } from '../repositories/studentProfiles.repository.js';
 import { serializeStudentPlacement } from '../serializers/students.serializer.js';
 import { serializeElectiveCourse } from '../serializers/institution.serializer.js';
 import { buildAttendancePercentage } from '../serializers/attendance.serializer.js';
@@ -53,9 +54,11 @@ export const getStudentPlacement = asyncHandler(
       throw new ApiError(403, "Not authorized to view this student's placement");
     }
 
+    const profile = await studentProfileRepository.findByUserId(studentId);
+
     return ok(
       res,
-      serializeStudentPlacement(membership, enrollments),
+      serializeStudentPlacement(membership, enrollments, student, profile),
       'Student placement retrieved',
     );
   },

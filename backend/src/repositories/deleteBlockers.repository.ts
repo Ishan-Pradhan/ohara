@@ -6,7 +6,6 @@ import { Document } from '../models/documents.model.js';
 import { Enrollment } from '../models/enrollments.model.js';
 import { Event } from '../models/events.model.js';
 import { Intervention } from '../models/intervention.model.js';
-import { Project } from '../models/projects.model.js';
 import { QuizAttempt } from '../models/quizAttempts.model.js';
 import { Section } from '../models/sections.model.js';
 import { StudyPlan } from '../models/studyPlan.model.js';
@@ -263,18 +262,6 @@ export const deleteBlockersRepository = {
         count: studyPlans,
         hint: 'Permanent academic record — study plan history cannot be removed.',
         category: 'academic_record',
-      });
-    }
-
-    const projects = await where(Project, { ownerId: studentId });
-    if (projects > 0) {
-      blockers.push({
-        entity: 'project',
-        label: 'kanban projects',
-        singular: 'kanban project',
-        count: projects,
-        hint: 'Owned artifact — delete or reassign these projects before hard-deleting the student.',
-        category: 'ownership',
       });
     }
 

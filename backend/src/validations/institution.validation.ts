@@ -332,6 +332,32 @@ registry.registerPath({
   },
 });
 
+export const getBatchCurrentPlacementSchema = idParams;
+
+const batchCurrentPlacementSchema = registry.register(
+  'BatchCurrentPlacement',
+  z.object({
+    classId: z.uuid(),
+    sectionId: z.uuid(),
+  }),
+);
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/batches/{id}/current-placement',
+  tags: ['Institution'],
+  request: { params: getBatchCurrentPlacementSchema.params },
+  responses: {
+    200: {
+      description: "The batch's current class(es)/section(s) — usually one, more if the cohort isn't uniformly promoted",
+      content: { 'application/json': { schema: envelope(z.array(batchCurrentPlacementSchema)) } },
+    },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Batch not found' },
+  },
+});
+
 // ── ACADEMIC YEARS ──────────────────────────────────────────────────────────
 
 export const createAcademicYearSchema = {
@@ -470,6 +496,7 @@ export const listSectionsSchema = {
   query: z.object({
     classId: z.uuid().optional(),
     academicYearId: z.uuid().optional(),
+    batchId: z.uuid().optional(),
   }),
 };
 
@@ -711,6 +738,10 @@ export const assignCourseTeacherSchema = {
 
 export const listCourseTeachersSchema = courseIdParams;
 
+export const unassignCourseTeacherSchema = {
+  params: z.object({ courseId: z.uuid(), teacherId: z.uuid() }),
+};
+
 export const courseTeacherSchema = registry.register(
   'CourseTeacher',
   z.object({
@@ -766,5 +797,18 @@ registry.registerPath({
     401: unauthenticated,
     403: forbidden,
     404: { description: 'Course not found' },
+  },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/courses/{courseId}/teachers/{teacherId}',
+  tags: ['Institution'],
+  request: { params: unassignCourseTeacherSchema.params },
+  responses: {
+    200: { description: 'Teacher unassigned from the course' },
+    401: unauthenticated,
+    403: forbidden,
+    404: { description: 'Course not found, or this teacher is not assigned to it' },
   },
 });

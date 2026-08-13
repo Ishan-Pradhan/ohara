@@ -51,6 +51,11 @@ export const batchSchema = z.object({
   createdAt: z.string(),
 });
 
+export const batchCurrentPlacementSchema = z.object({
+  classId: z.string(),
+  sectionId: z.string(),
+});
+
 export const academicYearTerms = ['odd', 'even', 'annual'] as const;
 export type AcademicYearTerm = (typeof academicYearTerms)[number];
 
@@ -114,6 +119,8 @@ export const courseSchema = z.object({
   isPublished: z.boolean(),
   courseType: z.enum(['compulsory', 'elective']),
   capacity: z.number().nullable(),
+  knowledgeBaseDocumentId: z.string().nullable(),
+  syllabusDocumentId: z.string().nullable(),
   enrolledCount: z.number(),
   createdAt: z.string(),
 });
@@ -163,6 +170,7 @@ export type CreateClassInput = z.infer<typeof createClassSchema>;
 export type Class = z.infer<typeof classSchema>;
 export type CreateBatchInput = z.infer<typeof createBatchSchema>;
 export type Batch = z.infer<typeof batchSchema>;
+export type BatchCurrentPlacement = z.infer<typeof batchCurrentPlacementSchema>;
 export type CreateAcademicYearInput = z.infer<typeof createAcademicYearSchema>;
 export type AcademicYear = z.infer<typeof academicYearSchema>;
 export type CreateSectionInput = z.infer<typeof createSectionSchema>;

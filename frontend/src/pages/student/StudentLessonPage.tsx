@@ -6,6 +6,8 @@ import { AppShell } from '../../components/layout/AppShell.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { Button } from '../../components/ui/Button.js';
 import { LessonReader } from '../../components/course-content/LessonReader.js';
+import { StudyAidsPanel } from '../../components/studyAids/StudyAidsPanel.js';
+import { cn } from '../../lib/cn.js';
 
 export const StudentLessonPage = () => {
   const { courseId = '', lessonId = '' } = useParams();
@@ -36,38 +38,48 @@ export const StudentLessonPage = () => {
       ) : !lesson ? (
         <p className="text-sm text-muted">Lesson not found.</p>
       ) : (
-        <LessonReader
-          moduleTitle={lesson.moduleTitle}
-          title={lesson.title}
-          content={lesson.content}
-          keyTopics={lesson.keyTopics}
-          footer={
-            <div className="flex items-center justify-between gap-3">
-              {prev ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate(`/student/courses/${courseId}/lessons/${prev.id}`)}
-                >
-                  <ChevronLeft className="size-4" aria-hidden />
-                  {prev.title}
-                </Button>
-              ) : (
-                <span />
-              )}
-              {next ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate(`/student/courses/${courseId}/lessons/${next.id}`)}
-                >
-                  {next.title}
-                  <ChevronRight className="size-4" aria-hidden />
-                </Button>
-              ) : (
-                <span />
-              )}
-            </div>
-          }
-        />
+        <>
+          <LessonReader
+            moduleTitle={lesson.moduleTitle}
+            title={lesson.title}
+            content={lesson.content}
+            keyTopics={lesson.keyTopics}
+            footer={
+              <div
+                className={cn(
+                  'flex items-center gap-3',
+                  prev && next ? 'justify-between' : next ? 'justify-end' : 'justify-start',
+                )}
+              >
+                {prev ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(`/student/courses/${courseId}/lessons/${prev.id}`)}
+                  >
+                    <ChevronLeft className="size-4" aria-hidden />
+                    {prev.title}
+                  </Button>
+                ) : null}
+                {next ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(`/student/courses/${courseId}/lessons/${next.id}`)}
+                  >
+                    {next.title}
+                    <ChevronRight className="size-4" aria-hidden />
+                  </Button>
+                ) : null}
+              </div>
+            }
+          />
+
+          <div className="mx-auto mt-10 max-w-3xl border-t border-border pt-8">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-subtle">
+              Study tools for this lesson
+            </h2>
+            <StudyAidsPanel courseId={courseId} lessonId={lessonId} />
+          </div>
+        </>
       )}
     </AppShell>
   );

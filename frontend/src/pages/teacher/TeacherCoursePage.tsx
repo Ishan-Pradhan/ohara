@@ -55,7 +55,11 @@ export const TeacherCoursePage = () => {
       case 'content':
         return (
           <div className="flex flex-col gap-10">
-            <DocumentsSection courseId={courseId} />
+            <DocumentsSection
+              courseId={courseId}
+              knowledgeBaseDocumentId={course?.knowledgeBaseDocumentId ?? null}
+              syllabusDocumentId={course?.syllabusDocumentId ?? null}
+            />
             <ModulesSection courseId={courseId} />
           </div>
         );

@@ -6,13 +6,26 @@ import {
   listCourseStudentsSchema,
   listSectionStudentsSchema,
   createFlagSchema,
+  getMyStudentSchema,
 } from '../validations/teacher.validation.js';
 import {
   listMyCourses,
   listCourseStudents,
   getMySection,
   listSectionStudents,
+  listMyStudents,
+  getMyStudent,
 } from '../controllers/teacher.controller.js';
+import {
+  listMyStudentNotesSchema,
+  createMyStudentNoteSchema,
+  deleteMyStudentNoteSchema,
+} from '../validations/teacherStudentNotes.validation.js';
+import {
+  listMyStudentNotes,
+  createMyStudentNote,
+  deleteMyStudentNote,
+} from '../controllers/teacherStudentNotes.controller.js';
 import { createStudentFlag } from '../controllers/studentFlags.controller.js';
 import { getTeacherDashboard, generateTeacherDashboardInsights } from '../controllers/teacherDashboard.controller.js';
 import {
@@ -58,6 +71,27 @@ router.post(
   requireRole(USER_ROLES.TEACHER),
   validate(createFlagSchema),
   createStudentFlag,
+);
+
+router.get('/students', requireRole(USER_ROLES.TEACHER), listMyStudents);
+
+router.get(
+  '/students/:studentId',
+  requireRole(USER_ROLES.TEACHER),
+  validate(getMyStudentSchema),
+  getMyStudent,
+);
+
+router
+  .route('/students/:studentId/notes')
+  .get(requireRole(USER_ROLES.TEACHER), validate(listMyStudentNotesSchema), listMyStudentNotes)
+  .post(requireRole(USER_ROLES.TEACHER), validate(createMyStudentNoteSchema), createMyStudentNote);
+
+router.delete(
+  '/students/:studentId/notes/:noteId',
+  requireRole(USER_ROLES.TEACHER),
+  validate(deleteMyStudentNoteSchema),
+  deleteMyStudentNote,
 );
 
 export default router;

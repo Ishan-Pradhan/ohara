@@ -65,6 +65,16 @@ body {
   }
 }
 
+/* Generic content pop-in, unlike scale-in above which assumes the Radix
+ * translate(-50%,-50%) centering those primitives already apply — safe to
+ * use on any normally-flowed element (e.g. FlashcardsSection's card face). */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -113,22 +113,72 @@ describe('Institution Intelligence (Group 3)', () => {
 
   // ── Admin Copilot ───────────────────────────────────────────────────
 
-  describe('POST /admin/copilot/query', () => {
-    it('returns AI-generated response for admin query', async () => {
+  describe('Admin Copilot', () => {
+    it('creates a conversation, sends a message, lists conversations, and persists history', async () => {
       const adminCookies = await signInAs(`admin-copilot-${Date.now()}@example.com`, 'admin');
 
-      vi.mocked(generateText).mockResolvedValue('The institution has 5 courses.');
+      const createConv = await request(app)
+        .post('/api/v1/admin/copilot/conversations')
+        .set('Cookie', adminCookies);
 
-      const res = await request(app)
-        .post('/api/v1/admin/copilot/query')
+      expect(createConv.status).toBe(201);
+      const convId = createConv.body.data.id;
+      expect(createConv.body.data.title).toBe('New conversation');
+
+      vi.mocked(generateText).mockResolvedValueOnce('The institution has 5 courses.');
+
+      const sendMsg = await request(app)
+        .post(`/api/v1/admin/copilot/conversations/${convId}/messages`)
         .set('Cookie', adminCookies)
-        .send({ question: 'How many courses do we have?' });
+        .send({ message: 'How many courses do we have?' });
 
-      expect(res.status).toBe(200);
-      expect(res.body.data).toMatchObject({
-        answer: expect.any(String),
-      });
-      expect(vi.mocked(generateText)).toHaveBeenCalledTimes(1);
+      expect(sendMsg.status).toBe(200);
+      expect(sendMsg.body.data.userMessage).toBeDefined();
+      expect(sendMsg.body.data.assistantMessage.content).toContain('5 courses');
+      expect(generateText).toHaveBeenCalledTimes(1);
+
+      const getConv = await request(app)
+        .get(`/api/v1/admin/copilot/conversations/${convId}`)
+        .set('Cookie', adminCookies);
+
+      expect(getConv.status).toBe(200);
+      expect(getConv.body.data.messages).toHaveLength(2);
+      expect(getConv.body.data.title).toBe('How many courses do we have?');
+
+      const listConvs = await request(app)
+        .get('/api/v1/admin/copilot/conversations')
+        .set('Cookie', adminCookies);
+
+      expect(listConvs.status).toBe(200);
+      expect(listConvs.body.data).toHaveLength(1);
+    });
+
+    it('includes recent conversation history in the prompt for a follow-up message', async () => {
+      const adminCookies = await signInAs(`admin-copilot-history-${Date.now()}@example.com`, 'admin');
+
+      const createConv = await request(app)
+        .post('/api/v1/admin/copilot/conversations')
+        .set('Cookie', adminCookies);
+      const convId = createConv.body.data.id;
+
+      vi.mocked(generateText).mockResolvedValueOnce('The Science program has the highest average.');
+      await request(app)
+        .post(`/api/v1/admin/copilot/conversations/${convId}/messages`)
+        .set('Cookie', adminCookies)
+        .send({ message: 'Which program performs best?' });
+
+      vi.mocked(generateText).mockResolvedValueOnce('Yes, it beats every other program by 8 points.');
+      const followUp = await request(app)
+        .post(`/api/v1/admin/copilot/conversations/${convId}/messages`)
+        .set('Cookie', adminCookies)
+        .send({ message: 'Do they beat the others by a lot?' });
+
+      expect(followUp.status).toBe(200);
+      expect(generateText).toHaveBeenCalledTimes(2);
+      const secondCallPrompt = vi.mocked(generateText).mock.calls[1]?.[1] as string;
+      expect(secondCallPrompt).toContain('Which program performs best?');
+      expect(secondCallPrompt).toContain('The Science program has the highest average.');
+      expect(secondCallPrompt).toContain('Do they beat the others by a lot?');
     });
 
     it('rejects non-admin users', async () => {
@@ -136,22 +186,51 @@ describe('Institution Intelligence (Group 3)', () => {
       const teacherCookies = await signInAs(teacher.email, 'teacher');
 
       const res = await request(app)
-        .post('/api/v1/admin/copilot/query')
-        .set('Cookie', teacherCookies)
-        .send({ question: 'Hello?' });
+        .post('/api/v1/admin/copilot/conversations')
+        .set('Cookie', teacherCookies);
 
       expect(res.status).toBe(403);
     });
 
-    it('rejects empty query', async () => {
+    it('rejects an empty message', async () => {
       const adminCookies = await signInAs(`admin-copilot-empty-${Date.now()}@example.com`, 'admin');
 
+      const createConv = await request(app)
+        .post('/api/v1/admin/copilot/conversations')
+        .set('Cookie', adminCookies);
+      const convId = createConv.body.data.id;
+
       const res = await request(app)
-        .post('/api/v1/admin/copilot/query')
+        .post(`/api/v1/admin/copilot/conversations/${convId}/messages`)
         .set('Cookie', adminCookies)
-        .send({ question: '' });
+        .send({ message: '' });
 
       expect(res.status).toBe(400);
+    });
+
+    it('deletes a conversation, and one admin cannot access another admin\'s conversation', async () => {
+      const adminCookies = await signInAs(`admin-copilot-owner-${Date.now()}@example.com`, 'admin');
+      const otherAdminCookies = await signInAs(`admin-copilot-other-${Date.now()}@example.com`, 'admin');
+
+      const createConv = await request(app)
+        .post('/api/v1/admin/copilot/conversations')
+        .set('Cookie', adminCookies);
+      const convId = createConv.body.data.id;
+
+      const otherAccess = await request(app)
+        .get(`/api/v1/admin/copilot/conversations/${convId}`)
+        .set('Cookie', otherAdminCookies);
+      expect(otherAccess.status).toBe(403);
+
+      const del = await request(app)
+        .delete(`/api/v1/admin/copilot/conversations/${convId}`)
+        .set('Cookie', adminCookies);
+      expect(del.status).toBe(200);
+
+      const getAfterDelete = await request(app)
+        .get(`/api/v1/admin/copilot/conversations/${convId}`)
+        .set('Cookie', adminCookies);
+      expect(getAfterDelete.status).toBe(404);
     });
   });
 

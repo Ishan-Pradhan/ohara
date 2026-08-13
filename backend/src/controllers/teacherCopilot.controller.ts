@@ -14,6 +14,7 @@ import { quizAttemptRepository } from '../repositories/quizAttempts.repository.j
 import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
 import { generateText } from '../services/llm.service.js';
 import { teacherCopilotSystemPrompt, buildCopilotDataContext } from '../prompts/teacherCopilot.prompt.js';
+import { formatCopilotHistory } from '../utils/copilotHistory.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -154,6 +155,13 @@ export const sendCopilotMessage = asyncHandler(
       throw new ApiError(403, 'Access denied');
     }
 
+    // Last 2 exchanges (4 messages), fetched before this turn's messages
+    // exist so it's genuinely "what came before", not including itself.
+    const priorMessages = await copilotRepository.findRecentMessages(conversationId, 4);
+    const history = formatCopilotHistory(
+      priorMessages.map((m) => ({ role: m.role, content: m.content })),
+    );
+
     const nextSeq = (await copilotRepository.getMaxSeq(conversationId)) + 1;
 
     // Save user message
@@ -175,7 +183,11 @@ export const sendCopilotMessage = asyncHandler(
 
     // Generate AI response
     const systemPrompt = teacherCopilotSystemPrompt;
-    const userPrompt = `${buildCopilotDataContext(dataContext)}\n\nTeacher's question: ${message}`;
+    const userPrompt = [
+      buildCopilotDataContext(dataContext),
+      history,
+      `Teacher's question: ${message}`,
+    ].filter(Boolean).join('\n\n');
 
     let assistantContent: string;
     try {

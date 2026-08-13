@@ -8,6 +8,11 @@ import { generateChartTool, executeGenerateChart } from './generateChart.tool.js
 
 export interface ToolContext {
   courseId: string;
+  /** The course's selected RAG source (Course.knowledgeBaseDocumentId),
+   * resolved once by the orchestrator — null when the teacher hasn't chosen
+   * one. search_course_material is scoped to this document, never to every
+   * document the course happens to have uploaded. */
+  knowledgeBaseDocumentId: string | null;
 }
 
 export interface ToolExecutionResult {

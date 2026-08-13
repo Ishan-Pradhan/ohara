@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const weeklyInsightsSchema = z.object({
+export const weeklyInsightsSchema = z.object({
   highlights: z.array(z.string()),
   concerns: z.array(z.string()),
   recommendations: z.array(z.string()),
@@ -41,6 +41,12 @@ export const weeklySummarySchema = z.object({
   ),
   classAverage: z.number().nullable(),
   insights: weeklyInsightsSchema.nullable(),
+  insightsGeneratedAt: z.string().nullable(),
+});
+
+export const generatedWeeklySummaryInsightsSchema = z.object({
+  insights: weeklyInsightsSchema,
+  generatedAt: z.string(),
 });
 
 export type WeeklySummary = z.infer<typeof weeklySummarySchema>;

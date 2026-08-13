@@ -1,4 +1,4 @@
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, ClipboardList, HelpCircle } from 'lucide-react';
 
 import { useMyGrades } from '../../features/gradebook/useGradebook.js';
 import { useGradeTrends } from '../../features/trends/useTrends.js';
@@ -10,7 +10,7 @@ import { Card } from '../../components/ui/Card.js';
 import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { GradeTrendChart } from '../../components/charts/GradeTrendChart.js';
-import { pctColor } from '../../lib/pctColor.js';
+import { SectionStats } from './SectionStats.js';
 
 interface StudentGradesSectionProps {
   courseId: string;
@@ -64,46 +64,54 @@ export const StudentGradesSection = ({ courseId }: StudentGradesSectionProps) =>
   }
 
   const gradedCount = row.entries.filter((e) => e.status === 'graded').length;
+  const pendingCount = row.entries.filter((e) => e.status === 'pending' || e.status === 'ungraded').length;
 
   return (
     <div className="flex flex-col gap-4">
       {gradeTrends && gradeTrends.length > 0 && <GradeTrendChart data={gradeTrends} />}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Card padding="sm">
-          <p className="text-xs text-subtle">Overall average</p>
-          <p className={`mt-1 text-2xl font-bold ${pctColor(row.average)}`}>
-            {row.average === null ? '—' : `${row.average.toFixed(1)}%`}
-          </p>
-        </Card>
-        <Card padding="sm">
-          <p className="text-xs text-subtle">Graded</p>
-          <p className="mt-1 text-2xl font-bold text-fg">
-            {gradedCount} / {row.entries.length}
-          </p>
-        </Card>
-      </div>
+      <SectionStats
+        stats={[
+          {
+            label: 'Overall average',
+            value: row.average === null ? '—' : `${row.average.toFixed(1)}%`,
+            tone: row.average === null ? 'default' : row.average >= 80 ? 'success' : row.average >= 60 ? 'accent' : 'danger',
+          },
+          { label: 'Graded', value: `${gradedCount} / ${row.entries.length}` },
+          {
+            label: 'Awaiting grade',
+            value: String(pendingCount),
+            tone: pendingCount > 0 ? 'warning' : 'default',
+          },
+        ]}
+      />
 
       <div className="flex flex-col gap-2">
-        {row.entries.map((entry) => (
-          <Card key={entry.assessmentId} padding="sm" className="flex items-center justify-between gap-3">
-            <div>
-              <span className="text-sm text-fg">
-                {titleById.get(entry.assessmentId) ?? (entry.type === 'assignment' ? 'Assignment' : 'Quiz')}
-              </span>
-              <p className="text-xs text-subtle">{entry.type === 'assignment' ? 'Assignment' : 'Quiz'}</p>
-            </div>
-            {entry.status === 'graded' ? (
-              <Badge variant={scoreBadgeVariant(entry.score ?? 0, entry.maxScore)}>
-                {entry.score} / {entry.maxScore}
-              </Badge>
-            ) : (
-              <Badge variant={entry.status === 'pending' ? 'warning' : 'neutral'}>
-                {statusLabel[entry.status]}
-              </Badge>
-            )}
-          </Card>
-        ))}
+        {row.entries.map((entry) => {
+          const Icon = entry.type === 'assignment' ? ClipboardList : HelpCircle;
+          return (
+            <Card key={entry.assessmentId} padding="sm" className="flex items-center gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-hover text-subtle">
+                <Icon className="size-4" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-fg">
+                  {titleById.get(entry.assessmentId) ?? (entry.type === 'assignment' ? 'Assignment' : 'Quiz')}
+                </p>
+                <p className="text-xs text-subtle capitalize">{entry.type}</p>
+              </div>
+              {entry.status === 'graded' ? (
+                <Badge variant={scoreBadgeVariant(entry.score ?? 0, entry.maxScore)}>
+                  {entry.score} / {entry.maxScore}
+                </Badge>
+              ) : (
+                <Badge variant={entry.status === 'pending' ? 'warning' : 'neutral'}>
+                  {statusLabel[entry.status]}
+                </Badge>
+              )}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

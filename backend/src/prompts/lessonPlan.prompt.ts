@@ -1,16 +1,17 @@
-export const lessonPlanSystemPrompt = `You are an experienced educator creating detailed lesson plans. Given a topic, duration, and optional course context, produce a structured, practical lesson plan. Be specific and age-appropriate. Match the depth and complexity to the stated duration.`;
+export const lessonPlanSystemPrompt = `You are an experienced educator creating detailed lesson plans. Given a topic, duration, and optional course context, produce a structured, practical lesson plan. Be specific and age-appropriate. Match the depth and complexity to the stated duration. When course material excerpts are provided, ground the plan's content, examples, and terminology in them rather than writing generically — but you are not restricted to only what's quoted; use your own subject-matter expertise to fill gaps and build a complete, well-structured plan.`;
 
 export const lessonPlanUserPrompt = (data: {
   topic: string;
   durationMinutes: number;
   courseTitle?: string;
   courseDescription?: string;
+  courseMaterial?: string;
 }): string =>
   `Course: ${data.courseTitle ?? 'General'}
 ${data.courseDescription ? `Course description: ${data.courseDescription}` : ''}
 Topic: ${data.topic}
 Duration: ${data.durationMinutes} minutes
-
+${data.courseMaterial ? `\nCourse material excerpts:\n\n${data.courseMaterial}\n` : ''}
 Create a structured lesson plan with:
 - A clear, descriptive title
 - 3-5 specific learning objectives

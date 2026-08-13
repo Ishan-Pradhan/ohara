@@ -14,6 +14,7 @@ import {
   listBatchesSchema,
   updateBatchSchema,
   deleteBatchSchema,
+  getBatchCurrentPlacementSchema,
   createAcademicYearSchema,
   updateAcademicYearSchema,
   deleteAcademicYearSchema,
@@ -27,6 +28,7 @@ import {
   deleteCourseSchema,
   assignCourseTeacherSchema,
   listCourseTeachersSchema,
+  unassignCourseTeacherSchema,
 } from '../validations/institution.validation.js';
 import {
   createProgram,
@@ -41,6 +43,7 @@ import {
   listBatches,
   updateBatch,
   deleteBatch,
+  getBatchCurrentPlacement,
   createAcademicYear,
   listAcademicYears,
   updateAcademicYear,
@@ -55,6 +58,7 @@ import {
   deleteCourse,
   assignCourseTeacher,
   listCourseTeachers,
+  unassignCourseTeacher,
 } from '../controllers/institution.controller.js';
 
 const router = Router();
@@ -93,6 +97,10 @@ router
   .delete(validate(deleteBatchSchema), deleteBatch);
 
 router
+  .route('/batches/:id/current-placement')
+  .get(validate(getBatchCurrentPlacementSchema), getBatchCurrentPlacement);
+
+router
   .route('/academic-years')
   .post(validate(createAcademicYearSchema), createAcademicYear)
   .get(listAcademicYears);
@@ -126,5 +134,9 @@ router
   .route('/courses/:courseId/teachers')
   .post(validate(assignCourseTeacherSchema), assignCourseTeacher)
   .get(validate(listCourseTeachersSchema), listCourseTeachers);
+
+router
+  .route('/courses/:courseId/teachers/:teacherId')
+  .delete(validate(unassignCourseTeacherSchema), unassignCourseTeacher);
 
 export default router;

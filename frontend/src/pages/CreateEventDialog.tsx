@@ -87,11 +87,18 @@ export const CreateEventDialog = ({ open, onOpenChange, editingEvent }: CreateEv
   }, [editingEvent, open, isAdmin]);
 
   // A teacher's own classes, deduped, derived from the courses they teach.
+  // Classes are named per-program (e.g. "3rd Semester"), so a teacher who
+  // teaches that same semester name in more than one program needs the
+  // program shown too — otherwise two identically-labeled options are
+  // indistinguishable and it's easy to scope an event to the wrong one.
   const myClasses = Array.from(
     new Map(
       (myCourses ?? [])
         .filter((c) => c.classId)
-        .map((c) => [c.classId as string, { id: c.classId as string, name: c.className ?? 'Class' }]),
+        .map((c) => [
+          c.classId as string,
+          { id: c.classId as string, name: c.className ?? 'Class', programName: c.programName },
+        ]),
     ).values(),
   );
 
@@ -248,7 +255,10 @@ export const CreateEventDialog = ({ open, onOpenChange, editingEvent }: CreateEv
               value={classId}
               onValueChange={setClassId}
               placeholder="Select a class"
-              options={myClasses.map((c) => ({ value: c.id, label: c.name }))}
+              options={myClasses.map((c) => ({
+                value: c.id,
+                label: c.programName ? `${c.name} (${c.programName})` : c.name,
+              }))}
             />
           </Field>
         )}

@@ -17,8 +17,7 @@ export const examTermRepository = {
   },
 
   /** `ExamMarks.examTermId` cascades — deleting a term deletes every mark
-   * entered against it, same as deleting a Kanban project cascades its
-   * columns/tasks. */
+   * entered against it. */
   delete: async (id: string): Promise<boolean> => {
     const deleted = await ExamTerm.destroy({ where: { id } });
     return deleted > 0;

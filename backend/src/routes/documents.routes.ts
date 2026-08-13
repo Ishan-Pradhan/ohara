@@ -1,16 +1,29 @@
 import { Router } from 'express';
-import { verifyJWT, requireCourseTeacher } from '../middlewares/auth.middleware.js';
+import {
+  verifyJWT,
+  requireCourseTeacher,
+  requireCourseAccess,
+  requireEnrolledStudent,
+} from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { uploadPdf } from '../middlewares/upload.middleware.js';
 import {
   uploadDocumentSchema,
   listDocumentsSchema,
   deleteDocumentSchema,
+  getDocumentFileSchema,
+  listViewableDocumentsSchema,
+  setKnowledgeBaseDocumentSchema,
+  setSyllabusDocumentSchema,
 } from '../validations/documents.validation.js';
 import {
   uploadDocument,
   listDocuments,
   deleteDocument,
+  getDocumentFile,
+  listViewableDocuments,
+  setKnowledgeBaseDocument,
+  setSyllabusDocument,
 } from '../controllers/documents.controller.js';
 
 const router = Router();
@@ -45,6 +58,42 @@ router
     requireCourseTeacher,
     validate(deleteDocumentSchema),
     deleteDocument,
+  );
+
+router
+  .route('/:courseId/documents/viewable')
+  .get(
+    verifyJWT,
+    requireEnrolledStudent,
+    validate(listViewableDocumentsSchema),
+    listViewableDocuments,
+  );
+
+router
+  .route('/:courseId/documents/:id/file')
+  .get(
+    verifyJWT,
+    requireCourseAccess,
+    validate(getDocumentFileSchema),
+    getDocumentFile,
+  );
+
+router
+  .route('/:courseId/knowledge-base')
+  .patch(
+    verifyJWT,
+    requireCourseTeacher,
+    validate(setKnowledgeBaseDocumentSchema),
+    setKnowledgeBaseDocument,
+  );
+
+router
+  .route('/:courseId/syllabus')
+  .patch(
+    verifyJWT,
+    requireCourseTeacher,
+    validate(setSyllabusDocumentSchema),
+    setSyllabusDocument,
   );
 
 export default router;

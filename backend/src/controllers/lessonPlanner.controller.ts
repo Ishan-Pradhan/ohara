@@ -4,6 +4,8 @@ import type { AuthRequest } from '../types/auth.types.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { generateJson } from '../services/llm.service.js';
 import { lessonPlanSystemPrompt, lessonPlanUserPrompt } from '../prompts/lessonPlan.prompt.js';
+import { retrieveKnowledgeBaseMaterial } from './documents.controller.js';
+import { TUTOR_RETRIEVAL_K } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -81,12 +83,18 @@ export const generateLessonPlan = asyncHandler(
     };
 
     const course = await courseRepository.findById(courseId);
+    const courseMaterial = await retrieveKnowledgeBaseMaterial(
+      course?.knowledgeBaseDocumentId ?? null,
+      topic,
+      TUTOR_RETRIEVAL_K,
+    );
 
     const prompt = lessonPlanUserPrompt({
       topic,
       durationMinutes,
       courseTitle: course?.title,
       courseDescription: course?.description ?? undefined,
+      courseMaterial: courseMaterial ?? undefined,
     });
 
     let rawResponse: string;

@@ -1,6 +1,6 @@
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, X } from 'lucide-react';
 
 import {
   assignCourseTeacherSchema,
@@ -9,6 +9,7 @@ import {
 import {
   useAssignCourseTeacher,
   useCourseTeachers,
+  useUnassignCourseTeacher,
 } from '../../features/institution/useInstitution.js';
 import { useTeachers } from '../../features/users/useUsers.js';
 import { ApiError } from '../../lib/apiError.js';
@@ -37,6 +38,7 @@ export const CourseTeachersDialog = ({
   const { data: assigned, isLoading } = useCourseTeachers(courseId);
   const { data: teachers } = useTeachers();
   const { mutateAsync, isPending, error, reset } = useAssignCourseTeacher(courseId);
+  const unassign = useUnassignCourseTeacher(courseId);
 
   const {
     control,
@@ -55,6 +57,15 @@ export const CourseTeachersDialog = ({
     toast.success(`${created.teacherName} assigned to ${courseTitle}`);
     resetForm();
   });
+
+  const onUnassign = async (teacherId: string, teacherName: string) => {
+    try {
+      await unassign.mutateAsync(teacherId);
+      toast.success(`${teacherName} removed from ${courseTitle}`);
+    } catch {
+      toast.error(`Could not remove ${teacherName}`);
+    }
+  };
 
   return (
     <Dialog
@@ -82,10 +93,20 @@ export const CourseTeachersDialog = ({
             {assigned.map((a) => (
               <li key={a.id} className="flex items-center gap-3 rounded-control border border-border px-3 py-2">
                 <Avatar name={a.teacherName} size="sm" />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-fg">{a.teacherName}</p>
                   <p className="truncate text-xs text-muted">{a.teacherEmail}</p>
                 </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={unassign.isPending && unassign.variables === a.teacherId}
+                  onClick={() => onUnassign(a.teacherId, a.teacherName)}
+                  aria-label={`Remove ${a.teacherName} from ${courseTitle}`}
+                >
+                  <X className="size-3.5" aria-hidden />
+                </Button>
               </li>
             ))}
           </ul>

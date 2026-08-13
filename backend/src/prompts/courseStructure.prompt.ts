@@ -1,20 +1,39 @@
 /** Course generation is two phases (see courseContent.controller.ts):
- * 1. Skeleton — one call over the whole source, producing just module/lesson
- *    titles + key topics. Cheap and reliable.
+ * 1. Skeleton — one call over the whole (truncated-to-MAX_LLM_SOURCE_CHARS)
+ *    source, producing just module/lesson titles + key topics. Cheap and
+ *    reliable, and the one remaining place a big-enough document could still
+ *    hit Groq's request-too-large limit — not fixed here, see the module
+ *    content note below for why this phase can't use the same fix.
+ *
+ *    Two prompt variants for this call, chosen by whether the course has a
+ *    Course.syllabusDocumentId set: courseSkeletonSystemPrompt INVENTS a
+ *    grouping from whatever document generateCourseStructure was pointed
+ *    at; courseSkeletonFromSyllabusSystemPrompt EXTRACTS the structure an
+ *    official syllabus document already defines, instead. The latter exists
+ *    because inventing a "sensible" structure from a textbook produces a
+ *    course structure that may not match a university's mandated syllabus —
+ *    which the teacher is required to teach to regardless of how the
+ *    source material happens to be organized.
  * 2. Content — one call PER MODULE (not per lesson, and not one call for the
- *    whole course), each given the full source plus that module's lesson
- *    titles/topics, asked to write all of that module's lessons in depth.
+ *    whole course), given that module's lesson titles/topics plus source
+ *    material RAG-retrieved for those lessons (documentChunkRepository, via
+ *    resolveModuleSourceText in courseContent.controller.ts) — not the full
+ *    document.
  *
  * A single call asked to write detailed, code/table-preserving content for
  * every lesson in the course at once reliably produced thin, generic
  * one-paragraph lessons in testing, regardless of word-count instructions or
  * a large completion-token budget — the model was rationing effort across
- * many items. Per-lesson calls fixed the depth problem but resend the full
- * source text on every single call, which burns through a Groq token quota
- * fast on anything but a trivially short document. Per-module is the
- * middle ground: each call only has a module's handful of lessons to write
- * (not the whole course), while cutting the number of full-source resends
- * roughly in half-to-third compared to per-lesson. */
+ * many items. Per-lesson calls fixed the depth problem but resent the whole
+ * document on every single call. Per-module is the middle ground on call
+ * count (a module's handful of lessons per call, not the whole course); RAG
+ * retrieval is the fix for what each of those calls sends as source material
+ * — the module-content call reliably exceeded Groq's on_demand tier's
+ * 12,000 TPM per-request cap once resending the whole document, regardless
+ * of chunking calls by module or by lesson. The skeleton call can't use the
+ * same retrieval fix — it needs a global view of the document to find
+ * sensible module/lesson boundaries in the first place, before any
+ * per-module query exists to search with. */
 
 const SKELETON_SCHEMA_DESCRIPTION = `{
   "modules": [
@@ -44,6 +63,32 @@ Rules:
 
 export const courseSkeletonUserPrompt = (sourceText: string): string =>
   `Course material:\n\n${sourceText}`;
+
+/** Used instead of courseSkeletonSystemPrompt when the course has a
+ * Course.syllabusDocumentId set (see generateSkeleton, courseContent.controller.ts).
+ * A deliberately different task from the "invent a sensible grouping"
+ * prompt above: an official syllabus already states its own units/topics —
+ * the model's job is to transcribe that structure faithfully, not redesign
+ * it. Written for the case that matters most in practice: many university
+ * programs (this one is built for Nepali bachelor's courses specifically)
+ * run against a fixed, institution-mandated syllabus that a teacher is
+ * required to follow — inventing a different grouping from a textbook's own
+ * organization, even a reasonable one, would teach the wrong curriculum. */
+export const courseSkeletonFromSyllabusSystemPrompt = `You are extracting the official module/lesson structure from a university course syllabus, so a teacher can generate lesson content against it later.
+
+Read the provided syllabus and produce a JSON object with this exact shape:
+${SKELETON_SCHEMA_DESCRIPTION}
+
+Rules:
+- This is a TRANSCRIPTION task, not a design task: the syllabus already defines the official units and topics. Do not invent, merge, split, reorder, or rebalance them — follow the syllabus's own structure and wording as closely as possible.
+- Each syllabus unit/chapter becomes one module, in the order the syllabus lists them. If the syllabus breaks a unit into named sub-topics or sessions, each becomes one lesson within that module, in the syllabus's own order.
+- If the syllabus lists topics for a unit but doesn't split it into named sub-topics, put the whole unit as a single lesson and use its listed topics as "keyTopics".
+- "keyTopics" must be terms the syllabus itself lists or names for that lesson — do not add topics the syllabus doesn't mention.
+- Do not write lesson content here — titles and key topics only.
+- Respond with ONLY the JSON object. No prose, no markdown code fences, no commentary.`;
+
+export const courseSkeletonFromSyllabusUserPrompt = (syllabusText: string): string =>
+  `Official syllabus:\n\n${syllabusText}`;
 
 export const courseSkeletonCorrectivePrompt = (invalidResponse: string): string =>
   `Your previous response was not valid JSON matching the required shape. Here is what you sent:\n\n${invalidResponse}\n\nRespond again with ONLY a JSON object matching this exact shape, and nothing else:\n${SKELETON_SCHEMA_DESCRIPTION}`;

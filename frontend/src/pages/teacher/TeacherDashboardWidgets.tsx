@@ -145,8 +145,8 @@ const TeacherCourseCard = ({ course }: { course: CourseSummary }) => (
 );
 
 // ──────────────────────────────────────────────────────────────────────────────
-// AI insights — one flowing block (mirrors ExamPrepCard's "AI analysis"
-// treatment) rather than a grid of boxes, with an explicit generate/refresh
+// AI insights — one flowing block of prose rather than a grid of boxes,
+// with an explicit generate/refresh
 // control: this is never generated automatically, only on request, so the
 // header always says exactly when it was last generated.
 // ──────────────────────────────────────────────────────────────────────────────

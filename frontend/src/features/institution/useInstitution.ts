@@ -16,12 +16,14 @@ import {
   deleteSection,
   fetchAcademicYears,
   fetchBatches,
+  fetchBatchCurrentPlacement,
   fetchClasses,
   fetchCourseTeachers,
   fetchCourses,
   fetchInstitutionProfile,
   fetchPrograms,
   fetchSections,
+  unassignCourseTeacher,
   updateAcademicYear,
   updateBatch,
   updateClass,
@@ -135,6 +137,18 @@ export const useDeleteBatch = () => {
   });
 };
 
+/** Which class(es)/section(s) a batch is placed in right now — GET
+ * /admin/classes and /admin/sections's own `batchId` filters return the
+ * batch's FULL semester history on purpose (see docs/SCHEMA.md), so this is
+ * the dedicated way to know which of those is current, for marking/
+ * auto-selecting it in a picker. */
+export const useBatchCurrentPlacement = (batchId: string) =>
+  useQuery({
+    queryKey: ['institution', 'batches', batchId, 'current-placement'] as const,
+    queryFn: () => fetchBatchCurrentPlacement(batchId),
+    enabled: Boolean(batchId),
+  });
+
 export const useAcademicYears = () =>
   useQuery({ queryKey: ACADEMIC_YEARS_KEY, queryFn: fetchAcademicYears });
 
@@ -163,8 +177,8 @@ export const useDeleteAcademicYear = () => {
   });
 };
 
-export const useSections = () =>
-  useQuery({ queryKey: SECTIONS_KEY, queryFn: fetchSections });
+export const useSections = (params?: { classId?: string; batchId?: string }) =>
+  useQuery({ queryKey: [...SECTIONS_KEY, params], queryFn: () => fetchSections(params) });
 
 export const useCreateSection = () => {
   const qc = useQueryClient();
@@ -233,6 +247,14 @@ export const useAssignCourseTeacher = (courseId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: AssignCourseTeacherInput) => assignCourseTeacher(courseId, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: courseTeachersKey(courseId) }),
+  });
+};
+
+export const useUnassignCourseTeacher = (courseId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (teacherId: string) => unassignCourseTeacher(courseId, teacherId),
     onSuccess: () => qc.invalidateQueries({ queryKey: courseTeachersKey(courseId) }),
   });
 };

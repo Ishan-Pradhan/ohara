@@ -33,17 +33,19 @@ import { Notification } from '../models/notifications.model.js';
 import { AttendanceSession } from '../models/attendanceSessions.model.js';
 import { AttendanceRecord } from '../models/attendanceRecords.model.js';
 import { Event } from '../models/events.model.js';
-import { Project } from '../models/projects.model.js';
-import { BoardColumn } from '../models/boardColumns.model.js';
-import { Task } from '../models/tasks.model.js';
-import { ProjectMember } from '../models/projectMembers.model.js';
 import { ExamTerm } from '../models/examTerms.model.js';
 import { ExamMark } from '../models/examMarks.model.js';
 import { StudyPlan } from '../models/studyPlan.model.js';
 import { TeacherDashboardInsight } from '../models/teacherDashboardInsight.model.js';
+import { InstitutionPerformanceInsight } from '../models/institutionPerformanceInsight.model.js';
+import { InstitutionWeeklyInsight } from '../models/institutionWeeklyInsight.model.js';
+import { CourseWeeklyInsight } from '../models/courseWeeklyInsight.model.js';
 import { Intervention } from '../models/intervention.model.js';
 import { TeacherCopilotConversation, TeacherCopilotMessage } from '../models/teacherCopilotConversation.model.js';
+import { AdminCopilotConversation, AdminCopilotMessage } from '../models/adminCopilotConversation.model.js';
 import { BirthdayWish } from '../models/birthdayWish.model.js';
+import { TeacherStudentNote } from '../models/teacherStudentNotes.model.js';
+import { CourseStudyAid } from '../models/courseStudyAids.model.js';
 
 // Under test the app must talk to the throwaway test database. Without this
 // the integration suites connect to - and truncate - the development database,
@@ -91,17 +93,20 @@ export const sequelize = new Sequelize({
     AttendanceSession,
     AttendanceRecord,
     Event,
-    Project,
-    BoardColumn,
-    Task,
-    ProjectMember,
     ExamTerm,
     ExamMark,
     StudyPlan,
     TeacherDashboardInsight,
+    InstitutionPerformanceInsight,
+    InstitutionWeeklyInsight,
+    CourseWeeklyInsight,
     Intervention,
     TeacherCopilotConversation,
     TeacherCopilotMessage,
+    AdminCopilotConversation,
+    AdminCopilotMessage,
     BirthdayWish,
+    TeacherStudentNote,
+    CourseStudyAid,
   ],
 });

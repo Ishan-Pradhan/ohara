@@ -12,13 +12,23 @@ export const classRepository = {
     return await Class.create(data);
   },
 
+  /** `batchId`, when given, scopes to classes this batch has ever actually
+   * been placed in — every class in its promotion history (Semester 1 in
+   * year N, Semester 2 in year N+1, ...), not just its current one. Browsing
+   * a batch's past semesters is a real need (reviewing old attendance/grades,
+   * correcting a past transcript entry), so this deliberately does NOT
+   * filter by `outcome` (design decision 2026-08-12, reversing an earlier,
+   * narrower version of this method that only returned the current class —
+   * see git history / conversation record if you need the reasoning that
+   * was rejected). Pair with `classMembershipRepository.findCurrentForBatch`
+   * to know which of the returned classes is the batch's *current* one, for
+   * marking/auto-selecting it in a picker — that's a UI concern, not a
+   * filtering one. If no matches at all, falls back to every class for the
+   * program (the batch may not have any placements yet). */
   findAll: async (options?: { programId?: string; batchId?: string }): Promise<Class[]> => {
     const where: Record<string, unknown> = {};
     if (options?.programId) where.programId = options.programId;
 
-    // When batchId is provided, filter to only classes that have sections
-    // with ClassMembership records for that batch. If no matches, fall back
-    // to all classes for the program (batch may not have placements yet).
     if (options?.batchId) {
       const memberships = await ClassMembership.findAll({
         where: { batchId: options.batchId },

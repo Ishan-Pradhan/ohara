@@ -9,6 +9,7 @@ import { lessonRepository } from '../repositories/lessons.repository.js';
 import { moduleRepository } from '../repositories/modules.repository.js';
 import { enrollmentRepository } from '../repositories/enrollments.repository.js';
 import { notificationRepository } from '../repositories/notifications.repository.js';
+import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeQuiz, serializeQuestion } from '../serializers/quizzes.serializer.js';
 import { generateJson } from '../services/llm.service.js';
 import {
@@ -18,9 +19,10 @@ import {
 } from '../prompts/quizGeneration.prompt.js';
 import type { QuizGenerationOptions } from '../prompts/quizGeneration.prompt.js';
 import { generatedQuizSchema } from '../validations/quizzes.validation.js';
-import { QUIZ_STATUS } from '../constants/index.js';
+import { QUIZ_STATUS, QUIZ_RETRIEVAL_K } from '../constants/index.js';
 import type { Quiz } from '../models/quizzes.model.js';
 import { resolveCurrentAcademicYearForCourse } from './courses.controller.js';
+import { retrieveKnowledgeBaseMaterial } from './documents.controller.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -42,6 +44,26 @@ const tryParseQuiz = (raw: string) => {
   } catch {
     return { success: false as const };
   }
+};
+
+/** Grounds a topic-based (no lessonId given) quiz request in the course's
+ * selected knowledge-base document via RAG (retrieveKnowledgeBaseMaterial,
+ * documents.controller.ts) instead of sending the bare topic string to the
+ * LLM as if it were source material. Previously this path had no grounding
+ * at all: `sourceText = topic` handed the model a two-word string and the
+ * quiz prompt's "don't invent facts not in the source" instruction had
+ * nothing to actually check against. Falls back to the bare topic when
+ * there's no selected document or nothing relevant is found — still lets a
+ * teacher generate a quiz from a topic name alone rather than blocking the
+ * request. */
+const resolveTopicSourceText = async (courseId: string, topic: string): Promise<string> => {
+  const course = await courseRepository.findById(courseId);
+  const material = await retrieveKnowledgeBaseMaterial(
+    course?.knowledgeBaseDocumentId ?? null,
+    topic,
+    QUIZ_RETRIEVAL_K,
+  );
+  return material ?? topic;
 };
 
 /** Same bounded call-parse-retry shape as courseContent.controller.ts and
@@ -84,9 +106,9 @@ export const generateQuiz = asyncHandler(
       learningObjectives?: string[];
     };
 
-    // Resolve source text from lesson(s) or topic
+    // Resolve source text from lesson(s), or a RAG-grounded topic search.
     const allLessonIds = lessonIds ?? (lessonId ? [lessonId] : []);
-    let sourceText = topic ?? '';
+    let sourceText: string;
     if (allLessonIds.length > 0) {
       const contents: string[] = [];
       for (const lid of allLessonIds) {
@@ -101,6 +123,10 @@ export const generateQuiz = asyncHandler(
         contents.push(lesson.content);
       }
       sourceText = contents.join('\n\n---\n\n');
+    } else {
+      // Validation (generateQuizSchema's refine) guarantees topic is set
+      // whenever lessonId/lessonIds aren't.
+      sourceText = await resolveTopicSourceText(courseId, topic ?? '');
     }
 
     const generated = await generateQuestions(sourceText, {

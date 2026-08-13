@@ -11,8 +11,17 @@ import { toApiError } from './apiError.js';
  * production, so the backend's httpOnly, sameSite=strict cookies are always
  * first-party. The frontend never reads, stores or attaches a token.
  */
+export const API_BASE_URL = '/api/v1';
+
+/**
+ * Exported for endpoints the browser navigates to directly rather than
+ * fetching through axios — e.g. a PDF opened in an <iframe>/new tab
+ * (features/documents/documents.api.ts's documentFileUrl). The cookie is
+ * same-origin either way, so no separate auth plumbing is needed there;
+ * this constant just keeps the prefix in one place.
+ */
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });

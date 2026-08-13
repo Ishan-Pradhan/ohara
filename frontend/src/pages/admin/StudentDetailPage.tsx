@@ -41,6 +41,7 @@ import { Skeleton } from '../../components/ui/Skeleton.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { Dialog } from '../../components/ui/Dialog.js';
 import { Alert } from '../../components/ui/Alert.js';
+import { StudentInfoCard } from './StudentInfoCard.js';
 
 export const StudentDetailPage = () => {
   const { studentId = '' } = useParams();
@@ -163,6 +164,18 @@ export const StudentDetailPage = () => {
         />
       ) : placement ? (
         <div className="flex flex-col gap-6">
+          <StudentInfoCard
+            student={placement.student}
+            profile={{
+              dateOfBirth: placement.dateOfBirth,
+              studentPhone: placement.studentPhone,
+              address: placement.address,
+              parentName: placement.parentName,
+              parentPhone: placement.parentPhone,
+              previousSchool: placement.previousSchool,
+            }}
+          />
+
           <Card>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-4">
