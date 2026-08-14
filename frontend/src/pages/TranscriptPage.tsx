@@ -20,6 +20,7 @@ import { Skeleton } from '../components/ui/Skeleton.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { ExamMarksEntrySection } from './admin/course-content/ExamMarksEntrySection.js';
 import { BulkExamMarksEntry } from './admin/course-content/BulkExamMarksEntry.js';
+import { ExamTermManager } from './admin/course-content/ExamTermManager.js';
 import { TranscriptView } from './TranscriptView.js';
 
 /** Two very different audiences share this one nav entry:
@@ -138,6 +139,8 @@ const AdminBulkMarksWorkspace = () => {
         />
       ) : (
         <div className="flex flex-col gap-6">
+          <ExamTermManager />
+
           {/* Cascading selectors */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="flex flex-col gap-1.5">
