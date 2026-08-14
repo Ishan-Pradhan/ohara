@@ -75,9 +75,9 @@ export const StudentLessonPage = () => {
 
           <div className="mx-auto mt-10 max-w-3xl border-t border-border pt-8">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-subtle">
-              Study tools for this lesson
+              Study tools
             </h2>
-            <StudyAidsPanel courseId={courseId} lessonId={lessonId} />
+            <StudyAidsPanel courseId={courseId} initialLessonId={lessonId} />
           </div>
         </>
       )}
