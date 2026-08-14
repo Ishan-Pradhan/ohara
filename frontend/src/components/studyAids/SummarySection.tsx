@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { RotateCw, Sparkles } from 'lucide-react';
 
 import { useSummary, useGenerateSummary } from '../../features/studyAids/useStudyAids.js';
+import { useCurrentUser } from '../../features/auth/useAuth.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { Card } from '../ui/Card.js';
 import { Button } from '../ui/Button.js';
 import { Skeleton } from '../ui/Skeleton.js';
 import { EmptyState } from '../ui/EmptyState.js';
+import { ConfirmDialog } from '../ui/Dialog.js';
 
 interface SummarySectionProps {
   courseId: string;
@@ -16,6 +19,9 @@ interface SummarySectionProps {
 export const SummarySection = ({ courseId, lessonId }: SummarySectionProps) => {
   const { data: summary, isLoading } = useSummary(courseId, lessonId);
   const generate = useGenerateSummary(courseId, lessonId);
+  const { data: currentUser } = useCurrentUser();
+  const canRegenerate = currentUser?.role === 'teacher' || currentUser?.role === 'admin';
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -58,6 +64,7 @@ export const SummarySection = ({ courseId, lessonId }: SummarySectionProps) => {
   const onRegenerate = async () => {
     try {
       await generate.mutateAsync(true);
+      setConfirmOpen(false);
       toast.success('Summary regenerated');
     } catch {
       toast.error("Couldn't regenerate the summary — try again.");
@@ -66,12 +73,23 @@ export const SummarySection = ({ courseId, lessonId }: SummarySectionProps) => {
 
   return (
     <Card padding="sm">
-      <div className="mb-3 flex justify-end">
-        <Button size="sm" variant="secondary" loading={generate.isPending} onClick={onRegenerate}>
-          <RotateCw className="size-3.5" aria-hidden />
-          Regenerate
-        </Button>
-      </div>
+      {canRegenerate ? (
+        <div className="mb-3 flex justify-end">
+          <Button size="sm" variant="secondary" onClick={() => setConfirmOpen(true)}>
+            <RotateCw className="size-3.5" aria-hidden />
+            Regenerate
+          </Button>
+        </div>
+      ) : null}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Regenerate this summary?"
+        description="Every student studying this material sees the same summary. Regenerating replaces it for all of them immediately — anyone mid-review loses the version they were reading."
+        confirmLabel="Regenerate"
+        loading={generate.isPending}
+        onConfirm={onRegenerate}
+      />
       <p className="text-sm leading-relaxed text-fg">{summary.content.summary}</p>
       {summary.content.keyPoints.length > 0 ? (
         <ul className="mt-4 flex flex-col gap-1.5 border-t border-border pt-4">

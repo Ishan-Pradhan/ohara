@@ -38,6 +38,22 @@ interface SourceResolution {
   label: string;
 }
 
+/** Regenerating deletes and replaces the single row every enrolled student
+ * reads from (see generateSummary/generateFlashcards below) — letting any
+ * student trigger it would let one student silently pull the material out
+ * from under everyone else mid-study, with no way to get the old version
+ * back. Only the course's own teacher or an admin may do it. A student may
+ * still trigger the very first generation (regenerate falsy), which only
+ * ever creates, never destroys, anything. */
+const assertRegeneratePermitted = (req: AuthRequest) => {
+  if (req.user!.role !== 'admin' && req.user!.role !== 'teacher') {
+    throw new ApiError(
+      403,
+      'Only a teacher or admin can regenerate this — it would replace what every enrolled student is currently studying from.',
+    );
+  }
+};
+
 /** Lesson-scoped: the lesson's own already-curated content is the source —
  * no RAG needed, it's on-topic by construction. Course-wide: every lesson's
  * content aggregated (cheap, already curated by course-structure
@@ -156,6 +172,7 @@ export const generateSummary = asyncHandler(async (req: AuthRequest, res: Respon
   const userId = req.user!.id;
 
   if (regenerate) {
+    assertRegeneratePermitted(req);
     await courseStudyAidRepository.delete(courseId, lessonId ?? null, STUDY_AID_TYPES.SUMMARY);
   } else {
     const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.SUMMARY);
@@ -220,6 +237,7 @@ export const generateFlashcards = asyncHandler(async (req: AuthRequest, res: Res
   const userId = req.user!.id;
 
   if (regenerate) {
+    assertRegeneratePermitted(req);
     await courseStudyAidRepository.delete(courseId, lessonId ?? null, STUDY_AID_TYPES.FLASHCARDS);
   } else {
     const cached = await courseStudyAidRepository.findOne(courseId, lessonId ?? null, STUDY_AID_TYPES.FLASHCARDS);

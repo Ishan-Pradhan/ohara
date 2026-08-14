@@ -25,6 +25,7 @@ const { documentChunkRepository } = await import(
   '../../src/repositories/documentChunks.repository.js'
 );
 const { courseRepository } = await import('../../src/repositories/courses.repository.js');
+const { courseTeacherRepository } = await import('../../src/repositories/courseTeachers.repository.js');
 const { moduleRepository } = await import('../../src/repositories/modules.repository.js');
 const { lessonRepository } = await import('../../src/repositories/lessons.repository.js');
 const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
@@ -199,9 +200,12 @@ describe('POST /courses/:courseId/study-aids/summary', () => {
     expect(generateJson).toHaveBeenCalledTimes(2);
   });
 
-  it('regenerate: true bypasses the cache and replaces the stored summary with fresh content', async () => {
+  it("regenerate: true (teacher) bypasses the cache and replaces the stored summary with fresh content", async () => {
     const { course, lesson } = await seedCourseWithLessonAndMaterial();
     const studentCookie = await signInEnrolledStudent('s6@example.com', course.id);
+    const teacher = await createTeacherUser({ email: 't-regen-summary@example.com' });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+    const teacherCookie = await signInAs(teacher.email, 'teacher');
 
     vi.mocked(generateJson).mockResolvedValueOnce(
       JSON.stringify({ summary: 'First version.', keyPoints: ['A'] }),
@@ -217,7 +221,7 @@ describe('POST /courses/:courseId/study-aids/summary', () => {
     );
     const regenerated = await request(app)
       .post(`/api/v1/courses/${course.id}/study-aids/summary`)
-      .set('Cookie', studentCookie)
+      .set('Cookie', teacherCookie)
       .send({ lessonId: lesson.id, regenerate: true });
 
     expect(regenerated.status).toBe(201);
@@ -229,6 +233,28 @@ describe('POST /courses/:courseId/study-aids/summary', () => {
       .query({ lessonId: lesson.id })
       .set('Cookie', studentCookie);
     expect(getRes.body.data.content.summary).toBe('Regenerated version.');
+  });
+
+  it('regenerate: true is rejected (403) for a student — it would replace what every other student sees', async () => {
+    const { course, lesson } = await seedCourseWithLessonAndMaterial();
+    const studentCookie = await signInEnrolledStudent('s7@example.com', course.id);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ summary: 'First version.', keyPoints: ['A'] }),
+    );
+    const first = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/summary`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id });
+    expect(first.status).toBe(201);
+
+    const regenerated = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/summary`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id, regenerate: true });
+
+    expect(regenerated.status).toBe(403);
+    expect(generateJson).toHaveBeenCalledTimes(1); // never re-called — rejected before generation
   });
 });
 
@@ -251,9 +277,12 @@ describe('POST /courses/:courseId/study-aids/flashcards', () => {
     expect(res.body.data.type).toBe('flashcards');
   });
 
-  it('regenerate: true bypasses the cache and replaces the stored flashcard set', async () => {
+  it('regenerate: true (teacher) bypasses the cache and replaces the stored flashcard set', async () => {
     const { course, lesson } = await seedCourseWithLessonAndMaterial();
     const studentCookie = await signInEnrolledStudent('f2@example.com', course.id);
+    const teacher = await createTeacherUser({ email: 't-regen-flashcards@example.com' });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+    const teacherCookie = await signInAs(teacher.email, 'teacher');
 
     vi.mocked(generateJson).mockResolvedValueOnce(
       JSON.stringify({ cards: [{ front: 'Q1', back: 'A1' }] }),
@@ -269,12 +298,34 @@ describe('POST /courses/:courseId/study-aids/flashcards', () => {
     );
     const regenerated = await request(app)
       .post(`/api/v1/courses/${course.id}/study-aids/flashcards`)
-      .set('Cookie', studentCookie)
+      .set('Cookie', teacherCookie)
       .send({ lessonId: lesson.id, regenerate: true });
 
     expect(regenerated.status).toBe(201);
     expect(regenerated.body.data.content.cards).toHaveLength(2);
     expect(generateJson).toHaveBeenCalledTimes(2); // called again, not served from cache
+  });
+
+  it('regenerate: true is rejected (403) for a student — it would replace what every other student sees', async () => {
+    const { course, lesson } = await seedCourseWithLessonAndMaterial();
+    const studentCookie = await signInEnrolledStudent('f3@example.com', course.id);
+
+    vi.mocked(generateJson).mockResolvedValueOnce(
+      JSON.stringify({ cards: [{ front: 'Q1', back: 'A1' }] }),
+    );
+    const first = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/flashcards`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id });
+    expect(first.status).toBe(201);
+
+    const regenerated = await request(app)
+      .post(`/api/v1/courses/${course.id}/study-aids/flashcards`)
+      .set('Cookie', studentCookie)
+      .send({ lessonId: lesson.id, regenerate: true });
+
+    expect(regenerated.status).toBe(403);
+    expect(generateJson).toHaveBeenCalledTimes(1); // never re-called — rejected before generation
   });
 });
 

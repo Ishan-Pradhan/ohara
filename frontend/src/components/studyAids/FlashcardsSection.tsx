@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Layers, RotateCw } from 'lucide-react';
 
 import { useFlashcards, useGenerateFlashcards } from '../../features/studyAids/useStudyAids.js';
+import { useCurrentUser } from '../../features/auth/useAuth.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
 import { cn } from '../../lib/cn.js';
@@ -10,6 +11,7 @@ import { Button } from '../ui/Button.js';
 import { Badge } from '../ui/Badge.js';
 import { Skeleton } from '../ui/Skeleton.js';
 import { EmptyState } from '../ui/EmptyState.js';
+import { ConfirmDialog } from '../ui/Dialog.js';
 
 interface FlashcardsSectionProps {
   courseId: string;
@@ -19,8 +21,11 @@ interface FlashcardsSectionProps {
 export const FlashcardsSection = ({ courseId, lessonId }: FlashcardsSectionProps) => {
   const { data: flashcards, isLoading } = useFlashcards(courseId, lessonId);
   const generate = useGenerateFlashcards(courseId, lessonId);
+  const { data: currentUser } = useCurrentUser();
+  const canRegenerate = currentUser?.role === 'teacher' || currentUser?.role === 'admin';
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -74,6 +79,7 @@ export const FlashcardsSection = ({ courseId, lessonId }: FlashcardsSectionProps
       await generate.mutateAsync(true);
       setIndex(0);
       setFlipped(false);
+      setConfirmOpen(false);
       toast.success('Flashcards regenerated');
     } catch {
       toast.error("Couldn't regenerate flashcards — try again.");
@@ -82,12 +88,23 @@ export const FlashcardsSection = ({ courseId, lessonId }: FlashcardsSectionProps
 
   return (
     <Card padding="sm">
-      <div className="mb-3 flex items-center justify-end">
-        <Button size="sm" variant="secondary" loading={generate.isPending} onClick={onRegenerate}>
-          <RotateCw className="size-3.5" aria-hidden />
-          Regenerate
-        </Button>
-      </div>
+      {canRegenerate ? (
+        <div className="mb-3 flex items-center justify-end">
+          <Button size="sm" variant="secondary" onClick={() => setConfirmOpen(true)}>
+            <RotateCw className="size-3.5" aria-hidden />
+            Regenerate
+          </Button>
+        </div>
+      ) : null}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Regenerate this flashcard set?"
+        description="Every student studying this material sees the same flashcards. Regenerating replaces them for all of them immediately — anyone mid-review loses the set they were studying."
+        confirmLabel="Regenerate"
+        loading={generate.isPending}
+        onConfirm={onRegenerate}
+      />
 
       <div className="mb-3 flex items-center gap-3">
         <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-surface-hover">

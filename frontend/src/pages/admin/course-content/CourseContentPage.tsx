@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Brain, Users } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, ClipboardList, HelpCircle, Brain, Users, Sparkles } from 'lucide-react';
 
 import {
   useClasses,
@@ -22,6 +22,7 @@ import { AssignmentsSection } from './AssignmentsSection.js';
 import { QuizzesSection } from './QuizzesSection.js';
 import { IntelligenceSection } from './IntelligenceSection.js';
 import { CourseRosterSection } from './CourseRosterSection.js';
+import { StudyAidsPanel } from '../../../components/studyAids/StudyAidsPanel.js';
 
 export const CourseContentPage = () => {
   const { courseId = '' } = useParams();
@@ -140,6 +141,10 @@ export const CourseContentPage = () => {
             <Brain className="size-4" aria-hidden />
             Intelligence
           </TabsTrigger>
+          <TabsTrigger value="study-aids">
+            <Sparkles className="size-4" aria-hidden />
+            Study aids
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="content">
@@ -170,6 +175,10 @@ export const CourseContentPage = () => {
 
         <TabsContent value="intelligence">
           <IntelligenceSection courseId={courseId} />
+        </TabsContent>
+
+        <TabsContent value="study-aids">
+          <StudyAidsPanel courseId={courseId} />
         </TabsContent>
       </Tabs>
     </AppShell>
