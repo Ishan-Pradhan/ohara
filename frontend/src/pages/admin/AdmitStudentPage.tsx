@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { UserPlus } from 'lucide-react';
 
@@ -30,7 +30,6 @@ export const AdmitStudentPage = () => {
   const navigate = useNavigate();
   const { data: programs } = usePrograms();
   const { data: classes } = useClasses();
-  const { data: sections } = useSections();
   const admitStudent = useAdmitStudent();
 
   const [programId, setProgramId] = useState('');
@@ -46,6 +45,16 @@ export const AdmitStudentPage = () => {
     formState: { errors },
   } = useForm<AdmitStudentInput>({ resolver: zodResolver(admitStudentSchema) });
 
+  const batchId = useWatch({ control, name: 'batchId' });
+
+  // A class (e.g. "Semester 3") is reused every year across every batch, so
+  // a plain classId filter returns one section per batch that has ever had
+  // a "Semester 3" section — scope to this batch too, same as
+  // TranscriptPage.tsx (see docs/SCHEMA.md's `sections` entry).
+  const { data: sections } = useSections(
+    classId && batchId ? { classId, batchId } : undefined,
+  );
+
   const programOptions = (programs ?? []).map((p) => ({ value: p.id, label: p.name }));
 
   const classOptions = (classes ?? [])
@@ -57,7 +66,7 @@ export const AdmitStudentPage = () => {
     .map((b) => ({ value: b.id, label: b.name }));
 
   const sectionOptions = (sections ?? [])
-    .filter((s) => s.classId === classId)
+    .filter((s) => s.classId === classId && s.batchId === batchId)
     .map((s) => ({
       value: s.id,
       label:
@@ -160,7 +169,10 @@ export const AdmitStudentPage = () => {
                     id="batchId"
                     options={batchOptions}
                     value={selectField.value}
-                    onValueChange={selectField.onChange}
+                    onValueChange={(value) => {
+                      selectField.onChange(value);
+                      setValue('sectionId', '');
+                    }}
                     invalid={Boolean(errors.batchId)}
                     placeholder={programId ? 'Select a batch' : 'Select a program first'}
                   />
