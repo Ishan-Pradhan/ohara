@@ -90,6 +90,40 @@ const STAGE1_NO_MATCH_MESSAGE =
 // full-history code path to maintain.
 const STAGE1_FALLBACK_HISTORY_MESSAGES = 6;
 
+// How many of the most recent user turns (a turn = one user message plus
+// everything the model did in response — text, tool calls, tool results,
+// charts) get replayed to the PRIMARY agent loop. Unlike
+// STAGE1_FALLBACK_HISTORY_MESSAGES above, this can't be a flat message-count
+// slice: a tool_call row must stay immediately adjacent to its tool_result
+// row(s), or Groq's tool-calling API rejects the request outright (the same
+// adjacency toAgentHistory's orphaned-tool_call handling already protects).
+// Windowing by whole turns preserves that adjacency for granted, since a
+// turn boundary only ever falls on a user message.
+//
+// Real incident (2026-08-14): a conversation with no windowing at all grew
+// to ~33,000 characters of replayed history by its 36th message — big
+// enough that the primary loop's own runAgentTurn call started failing
+// outright, which permanently wedged the conversation into fallback-only
+// mode for every turn after that, since the resend only ever got bigger,
+// never smaller. 2 turns is deliberately small: it's enough for a student's
+// short referential follow-up ("that one", "yes", "no") to resolve against
+// what was just discussed, without the request ever growing unbounded.
+const TUTOR_HISTORY_MAX_TURNS = 2;
+
+/** Slices `messages` down to the last `maxTurns` user turns (inclusive of
+ * the current, not-yet-answered question) — everything from the maxTurns-th
+ * most recent user message onward. Returns `messages` unchanged if there
+ * aren't more than `maxTurns` user turns yet. */
+const windowToRecentTurns = (messages: TutorMessage[], maxTurns: number): TutorMessage[] => {
+  const userIndices: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]!.role === TUTOR_MESSAGE_ROLES.USER) userIndices.push(i);
+  }
+  if (userIndices.length <= maxTurns) return messages;
+  const startIndex = userIndices[userIndices.length - maxTurns]!;
+  return messages.slice(startIndex);
+};
+
 /** A raw, not-yet-persisted answer — the shape `stage1Fallback` and the
  * static-unavailable-message branch produce before a row id exists. */
 interface RawAnswer {
@@ -350,7 +384,11 @@ export const runTutorAgentTurn = async (
     : tutorAgentSystemPrompt;
 
   const priorMessages = await tutorMessageRepository.findAllByConversation(conversationId);
-  const history = toAgentHistory(systemPrompt, priorMessages);
+  // Windowed for the PRIMARY loop only — countTrailingClarificationStreak
+  // and stage1Fallback below both still use the full, unwindowed
+  // priorMessages (the former only ever looks at the tail anyway; the
+  // latter needs the true last user message regardless of window size).
+  const history = toAgentHistory(systemPrompt, windowToRecentTurns(priorMessages, TUTOR_HISTORY_MAX_TURNS));
 
   // Computed once from history *before* this turn — see
   // countTrailingClarificationStreak's comment. Reused for every iteration

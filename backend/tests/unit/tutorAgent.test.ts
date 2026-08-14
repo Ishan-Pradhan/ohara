@@ -510,6 +510,56 @@ describe('runTutorAgentTurn', () => {
     expect(persisted).toBeTruthy();
   });
 
+  it('windows the replayed history to only the last 2 user turns, dropping older ones', async () => {
+    const course = await createCourse();
+    await seedCourseWithMaterial(course.id);
+    const student = await createStudentUser();
+    const conversation = await tutorConversationRepository.create({
+      courseId: course.id,
+      studentId: student.id,
+      title: 'Long conversation',
+    });
+
+    // Turn 1 (should be dropped from what's sent to the model).
+    await tutorMessageRepository.create({
+      conversationId: conversation.id, seq: 0, role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT, content: 'oldest question',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id, seq: 1, role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TEXT, content: 'oldest answer',
+    });
+    // Turn 2 (kept — second-to-last turn).
+    await tutorMessageRepository.create({
+      conversationId: conversation.id, seq: 2, role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT, content: 'middle question',
+    });
+    await tutorMessageRepository.create({
+      conversationId: conversation.id, seq: 3, role: TUTOR_MESSAGE_ROLES.ASSISTANT,
+      type: TUTOR_MESSAGE_TYPES.TEXT, content: 'middle answer',
+    });
+    // Turn 3 — the current, unanswered question (kept — it's what triggered this call).
+    await tutorMessageRepository.create({
+      conversationId: conversation.id, seq: 4, role: TUTOR_MESSAGE_ROLES.USER,
+      type: TUTOR_MESSAGE_TYPES.TEXT, content: 'newest question',
+    });
+
+    let capturedHistory: { role: string; content: unknown }[] = [];
+    vi.mocked(runAgentTurn).mockImplementationOnce((history) => {
+      capturedHistory = history as typeof capturedHistory;
+      return Promise.resolve({ type: 'text', content: 'Answer' });
+    });
+
+    await runTutorAgentTurn(conversation.id, course.id);
+
+    const contents = capturedHistory.map((m) => m.content);
+    expect(contents).not.toContain('oldest question');
+    expect(contents).not.toContain('oldest answer');
+    expect(contents).toContain('middle question');
+    expect(contents).toContain('middle answer');
+    expect(contents).toContain('newest question');
+  });
+
   it('injects learningContext into the system prompt when provided', async () => {
     const course = await createCourse();
     await seedCourseWithMaterial(course.id);
