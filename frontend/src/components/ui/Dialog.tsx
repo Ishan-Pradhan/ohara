@@ -32,14 +32,14 @@ export const Dialog = ({
       />
       <RadixDialog.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2',
-          'rounded-card border border-border bg-surface p-6 shadow-xl shadow-black/10',
+          'fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-full max-w-md -translate-x-1/2 -translate-y-1/2 flex-col',
+          'rounded-card border border-border bg-surface shadow-xl shadow-black/10',
           'data-[state=open]:[animation:scale-in_180ms_var(--ease-out)]',
           'data-[state=closed]:[animation:scale-out_150ms_var(--ease-out)]',
           'focus:outline-none',
         )}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6">
           <div>
             <RadixDialog.Title className="text-lg font-semibold text-fg">
               {title}
@@ -61,9 +61,13 @@ export const Dialog = ({
           </RadixDialog.Close>
         </div>
 
-        {children}
-
-        {footer ? <div className="mt-6 flex justify-end gap-3">{footer}</div> : null}
+        {/* Fixed dialog height (max-h-[85vh] above) — everything below the
+            header scrolls together, since some callers (e.g. GenerateQuizDialog)
+            put their action buttons inside `children` rather than `footer`. */}
+        <div className="mt-4 overflow-y-auto px-6 pb-6">
+          {children}
+          {footer ? <div className="mt-6 flex justify-end gap-3">{footer}</div> : null}
+        </div>
       </RadixDialog.Content>
     </RadixDialog.Portal>
   </RadixDialog.Root>
