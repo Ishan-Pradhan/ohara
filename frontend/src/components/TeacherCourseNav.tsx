@@ -70,9 +70,17 @@ export const TeacherCourseNav = ({ courses, onSelect }: TeacherCourseNavProps) =
     }
   }, [filteredCourses, courseId]);
 
+  // Deliberately excludes `onSelect` — several callers (Gradebook/AtRisk/
+  // Attendance) pass an inline handler that also resets their own batchId
+  // state, so it's a new function identity every render. Depending on it
+  // here would re-fire this effect on every unrelated re-render (e.g. right
+  // after the caller's own setBatchId call), immediately resetting the
+  // batch selection the user just made back to "current". This should only
+  // ever re-notify the parent when the selected course itself changes.
   useEffect(() => {
     onSelect(courseId);
-  }, [courseId, onSelect]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
   return (
     <div className="flex flex-col gap-3">
