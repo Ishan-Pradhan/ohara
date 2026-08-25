@@ -6,7 +6,7 @@ import {
   requireEnrolledStudent,
 } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
-import { uploadPdf } from '../middlewares/upload.middleware.js';
+import { uploadCourseDocument } from '../middlewares/upload.middleware.js';
 import {
   uploadDocumentSchema,
   listDocumentsSchema,
@@ -40,7 +40,7 @@ router
   .post(
     verifyJWT,
     requireCourseTeacher,
-    uploadPdf,
+    uploadCourseDocument,
     validate(uploadDocumentSchema),
     uploadDocument,
   )

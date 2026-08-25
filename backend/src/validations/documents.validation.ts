@@ -67,10 +67,10 @@ registry.registerPath({
   responses: {
     202: {
       description:
-        'PDF accepted — status starts "processing"; extraction/chunking/embedding runs in the background',
+        'File accepted — status starts "processing"; extraction/chunking/embedding runs in the background',
       content: { 'application/json': { schema: envelope(documentSchema) } },
     },
-    400: { description: 'No file, or not a PDF' },
+    400: { description: 'No file, or not a PDF/Markdown (.md) file' },
     401: unauthenticated,
     403: forbidden,
   },

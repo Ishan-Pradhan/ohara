@@ -66,15 +66,21 @@ export const DocumentsSection = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
+    if (files.length === 0) return;
 
-    try {
-      await uploadDocument.mutateAsync(file);
-      toast.success(`${file.name} uploaded — processing`);
-    } catch (caught) {
-      toast.error(caught instanceof ApiError ? caught.message : 'Upload failed');
+    // Sequential, one request per file — a bad file (rejected type, too
+    // large) surfaces its own toast without blocking the rest of the batch.
+    for (const file of files) {
+      try {
+        await uploadDocument.mutateAsync(file);
+        toast.success(`${file.name} uploaded — processing`);
+      } catch (caught) {
+        toast.error(
+          caught instanceof ApiError ? `${file.name}: ${caught.message}` : `${file.name}: upload failed`,
+        );
+      }
     }
   };
 
@@ -132,7 +138,8 @@ export const DocumentsSection = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept=".pdf,.md,application/pdf,text/markdown"
+          multiple
           className="hidden"
           onChange={onFileSelected}
         />
@@ -142,7 +149,7 @@ export const DocumentsSection = ({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="size-4" aria-hidden />
-          Upload PDF
+          Upload PDF/Markdown
         </Button>
       </div>
 
@@ -155,7 +162,7 @@ export const DocumentsSection = ({
         <EmptyState
           icon={FileText}
           title="No documents yet"
-          description="Upload a course PDF to start generating a lesson structure from it."
+          description="Upload course PDFs or Markdown files to start generating a lesson structure from them."
         />
       ) : (
         <div className="flex flex-col gap-2">
