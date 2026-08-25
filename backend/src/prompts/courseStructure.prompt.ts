@@ -1,9 +1,12 @@
 /** Course generation is two phases (see courseContent.controller.ts):
- * 1. Skeleton — one call over the whole (truncated-to-MAX_LLM_SOURCE_CHARS)
- *    source, producing just module/lesson titles + key topics. Cheap and
- *    reliable, and the one remaining place a big-enough document could still
- *    hit Groq's request-too-large limit — not fixed here, see the module
- *    content note below for why this phase can't use the same fix.
+ * 1. Skeleton — one call over the whole source, producing just module/lesson
+ *    titles + key topics. Truncated to COURSE_SKELETON_MAX_SOURCE_CHARS
+ *    (constants/index.ts) rather than the far larger MAX_LLM_SOURCE_CHARS —
+ *    unlike module content below, this phase can't use RAG retrieval to stay
+ *    under Groq's TPM ceiling, so a big-enough document still only gets a
+ *    structure generated from its first ~15,000 characters, not the whole
+ *    thing. Known limitation, not solved here — see the module content note
+ *    below for why this phase can't use the same retrieval fix.
  *
  *    Two prompt variants for this call, chosen by whether the course has a
  *    Course.syllabusDocumentId set: courseSkeletonSystemPrompt INVENTS a
@@ -29,7 +32,7 @@
  * count (a module's handful of lessons per call, not the whole course); RAG
  * retrieval is the fix for what each of those calls sends as source material
  * — the module-content call reliably exceeded Groq's on_demand tier's
- * 12,000 TPM per-request cap once resending the whole document, regardless
+ * TPM per-request cap once resending the whole document, regardless
  * of chunking calls by module or by lesson. The skeleton call can't use the
  * same retrieval fix — it needs a global view of the document to find
  * sensible module/lesson boundaries in the first place, before any

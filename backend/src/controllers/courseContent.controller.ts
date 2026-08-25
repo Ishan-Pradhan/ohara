@@ -34,6 +34,8 @@ import {
   MODULE_CONTENT_MAX_COMPLETION_TOKENS,
   MODULE_CONTENT_RETRIEVAL_K,
   MODULE_CONTENT_SOURCE_FALLBACK_CHARS,
+  COURSE_SKELETON_MAX_SOURCE_CHARS,
+  COURSE_SKELETON_MAX_COMPLETION_TOKENS,
 } from '../constants/index.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -50,18 +52,31 @@ import type { Module } from '../models/modules.model.js';
  * see generateCourseStructure below), this EXTRACTS the structure from that
  * official syllabus instead of inventing one from sourceText — sourceText
  * is unused in that case, kept as a parameter only so the corrective retry
- * and error handling stay identical between the two modes. */
+ * and error handling stay identical between the two modes.
+ *
+ * Both sourceText and syllabusText arrive already truncated to
+ * MAX_LLM_SOURCE_CHARS (250,000 chars) by the caller — far more than this
+ * phase can actually send in one request. Re-truncated here to
+ * COURSE_SKELETON_MAX_SOURCE_CHARS, which is sized to fit under Groq's TPM
+ * ceiling alongside COURSE_SKELETON_MAX_COMPLETION_TOKENS (see
+ * constants/index.ts) — this phase can't use module-content generation's
+ * RAG-retrieval fix, since it needs a global view of the document to find
+ * module/lesson boundaries in the first place. */
 const generateSkeleton = async (sourceText: string, syllabusText: string | null) => {
   const systemPrompt = syllabusText ? courseSkeletonFromSyllabusSystemPrompt : courseSkeletonSystemPrompt;
   const userPrompt = syllabusText
-    ? courseSkeletonFromSyllabusUserPrompt(syllabusText)
-    : courseSkeletonUserPrompt(sourceText);
-  const raw = await generateJson(systemPrompt, userPrompt);
+    ? courseSkeletonFromSyllabusUserPrompt(syllabusText.slice(0, COURSE_SKELETON_MAX_SOURCE_CHARS))
+    : courseSkeletonUserPrompt(sourceText.slice(0, COURSE_SKELETON_MAX_SOURCE_CHARS));
+  const raw = await generateJson(systemPrompt, userPrompt, COURSE_SKELETON_MAX_COMPLETION_TOKENS);
 
   const firstAttempt = tryParseSkeleton(raw);
   if (firstAttempt.success) return firstAttempt.data;
 
-  const retryRaw = await generateJson(systemPrompt, courseSkeletonCorrectivePrompt(raw));
+  const retryRaw = await generateJson(
+    systemPrompt,
+    courseSkeletonCorrectivePrompt(raw),
+    COURSE_SKELETON_MAX_COMPLETION_TOKENS,
+  );
   const secondAttempt = tryParseSkeleton(retryRaw);
   if (secondAttempt.success) return secondAttempt.data;
 

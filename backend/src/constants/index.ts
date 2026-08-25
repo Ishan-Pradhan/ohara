@@ -71,23 +71,30 @@ export const CHUNK_SIZE_CHARS = 1000;
 export const CHUNK_OVERLAP_CHARS = 100;
 
 // Course structure generation is two phases (see courseStructure.prompt.ts):
-// a cheap skeleton call (generateJson's default token budget is plenty —
-// titles and key topics only), then one content call per MODULE (a
-// module's handful of lessons, not the whole course in one call and not
-// one call per lesson — the former rations depth too thin, the latter
-// meant resending the full source text on every call). A module can have a
-// few lessons at 400+ words each plus code blocks, so this budget is larger
-// than a single lesson would need.
-export const MODULE_CONTENT_MAX_COMPLETION_TOKENS = 8192;
+// a skeleton call (titles and key topics only), then one content call per
+// MODULE (a module's handful of lessons, not the whole course in one call
+// and not one call per lesson — the former rations depth too thin, the
+// latter meant resending the full source text on every call).
+//
+// All the budgets below were recalibrated 2026-08-25 after the Groq model
+// migration off the deprecated llama-3.3-70b-versatile (12,000 TPM on the
+// on_demand tier) to openai/gpt-oss-120b, whose on_demand tier caps at only
+// 8,000 TPM — confirmed against the live account, not just Groq's docs:
+// MODULE_CONTENT_MAX_COMPLETION_TOKENS alone used to be 8192, which by
+// itself already exceeded the new 8,000 ceiling before counting a single
+// token of input. A module can have a few lessons at 400+ words each plus
+// code blocks, so this budget is still the largest of the bunch — just no
+// longer larger than the entire per-request ceiling.
+export const MODULE_CONTENT_MAX_COMPLETION_TOKENS = 3500;
 
 // Module-content generation retrieves RAG chunks (documentChunkRepository,
 // same as the tutor/quiz/lesson-planner) instead of resending the whole
 // document — the source of the Groq 413 "request too large" errors this
-// replaced. Sized to leave headroom under Groq's on_demand tier's 12,000
-// TPM hard cap alongside MODULE_CONTENT_MAX_COMPLETION_TOKENS: 10 chunks at
-// ~1000 chars (CHUNK_SIZE_CHARS) is roughly 2,500 tokens, well under the
-// ~3,800 tokens left after the completion budget, with headroom for the
-// system prompt and lesson list.
+// replaced. Sized to leave headroom under the 8,000 TPM ceiling alongside
+// MODULE_CONTENT_MAX_COMPLETION_TOKENS: 10 chunks at ~1000 chars
+// (CHUNK_SIZE_CHARS) is roughly 2,500 tokens, leaving comfortable room under
+// the ~4,500 tokens left after the completion budget for the system prompt
+// and lesson list.
 export const MODULE_CONTENT_RETRIEVAL_K = 10;
 
 // Defensive fallback only — used when RAG retrieval finds nothing for a
@@ -96,6 +103,29 @@ export const MODULE_CONTENT_RETRIEVAL_K = 10;
 // a slice of the raw source text, not chunk-selected, so it must stay well
 // under the same TPM budget on its own.
 export const MODULE_CONTENT_SOURCE_FALLBACK_CHARS = 3000;
+
+// Skeleton-phase source text cap (courseContent.controller.ts's
+// generateSkeleton) — deliberately much smaller than MAX_LLM_SOURCE_CHARS
+// (250,000 chars), which is sized for module-content generation's RAG
+// retrieval, not for resending the (near-)entire document in one call the
+// way the skeleton phase does — it can't use RAG retrieval itself, since it
+// needs a global view of the document to find module/lesson boundaries
+// before any per-module query exists. Real incident (2026-08-25): a
+// 26,360-char document alone measured ~6,300 input tokens against
+// openai/gpt-oss-120b's tokenizer — already most of the whole 8,000 TPM
+// budget before adding a completion budget on top, which is exactly why
+// this phase now needs its own (tight) cap instead of sharing
+// MAX_LLM_SOURCE_CHARS's headroom. ~4.2 chars/token was the measured ratio
+// for that incident; 15,000 chars keeps input comfortably under ~3,600
+// tokens even allowing for less token-efficient content (code, tables).
+export const COURSE_SKELETON_MAX_SOURCE_CHARS = 15_000;
+
+// Titles + key topics only, no lesson content — comfortably fits in far
+// less than MODULE_CONTENT_MAX_COMPLETION_TOKENS. Paired with
+// COURSE_SKELETON_MAX_SOURCE_CHARS above, system prompt (~300 tokens) +
+// input (~3,600 tokens) + this leaves ~2,000 tokens of headroom under the
+// 8,000 TPM ceiling for tokenization variance.
+export const COURSE_SKELETON_MAX_COMPLETION_TOKENS = 2048;
 
 // Study aids (summary/flashcards/explain) send a lesson's or a whole
 // course's already-curated content verbatim rather than RAG-retrieving it —
