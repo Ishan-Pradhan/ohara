@@ -9,6 +9,7 @@ import {
   useSendMessage,
   useDeleteConversation,
   useDeleteMessage,
+  OPTIMISTIC_MESSAGE_ID_PREFIX,
 } from '../../features/tutor/useTutor.js';
 import { ApiError } from '../../lib/apiError.js';
 import { toast } from '../../lib/toast.js';
@@ -57,8 +58,12 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
   const selectedConversation = conversations?.find((conversation) => conversation.id === selectedId);
   // Only the true last message (including hidden tool_call/tool_result rows)
   // is deletable — if that's a hidden row, no *visible* message is
-  // currently the tail, so nothing shows a delete affordance.
-  const lastRawMessageId = messages && messages.length > 0 ? messages[messages.length - 1]!.id : null;
+  // currently the tail, so nothing shows a delete affordance. Never the
+  // optimistic bubble useSendMessage appends while its request is still in
+  // flight — it has no real row yet, so a delete call for it would 400.
+  const rawLastMessage = messages && messages.length > 0 ? messages[messages.length - 1] : null;
+  const lastRawMessageId =
+    rawLastMessage && !rawLastMessage.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX) ? rawLastMessage.id : null;
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
