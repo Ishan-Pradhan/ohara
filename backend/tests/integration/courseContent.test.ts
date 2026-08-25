@@ -418,6 +418,31 @@ describe('POST /courses/:courseId/documents/:documentId/generate', () => {
     expect(res.body.data[0].lessons[1].content).toContain('Content generation failed');
   });
 
+  it('falls back to a placeholder for a module whose content call throws (e.g. a rate limit), without failing the whole generation', async () => {
+    const course = await createCourse();
+    const admin = await createTeacherUser({ email: 'x@example.com' });
+    const document = await createReadyDocument(course.id, admin.id);
+    const cookies = await signInAs('admin@example.com', 'admin');
+
+    // Real incident (2026-08-25): a module hitting a Groq rate limit deep
+    // into a multi-module generation used to throw away the whole request —
+    // including every module already generated before it — instead of
+    // degrading to a placeholder for just this one module.
+    vi.mocked(generateJson)
+      .mockResolvedValueOnce(validSkeletonJson)
+      .mockRejectedValueOnce(
+        new Error('The AI service has reached its per-minute usage limit — please try again in a minute or two.'),
+      );
+
+    const res = await request(app)
+      .post(`/api/v1/courses/${course.id}/documents/${document.id}/generate`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data[0].lessons[0].content).toContain('Content generation failed');
+    expect(res.body.data[0].lessons[1].content).toContain('Content generation failed');
+  });
+
   it('falls back to a placeholder for just the lesson a module response omits', async () => {
     const course = await createCourse();
     const admin = await createTeacherUser({ email: 'x@example.com' });

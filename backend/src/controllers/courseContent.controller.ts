@@ -137,35 +137,46 @@ const resolveModuleSourceText = async (
  * and re-searching per lesson for no benefit — a module's lessons share
  * enough context to search together). See courseStructure.prompt.ts.
  * Falls back to a placeholder per lesson rather than aborting the rest of
- * the generation if this module's call never produces valid JSON, or omits
- * a lesson the skeleton asked for. */
+ * the generation if this module's call never produces valid JSON, omits a
+ * lesson the skeleton asked for, OR the call itself fails outright (a Groq
+ * rate limit — see llm.service.ts's toLlmError — is just as recoverable
+ * here as invalid JSON is: real incident 2026-08-25, a module hitting the
+ * per-minute limit deep into a multi-module generation used to throw away
+ * every module already generated before it, after several minutes of real
+ * work, instead of finishing with a placeholder for the one module that
+ * failed). */
 const generateModuleContent = async (
   documentId: string,
   fallbackSourceText: string,
   moduleTitle: string,
   lessons: { title: string; keyTopics: string[] }[],
 ): Promise<Map<string, string>> => {
-  const moduleSourceText = await resolveModuleSourceText(documentId, fallbackSourceText, moduleTitle, lessons);
-  const userPrompt = moduleContentUserPrompt(moduleSourceText, moduleTitle, lessons);
-  const raw = await generateJson(
-    moduleContentSystemPrompt,
-    userPrompt,
-    MODULE_CONTENT_MAX_COMPLETION_TOKENS,
-  );
+  try {
+    const moduleSourceText = await resolveModuleSourceText(documentId, fallbackSourceText, moduleTitle, lessons);
+    const userPrompt = moduleContentUserPrompt(moduleSourceText, moduleTitle, lessons);
+    const raw = await generateJson(
+      moduleContentSystemPrompt,
+      userPrompt,
+      MODULE_CONTENT_MAX_COMPLETION_TOKENS,
+    );
 
-  const firstAttempt = tryParseModuleContent(raw);
-  if (firstAttempt.success) return contentByTitle(firstAttempt.data);
+    const firstAttempt = tryParseModuleContent(raw);
+    if (firstAttempt.success) return contentByTitle(firstAttempt.data);
 
-  const retryRaw = await generateJson(
-    moduleContentSystemPrompt,
-    moduleContentCorrectivePrompt(raw),
-    MODULE_CONTENT_MAX_COMPLETION_TOKENS,
-  );
-  const secondAttempt = tryParseModuleContent(retryRaw);
-  if (secondAttempt.success) return contentByTitle(secondAttempt.data);
+    const retryRaw = await generateJson(
+      moduleContentSystemPrompt,
+      moduleContentCorrectivePrompt(raw),
+      MODULE_CONTENT_MAX_COMPLETION_TOKENS,
+    );
+    const secondAttempt = tryParseModuleContent(retryRaw);
+    if (secondAttempt.success) return contentByTitle(secondAttempt.data);
 
-  logger.warn({ moduleTitle }, 'Module content generation failed twice; using placeholders');
-  return new Map();
+    logger.warn({ moduleTitle }, 'Module content generation failed twice; using placeholders');
+    return new Map();
+  } catch (err) {
+    logger.warn({ err, moduleTitle }, 'Module content generation errored; using placeholders');
+    return new Map();
+  }
 };
 
 const contentByTitle = (data: { lessons: { title: string; content: string }[] }): Map<string, string> =>
