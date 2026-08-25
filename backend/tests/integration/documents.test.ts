@@ -1,5 +1,4 @@
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
@@ -8,6 +7,15 @@ vi.mock('../../src/services/email.service.js', async () => {
   const { emailServiceStub } = await import('../helpers/auth.js');
   return emailServiceStub();
 });
+
+vi.mock('../../src/services/cloudinary.service.js', () => ({
+  uploadBuffer: vi.fn(async () => ({
+    url: 'https://res.cloudinary.com/test/raw/upload/v1/documents/fake.pdf',
+    publicId: 'documents/fake',
+  })),
+  deleteFile: vi.fn(async () => undefined),
+  downloadBuffer: vi.fn(async () => Buffer.from('fake file bytes')),
+}));
 
 const { app } = await import('../../src/app.js');
 const { truncateAll, closeDb } = await import('../helpers/db.js');
@@ -23,12 +31,12 @@ const { courseTeacherRepository } = await import(
 );
 const { documentRepository } = await import('../../src/repositories/documents.repository.js');
 const { courseRepository } = await import('../../src/repositories/courses.repository.js');
-const { ensureDocumentsDir, documentFilePath } = await import('../../src/utils/storage.utils.js');
 const { EMBEDDING_DIMENSIONS } = await import('../../src/constants/index.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_PDF = path.join(__dirname, '..', 'fixtures', 'sample.pdf');
 const CORRUPT_PDF = path.join(__dirname, '..', 'fixtures', 'corrupt.pdf');
+const SAMPLE_MD = path.join(__dirname, '..', 'fixtures', 'sample.md');
 
 const PASSWORD = 'hunter2secret';
 
@@ -165,6 +173,31 @@ describe('POST /courses/:courseId/documents', () => {
   );
 
   it(
+    'accepts a Markdown upload and processes it into ready chunks with embeddings',
+    async () => {
+      const course = await createCourse();
+      const cookies = await signInAs('admin@example.com', 'admin');
+
+      const res = await request(app)
+        .post(`/api/v1/courses/${course.id}/documents`)
+        .set('Cookie', cookies)
+        .attach('file', SAMPLE_MD);
+
+      expect(res.status).toBe(202);
+      expect(res.body.data).toMatchObject({ courseId: course.id, filename: 'sample.md' });
+
+      const ready = await waitForStatus(res.body.data.id, 'ready');
+      expect(ready.status).toBe('ready');
+
+      const chunks = await DocumentChunk.findAll({ where: { documentId: ready.id } });
+      expect(chunks.length).toBeGreaterThan(0);
+      expect(chunks[0]?.content).toContain('Cellular respiration');
+      expect(chunks[0]?.embedding).toHaveLength(EMBEDDING_DIMENSIONS);
+    },
+    30000,
+  );
+
+  it(
     'marks the document failed when the PDF cannot be parsed',
     async () => {
       const course = await createCourse();
@@ -211,7 +244,8 @@ describe('GET /courses/:courseId/documents', () => {
 });
 
 describe('DELETE /courses/:courseId/documents/:id', () => {
-  it('deletes the row and the file from disk', async () => {
+  it('deletes the row and the file from Cloudinary', async () => {
+    const { deleteFile } = await import('../../src/services/cloudinary.service.js');
     const course = await createCourse();
     const cookies = await signInAs('admin@example.com', 'admin');
 
@@ -222,7 +256,7 @@ describe('DELETE /courses/:courseId/documents/:id', () => {
 
     const documentId = uploadRes.body.data.id;
     const created = await Document.findByPk(documentId);
-    const storageKey = created?.storageKey as string;
+    expect(created?.filePublicId).toBe('documents/fake');
 
     const deleteRes = await request(app)
       .delete(`/api/v1/courses/${course.id}/documents/${documentId}`)
@@ -230,7 +264,7 @@ describe('DELETE /courses/:courseId/documents/:id', () => {
 
     expect(deleteRes.status).toBe(200);
     expect(await Document.findByPk(documentId)).toBeNull();
-    await expect(fs.access(storageKey)).rejects.toThrow();
+    expect(deleteFile).toHaveBeenCalledWith('documents/fake');
   });
 
   it("404s deleting a document that belongs to a different course", async () => {
@@ -346,21 +380,18 @@ describe('PATCH /courses/:courseId/knowledge-base', () => {
 });
 
 describe('GET /courses/:courseId/documents/:id/file', () => {
-  /** Creates a document row backed by a real file on disk (a copy of the
-   * sample fixture) — res.sendFile needs an actual file to stream, unlike
-   * the knowledge-base tests above which never touch the file itself. */
+  /** Creates a document row backed by a fake Cloudinary reference — the
+   * mocked downloadBuffer above returns bytes for any URL, so the value
+   * itself doesn't need to resolve to anything real. */
   const createDocumentWithRealFile = async (courseId: string, uploaderId: string) => {
-    const document = await documentRepository.create({
+    return await documentRepository.create({
       courseId,
       uploadedBy: uploaderId,
       filename: 'lecture-1.pdf',
-      storageKey: '',
+      fileUrl: 'https://res.cloudinary.com/test/raw/upload/v1/documents/lecture-1.pdf',
+      filePublicId: 'documents/lecture-1',
+      status: 'ready',
     });
-    await ensureDocumentsDir();
-    const filePath = documentFilePath(document.id);
-    await fs.copyFile(SAMPLE_PDF, filePath);
-    await document.update({ storageKey: filePath, status: 'ready' });
-    return document;
   };
 
   it('streams the PDF inline for an assigned teacher', async () => {
@@ -378,6 +409,28 @@ describe('GET /courses/:courseId/documents/:id/file', () => {
     expect(res.headers['content-type']).toContain('application/pdf');
     expect(res.headers['content-disposition']).toContain('inline');
     expect(res.headers['content-disposition']).toContain('lecture-1.pdf');
+  });
+
+  it('streams a Markdown document as text/markdown', async () => {
+    const course = await createCourse();
+    const teacher = await createTeacherUser();
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+    const document = await documentRepository.create({
+      courseId: course.id,
+      uploadedBy: teacher.id,
+      filename: 'lecture-1.md',
+      fileUrl: 'https://res.cloudinary.com/test/raw/upload/v1/documents/lecture-1.md',
+      filePublicId: 'documents/lecture-1-md',
+      status: 'ready',
+    });
+    const cookies = await signInAs(teacher.email, 'teacher');
+
+    const res = await request(app)
+      .get(`/api/v1/courses/${course.id}/documents/${document.id}/file`)
+      .set('Cookie', cookies);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/markdown');
   });
 
   it('streams the PDF for an enrolled student', async () => {

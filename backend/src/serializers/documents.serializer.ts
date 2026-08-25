@@ -1,6 +1,9 @@
 import type { Document } from '../models/documents.model.js';
 
-// storageKey is a filesystem path — never returned to the client.
+// storageKey/fileUrl/filePublicId are storage internals — never returned to
+// the client. The file itself is only ever reached through
+// GET .../documents/:id/file, which enforces the same course-access check on
+// every request.
 export const serializeDocument = (d: Document) => ({
   id: d.id,
   courseId: d.courseId,

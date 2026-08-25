@@ -8,7 +8,9 @@ export interface DocumentAttributes {
   courseId: string;
   uploadedBy: string;
   filename: string;
-  storageKey: string;
+  storageKey: string | null;
+  fileUrl: string | null;
+  filePublicId: string | null;
   status: DocumentStatus;
   errorMessage: string | null;
   createdAt?: Date;
@@ -17,7 +19,7 @@ export interface DocumentAttributes {
 
 export type DocumentCreationAttributes = Optional<
   DocumentAttributes,
-  'id' | 'status' | 'errorMessage' | 'createdAt' | 'updatedAt'
+  'id' | 'storageKey' | 'fileUrl' | 'filePublicId' | 'status' | 'errorMessage' | 'createdAt' | 'updatedAt'
 >;
 
 export interface DocumentChunkAttributes {

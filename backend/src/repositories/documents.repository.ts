@@ -31,9 +31,9 @@ export const documentRepository = {
   },
 
   /** `document_chunks.documentId` is ON DELETE CASCADE — deleting a document
-   * sweeps away its chunks. The file on disk is removed separately by the
-   * controller (storageKey is a filesystem path, not this repository's
-   * concern). */
+   * sweeps away its chunks. The underlying file (Cloudinary, or local disk
+   * for a pre-migration row) is removed separately by the controller — not
+   * this repository's concern. */
   delete: async (id: string): Promise<boolean> => {
     const deleted = await Document.destroy({ where: { id } });
     return deleted > 0;

@@ -10,9 +10,11 @@ import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeModule, serializeLesson } from '../serializers/courseContent.serializer.js';
 import { serializeBatch } from '../serializers/institution.serializer.js';
 import { listBatchesForCourse } from './courses.controller.js';
-import { extractText } from '../services/pdf.service.js';
+import { extractDocumentText } from '../utils/fileExtraction.utils.js';
 import { generateJson } from '../services/llm.service.js';
+import { downloadBuffer } from '../services/cloudinary.service.js';
 import { retrieveKnowledgeBaseMaterial } from './documents.controller.js';
+import type { Document } from '../models/documents.model.js';
 import {
   courseSkeletonSystemPrompt,
   courseSkeletonUserPrompt,
@@ -163,6 +165,19 @@ const tryParseModuleContent = (raw: string) => {
   }
 };
 
+/** Re-reads a previously uploaded document's raw bytes — from Cloudinary for
+ * a document uploaded after the storage migration, or from local disk for an
+ * older row that still only has storageKey. */
+const readDocumentBuffer = async (document: Document): Promise<Buffer> => {
+  if (document.fileUrl) {
+    return await downloadBuffer(document.fileUrl);
+  }
+  if (!document.storageKey) {
+    throw new Error(`Document ${document.id} has no stored file`);
+  }
+  return await fs.readFile(document.storageKey);
+};
+
 /** If the course has a Course.syllabusDocumentId set, re-extracts that
  * document's own text (truncated the same way as the target document) for
  * generateSkeleton's syllabus-extraction mode. Returns null — never throws
@@ -177,8 +192,8 @@ const resolveSyllabusText = async (courseId: string): Promise<string | null> => 
   try {
     const syllabusDocument = await documentRepository.findById(course.syllabusDocumentId);
     if (!syllabusDocument) return null;
-    const syllabusBuffer = await fs.readFile(syllabusDocument.storageKey);
-    const syllabusFullText = await extractText(syllabusBuffer);
+    const syllabusBuffer = await readDocumentBuffer(syllabusDocument);
+    const syllabusFullText = await extractDocumentText(syllabusDocument.filename, syllabusBuffer);
     return syllabusFullText.slice(0, env.MAX_LLM_SOURCE_CHARS);
   } catch (err) {
     logger.warn(
@@ -204,8 +219,8 @@ export const generateCourseStructure = asyncHandler(
       throw new ApiError(400, 'This document has not finished processing yet');
     }
 
-    const fileBuffer = await fs.readFile(document.storageKey);
-    const fullText = await extractText(fileBuffer);
+    const fileBuffer = await readDocumentBuffer(document);
+    const fullText = await extractDocumentText(document.filename, fileBuffer);
     // A single chapter-sized PDF fits comfortably within MAX_LLM_SOURCE_CHARS;
     // a whole textbook in one upload doesn't (known limitation — see design
     // doc, not solved here).

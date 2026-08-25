@@ -38,7 +38,7 @@ const envSchema = z.object({
 
   // Document uploads (Phase 3) — deployment-tunable limits, no schema dependency.
   MAX_UPLOAD_PDF_BYTES: z.coerce.number().default(20 * 1024 * 1024),
-  // llama-3.3-70b-versatile has a 128K-token context window on Groq. 250,000
+  // openai/gpt-oss-120b has a 128K-token context window on Groq. 250,000
   // chars is roughly 65-70K tokens at typical English/code density, leaving
   // comfortable headroom for the system prompt and a detailed multi-module
   // completion without ever approaching the model's limit. The previous
@@ -46,7 +46,6 @@ const envSchema = z.object({
   // ~15 pages of a real textbook-sized PDF, which is why generated lessons
   // read as thin summaries instead of the source's actual depth.
   MAX_LLM_SOURCE_CHARS: z.coerce.number().default(250_000),
-  UPLOAD_DIR: z.string().default('uploads'),
 
   // Assignment submission uploads (Phase 5) — broader file types than course
   // material, stored in Cloudinary rather than local disk.

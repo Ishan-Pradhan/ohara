@@ -7,10 +7,10 @@ import { documentRepository } from '../repositories/documents.repository.js';
 import { documentChunkRepository } from '../repositories/documentChunks.repository.js';
 import { courseRepository } from '../repositories/courses.repository.js';
 import { serializeDocument } from '../serializers/documents.serializer.js';
-import { extractText } from '../services/pdf.service.js';
 import { embed } from '../services/embeddings.service.js';
+import { uploadBuffer, deleteFile, downloadBuffer } from '../services/cloudinary.service.js';
 import { chunkText } from '../utils/chunk.utils.js';
-import { ensureDocumentsDir, documentFilePath } from '../utils/storage.utils.js';
+import { extractDocumentText } from '../utils/fileExtraction.utils.js';
 import { DOCUMENT_STATUS } from '../constants/index.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
@@ -20,16 +20,20 @@ import { logger } from '../utils/logger.js';
 /** Runs after the upload response is already sent — never awaited by the
  * request. Any failure here is caught and recorded on the document row
  * itself; there is nothing left to respond to. */
-const processDocument = async (documentId: string, buffer: Buffer): Promise<void> => {
+const processDocument = async (
+  documentId: string,
+  filename: string,
+  buffer: Buffer,
+): Promise<void> => {
   try {
-    const text = await extractText(buffer);
+    const text = await extractDocumentText(filename, buffer);
     const chunks = chunkText(text);
 
     if (chunks.length === 0) {
       await documentRepository.setStatus(
         documentId,
         DOCUMENT_STATUS.FAILED,
-        'No extractable text found in this PDF',
+        'No extractable text found in this file',
       );
       return;
     }
@@ -54,7 +58,7 @@ const processDocument = async (documentId: string, buffer: Buffer): Promise<void
     await documentRepository.setStatus(
       documentId,
       DOCUMENT_STATUS.FAILED,
-      'Could not process this PDF',
+      'Could not process this file',
     );
   }
 };
@@ -75,16 +79,13 @@ export const uploadDocument = asyncHandler(
       courseId,
       uploadedBy: userId,
       filename: req.file.originalname,
-      storageKey: '', // filled in below, once the id (and therefore the path) exists
     });
 
-    await ensureDocumentsDir();
-    const filePath = documentFilePath(document.id);
-    await fs.writeFile(filePath, req.file.buffer);
-    await document.update({ storageKey: filePath });
+    const uploaded = await uploadBuffer(req.file.buffer, `documents/${courseId}`);
+    await document.update({ fileUrl: uploaded.url, filePublicId: uploaded.publicId });
 
     // Fire-and-forget: the response goes out now, processing continues after.
-    void processDocument(document.id, req.file.buffer);
+    void processDocument(document.id, req.file.originalname, req.file.buffer);
 
     return ok(res, serializeDocument(document), 'Document accepted, processing', 202);
   },
@@ -110,13 +111,17 @@ export const deleteDocument = asyncHandler(
       throw new ApiError(404, 'Document not found');
     }
 
-    const filePath = document.storageKey;
     await documentRepository.delete(id);
 
     try {
-      await fs.unlink(filePath);
+      if (document.filePublicId) {
+        await deleteFile(document.filePublicId);
+      } else if (document.storageKey) {
+        // Pre-Cloudinary-migration row — file is still on local disk.
+        await fs.unlink(document.storageKey);
+      }
     } catch (err) {
-      logger.warn({ err, documentId: id }, 'Could not remove document file from disk');
+      logger.warn({ err, documentId: id }, 'Could not remove document file from storage');
     }
 
     return ok(res, null, 'Document deleted');
@@ -125,13 +130,16 @@ export const deleteDocument = asyncHandler(
 
 // ── Viewing ──────────────────────────────────────────────────────────────────
 
-/** Streams the raw PDF inline (not as a download) — the source for the
+const contentTypeForFilename = (filename: string): string =>
+  filename.toLowerCase().endsWith('.md') ? 'text/markdown' : 'application/pdf';
+
+/** Streams the raw file inline (not as a download) — the source for the
  * raw-document viewer, used by both the management UI (teacher/admin
  * preview) and the student-facing reader (via listViewableDocuments below
  * for discovery). requireCourseAccess (not requireCourseTeacher) gates the
  * route, so admins, assigned teachers, and enrolled students can all reach
- * it. Deliberately not gated by document status here — the file lands on
- * disk at upload time, before ingestion runs, so a teacher previewing a
+ * it. Deliberately not gated by document status here — the file is uploaded
+ * to Cloudinary before ingestion runs, so a teacher previewing a
  * still-processing or failed document isn't blocked; only
  * listViewableDocuments filters by status for the student-facing list. */
 export const getDocumentFile = asyncHandler(
@@ -152,7 +160,24 @@ export const getDocumentFile = asyncHandler(
       'Content-Disposition',
       `inline; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(document.filename)}`,
     );
-    res.type('application/pdf');
+    res.type(contentTypeForFilename(document.filename));
+
+    if (document.fileUrl) {
+      try {
+        const buffer = await downloadBuffer(document.fileUrl);
+        res.send(buffer);
+      } catch (err) {
+        logger.warn({ err, documentId: id }, 'Could not fetch document file from Cloudinary');
+        next(new ApiError(404, 'File not found'));
+      }
+      return;
+    }
+
+    if (!document.storageKey) {
+      throw new ApiError(404, 'File not found');
+    }
+
+    // Pre-Cloudinary-migration row — file is still on local disk.
     res.sendFile(document.storageKey, (err) => {
       // sendFile's error callback fires outside the try/catch asyncHandler
       // wraps this function in — route it through the normal error-handling

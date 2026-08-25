@@ -45,9 +45,17 @@ export class Document extends Model {
   @Column(DataType.STRING)
   declare filename: string;
 
-  @AllowNull(false)
+  // Filesystem path, populated only for documents uploaded before the
+  // Cloudinary migration — new uploads use fileUrl/filePublicId below instead
+  // and leave this null. Kept so those older rows stay readable.
   @Column(DataType.STRING)
-  declare storageKey: string;
+  declare storageKey: string | null;
+
+  @Column(DataType.STRING)
+  declare fileUrl: string | null;
+
+  @Column(DataType.STRING)
+  declare filePublicId: string | null;
 
   @AllowNull(false)
   @Default(DOCUMENT_STATUS.PROCESSING)
