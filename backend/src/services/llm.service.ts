@@ -1,9 +1,42 @@
 import Groq, { APIError, RateLimitError } from 'groq-sdk';
 
 import { env } from '../config/env.js';
+import { logger } from '../utils/logger.js';
 import type { AgentMessage, AgentTool, AgentTurnResult } from '../types/agent.types.js';
 
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
+
+// Below this fraction of the limit remaining, a rate-limit log line is
+// promoted from info to warn — the point of logging every call's headers is
+// to see the trend before it's a problem (real incident 2026-08-25: the
+// daily quota's exhaustion was only discovered via a user's failed
+// request), so most lines are just data points, but a genuinely low
+// reading should stand out in a log search rather than blend in.
+const RATE_LIMIT_WARN_THRESHOLD = 0.2;
+
+/** Logs Groq's own rate-limit headers (present on both successful and
+ * failed responses) — the same x-ratelimit-remaining-tokens/-requests
+ * headers read manually via a throwaway script during that incident, now
+ * captured on every real call instead of only when something has already
+ * gone wrong. `callSite` is just which of this file's three exports made
+ * the call, for filtering. Never throws — a missing/malformed header is a
+ * reason to skip logging, not a reason to fail the actual request. */
+const logRateLimitHeaders = (headers: Headers | null | undefined, callSite: string): void => {
+  if (!headers) return;
+  const remainingTokens = headers.get('x-ratelimit-remaining-tokens');
+  const limitTokens = headers.get('x-ratelimit-limit-tokens');
+  const remainingRequests = headers.get('x-ratelimit-remaining-requests');
+  const limitRequests = headers.get('x-ratelimit-limit-requests');
+  if (remainingTokens === null && remainingRequests === null) return;
+
+  const fields = { callSite, remainingTokens, limitTokens, remainingRequests, limitRequests };
+  const tokenRatio = remainingTokens && limitTokens ? Number(remainingTokens) / Number(limitTokens) : null;
+  if (tokenRatio !== null && tokenRatio < RATE_LIMIT_WARN_THRESHOLD) {
+    logger.warn(fields, 'Groq token quota running low');
+  } else {
+    logger.info(fields, 'Groq rate-limit headers');
+  }
+};
 
 /** Translates a raw Groq SDK error into a clean, user-safe message. Groq's
  * own error bodies are internal detail — raw JSON error codes, a
@@ -13,8 +46,13 @@ const groq = new Groq({ apiKey: env.GROQ_API_KEY });
  * exports is the only place in the codebase that touches the Groq SDK
  * directly, so this is the one place that needs to catch it. Every export
  * below funnels its `groq.chat.completions.create` call through this. */
-const toLlmError = (err: unknown): Error => {
+const toLlmError = (err: unknown, callSite: string): Error => {
   if (err instanceof APIError) {
+    // A rate-limit error carries the same headers a successful response
+    // does — this is actually the single most valuable moment to see them,
+    // since it's exactly the failure the trend was meant to give warning
+    // before.
+    logRateLimitHeaders(err.headers, callSite);
     // Confirmed against a real exhausted account (2026-08-25): Groq's
     // structured `type`/`code` fields are identical ("tokens" /
     // "rate_limit_exceeded") for both a per-minute-too-large single request
@@ -61,26 +99,36 @@ const toLlmError = (err: unknown): Error => {
  * maxCompletionTokens defaults to a modest budget (grading/quiz-gen output is
  * short); course structure generation passes a much larger explicit value
  * since a detailed, code/table-preserving multi-lesson response needs it —
- * otherwise the completion silently cuts off mid-JSON. */
+ * otherwise the completion silently cuts off mid-JSON.
+ *
+ * model defaults to env.GROQ_MODEL (the app-wide default) but can be
+ * overridden per call — e.g. a task where output quality matters more than
+ * speed/cost can opt into a stronger model without changing what every
+ * other caller uses. */
 export const generateJson = async (
   systemPrompt: string,
   userPrompt: string,
   maxCompletionTokens = 4096,
+  model = env.GROQ_MODEL,
 ): Promise<string> => {
   let completion;
   try {
-    completion = await groq.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
-      max_completion_tokens: maxCompletionTokens,
-    });
+    const result = await groq.chat.completions
+      .create({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_completion_tokens: maxCompletionTokens,
+      })
+      .withResponse();
+    logRateLimitHeaders(result.response.headers, 'generateJson');
+    completion = result.data;
   } catch (err) {
-    throw toLlmError(err);
+    throw toLlmError(err, 'generateJson');
   }
 
   const content = completion.choices[0]?.message?.content;
@@ -102,25 +150,32 @@ export const generateJson = async (
  * input is exactly how a request blows past the on_demand tier's 12,000 TPM
  * cap (a 413, distinct from the daily token cap) — the same class of bug
  * MODULE_CONTENT_RETRIEVAL_K (constants/index.ts) was already introduced to
- * avoid on the generateJson side. */
+ * avoid on the generateJson side.
+ *
+ * model defaults to env.GROQ_MODEL, same override contract as generateJson. */
 export const generateText = async (
   systemPrompt: string,
   userPrompt: string,
   maxCompletionTokens = 1024,
+  model = env.GROQ_MODEL,
 ): Promise<string> => {
   let completion;
   try {
-    completion = await groq.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_completion_tokens: maxCompletionTokens,
-    });
+    const result = await groq.chat.completions
+      .create({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_completion_tokens: maxCompletionTokens,
+      })
+      .withResponse();
+    logRateLimitHeaders(result.response.headers, 'generateText');
+    completion = result.data;
   } catch (err) {
-    throw toLlmError(err);
+    throw toLlmError(err, 'generateText');
   }
 
   const content = completion.choices[0]?.message?.content;
@@ -136,10 +191,16 @@ export const generateText = async (
  * API — the same `groq.chat.completions.create` transport `generateJson`/
  * `generateText` already use, just with `tools` attached. This is the only
  * place that decides text-vs-tool-calls; the orchestrator (agent/tutorAgent.ts)
- * never touches the Groq SDK directly. */
+ * never touches the Groq SDK directly.
+ *
+ * model defaults to env.GROQ_MODEL, same override contract as generateJson —
+ * note tool-calling quality varies more by model than plain text does, so a
+ * caller overriding this should confirm the target model actually supports
+ * Groq's function-calling API well before relying on it here. */
 export const runAgentTurn = async (
   history: AgentMessage[],
   tools: AgentTool[],
+  model = env.GROQ_MODEL,
 ): Promise<AgentTurnResult> => {
   const messages = history.map((m) => {
     if (m.role === 'assistant') {
@@ -165,18 +226,22 @@ export const runAgentTurn = async (
 
   let completion;
   try {
-    completion = await groq.chat.completions.create({
-      model: env.GROQ_MODEL,
-      messages,
-      tools: tools.map((t) => ({
-        type: 'function' as const,
-        function: { name: t.name, description: t.description, parameters: t.parameters },
-      })),
-      tool_choice: 'auto',
-      temperature: 0.3,
-    });
+    const result = await groq.chat.completions
+      .create({
+        model,
+        messages,
+        tools: tools.map((t) => ({
+          type: 'function' as const,
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        })),
+        tool_choice: 'auto',
+        temperature: 0.3,
+      })
+      .withResponse();
+    logRateLimitHeaders(result.response.headers, 'runAgentTurn');
+    completion = result.data;
   } catch (err) {
-    throw toLlmError(err);
+    throw toLlmError(err, 'runAgentTurn');
   }
 
   const message = completion.choices[0]?.message;
