@@ -23,6 +23,7 @@ import { Spinner } from '../../components/ui/Spinner.js';
 import { EmptyState } from '../../components/ui/EmptyState.js';
 import { ConfirmDialog } from '../../components/ui/Dialog.js';
 import { ChartRenderer } from '../../components/tutor/ChartRenderer.js';
+import { MarkdownContent } from '../../components/course-content/MarkdownContent.js';
 
 interface TutorPanelProps {
   courseId: string;
@@ -269,10 +270,14 @@ export const TutorPanel = ({ courseId }: TutorPanelProps) => {
                               'rounded-card px-3.5 py-2.5 text-sm leading-relaxed',
                               message.role === 'user'
                                 ? 'bg-primary text-primary-fg'
-                                : 'bg-surface-hover text-fg',
+                                : 'bg-surface-hover text-fg [&>div>*:first-child]:mt-0 [&>div>*:last-child]:mb-0',
                             )}
                           >
-                            {message.content}
+                            {message.role === 'assistant' ? (
+                              <MarkdownContent content={message.content ?? ''} />
+                            ) : (
+                              message.content
+                            )}
                           </div>
                           {message.role === 'assistant' && message.sources && message.sources.length > 0 ? (
                             <details className="text-xs text-muted">
