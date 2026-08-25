@@ -93,13 +93,24 @@ export const DocumentsSection = ({
 
   const onGenerate = async (documentId: string) => {
     setGeneratingId(documentId);
+    // A dropdown item's own row disappears the moment the menu closes, so
+    // without this the only visible sign anything is happening is the "..."
+    // trigger going disabled — easy to miss. This runs several sequential
+    // LLM calls server-side (a skeleton call, then one per module) and can
+    // genuinely take a minute or more, so a loading toast that stays on
+    // screen until it resolves is the fix, not just a faster request.
     try {
-      const modules = await generateStructure.mutateAsync(documentId);
-      toast.success(`Generated ${modules.length} module${modules.length === 1 ? '' : 's'}`);
-    } catch (caught) {
-      toast.error(
-        caught instanceof ApiError ? caught.message : 'Could not generate a structure',
-      );
+      await toast
+        .promise(generateStructure.mutateAsync(documentId), {
+          loading: 'Generating course structure — this can take a minute or two…',
+          success: (result) =>
+            `Generated ${result.length} module${result.length === 1 ? '' : 's'}`,
+          error: (caught) =>
+            caught instanceof ApiError ? caught.message : 'Could not generate a structure',
+        })
+        .unwrap();
+    } catch {
+      // Already surfaced by the error toast above.
     } finally {
       setGeneratingId(null);
     }
