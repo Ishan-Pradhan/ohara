@@ -34,7 +34,7 @@ const envSchema = z.object({
   // Model is env-configurable (no schema dependency, unlike the embedding
   // model — see EMBEDDING_MODEL in constants/index.ts for why that one isn't).
   GROQ_API_KEY: z.string().min(1),
-  GROQ_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GROQ_MODEL: z.string().default('openai/gpt-oss-120b'),
 
   // Document uploads (Phase 3) — deployment-tunable limits, no schema dependency.
   MAX_UPLOAD_PDF_BYTES: z.coerce.number().default(20 * 1024 * 1024),
