@@ -24,13 +24,23 @@ import { asyncHandler } from '../utils/AsyncHandler.js';
 import { ok } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 
-// requireEnrolledStudent already guards every route in this file.
+// requireEnrolledStudent already guards every route in this file except
+// getCourseOutline, which uses requireCourseAccess instead — see
+// tutor.routes.ts for why.
 
+/** Shared by the student tutor chat and the study-aids scope picker
+ * (StudyAidsPanel), reachable by a student, the course's assigned teacher,
+ * or an admin (requireCourseAccess). A student only ever sees a published
+ * course's structure; a teacher/admin managing their own (possibly still
+ * draft) course needs to see it before publishing. */
 export const getCourseOutline = asyncHandler(async (req: AuthRequest, res: Response) => {
   const { courseId } = req.validated?.params as { courseId: string };
 
   const course = await courseRepository.findById(courseId);
-  if (!course || !course.isPublished) {
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+  if (!course.isPublished && req.user!.role === 'student') {
     throw new ApiError(404, 'Course not found');
   }
 

@@ -34,6 +34,7 @@ const { tutorConversationRepository } = await import(
   '../../src/repositories/tutorConversations.repository.js'
 );
 const { tutorMessageRepository } = await import('../../src/repositories/tutorMessages.repository.js');
+const { courseTeacherRepository } = await import('../../src/repositories/courseTeachers.repository.js');
 const { EMBEDDING_DIMENSIONS, TUTOR_CONVERSATION_STATUSES } = await import(
   '../../src/constants/index.js'
 );
@@ -681,6 +682,46 @@ describe('Tutor endpoints', () => {
       .get(`/api/v1/courses/${course.id}/outline`)
       .set('Cookie', enrolledStudentCookie);
     expect(res.status).toBe(404);
+  });
+
+  it("lets the course's assigned teacher see the outline of a still-unpublished course", async () => {
+    const course = await createCourse();
+    const module = await moduleRepository.create({ courseId: course.id, title: 'Module 1', orderIndex: 0 });
+    await lessonRepository.create({
+      moduleId: module.id,
+      title: 'Draft lesson',
+      content: 'Not published yet.',
+      keyTopics: [],
+      orderIndex: 0,
+    });
+    const teacher = await createTeacherUser({ email: 'outline-teacher@example.com' });
+    await courseTeacherRepository.assign({ teacherId: teacher.id, courseId: course.id });
+    const teacherCookie = await signInAs(teacher.email, 'teacher');
+
+    const res = await request(app)
+      .get(`/api/v1/courses/${course.id}/outline`)
+      .set('Cookie', teacherCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].lessons[0].title).toBe('Draft lesson');
+  });
+
+  it('lets an admin see the outline of a still-unpublished course', async () => {
+    const course = await createCourse();
+    const module = await moduleRepository.create({ courseId: course.id, title: 'Module 1', orderIndex: 0 });
+    await lessonRepository.create({
+      moduleId: module.id,
+      title: 'Draft lesson',
+      content: 'Not published yet.',
+      keyTopics: [],
+      orderIndex: 0,
+    });
+    const adminCookie = await signInAs('outline-admin@example.com', 'admin');
+
+    const res = await request(app)
+      .get(`/api/v1/courses/${course.id}/outline`)
+      .set('Cookie', adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].lessons[0].title).toBe('Draft lesson');
   });
 });
 

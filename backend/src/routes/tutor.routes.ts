@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifyJWT, requireEnrolledStudent } from '../middlewares/auth.middleware.js';
+import { verifyJWT, requireEnrolledStudent, requireCourseAccess } from '../middlewares/auth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { tutorLimiter } from '../middlewares/rateLimiter.middleware.js';
 import {
@@ -26,9 +26,14 @@ const router = Router();
 
 router.use(verifyJWT);
 
+// requireCourseAccess (not requireEnrolledStudent) — this outline also backs
+// the study-aids scope picker (StudyAidsPanel), which a teacher or admin
+// needs too, not just the tutor chat's own student-only UI. getCourseOutline
+// itself still 404s on an unpublished course for a student; a teacher/admin
+// managing their own course can see its draft structure.
 router.get(
   '/:courseId/outline',
-  requireEnrolledStudent,
+  requireCourseAccess,
   validate(courseIdParamSchema),
   getCourseOutline,
 );
