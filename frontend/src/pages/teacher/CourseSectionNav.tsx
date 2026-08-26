@@ -9,6 +9,7 @@ import {
   HelpCircle,
   MessageSquare,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 
 import { cn } from '../../lib/cn.js';
@@ -57,6 +58,10 @@ export const CourseSectionNav = ({ courseId }: CourseSectionNavProps) => {
       <NavLink to={`${base}/attendance`} end className={navItemClass}>
         <CalendarCheck className="size-4.5 shrink-0" aria-hidden />
         Attendance
+      </NavLink>
+      <NavLink to={`${base}/study-aids`} end className={navItemClass}>
+        <Sparkles className="size-4.5 shrink-0" aria-hidden />
+        Study aids
       </NavLink>
       <NavLink to={`${base}/intelligence`} end className={navItemClass}>
         <Brain className="size-4.5 shrink-0" aria-hidden />

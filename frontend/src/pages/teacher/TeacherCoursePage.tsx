@@ -19,10 +19,11 @@ import { CopilotPanel } from '../admin/course-content/CopilotPanel.js';
 import { InterventionPanel } from '../admin/course-content/InterventionPanel.js';
 import { LessonPlannerPanel } from '../admin/course-content/LessonPlannerPanel.js';
 import { WeeklyIntelligencePanel } from '../admin/course-content/WeeklyIntelligencePanel.js';
+import { StudyAidsPanel } from '../../components/studyAids/StudyAidsPanel.js';
 import { TeacherOverviewSection } from './TeacherOverviewSection.js';
 import { CourseSectionNav } from './CourseSectionNav.js';
 
-const SECTIONS = ['overview', 'content', 'assignments', 'quizzes', 'gradebook', 'attendance', 'intelligence'] as const;
+const SECTIONS = ['overview', 'content', 'assignments', 'quizzes', 'gradebook', 'attendance', 'study-aids', 'intelligence'] as const;
 type Section = (typeof SECTIONS)[number];
 
 const INTELLIGENCE_SUBSECTIONS = ['weekly', 'copilot', 'interventions', 'lesson-planner'] as const;
@@ -71,6 +72,8 @@ export const TeacherCoursePage = () => {
         return <GradebookSection courseId={courseId} />;
       case 'attendance':
         return <AttendanceSection courseId={courseId} />;
+      case 'study-aids':
+        return <StudyAidsPanel courseId={courseId} />;
       case 'intelligence':
         switch (intelligenceSubsection) {
           case 'weekly':
